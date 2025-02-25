@@ -1,11 +1,11 @@
-package depchain.server.utils;
+package depchain.client.utils;
 
 import java.io.IOException;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Random;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
 
 public final class Links {
 
@@ -100,3 +100,4 @@ public final class Links {
         // TODO
     }
 }
+

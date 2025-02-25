@@ -4,6 +4,8 @@ import java.io.*;
 import java.net.*;
 import java.util.Scanner;
 
+import static depchain.client.utils.Links.sendMessage;
+
 public class UDPClient {
 
     public static void main(String[] args) throws IOException {
@@ -22,10 +24,8 @@ public class UDPClient {
                 System.exit(1);
             }
             sendData = cmd.getBytes();
-            sendPacket = new DatagramPacket(sendData,
-                        sendData.length,
-                        InetAddress.getByName("127.0.0.1"), 5001);
-            clientSocket.send(sendPacket);
+
+            sendMessage(clientSocket, sendData, sendData.length, "127.0.0.1", 5001);
         }
     }
 }
