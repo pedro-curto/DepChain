@@ -3,29 +3,40 @@ package depchain.client;
 import java.io.*;
 import java.net.*;
 import java.util.Scanner;
+import java.util.UUID;
 
-import static depchain.client.utils.Links.sendMessage;
+import depchain.client.links.PerfectLink;
 
 public class UDPClient {
+    private static PerfectLink perfectLink;
+    private static final String ADDRESS = "localhost";
+    private static final int PORT = 5001;
 
     public static void main(String[] args) throws IOException {
-        DatagramPacket sendPacket;
         byte[] sendData;
-        // datagram socket (UDP)
         DatagramSocket clientSocket = new DatagramSocket();
-        // client timeout is 5 seconds
-        clientSocket.setSoTimeout(5000);
+        perfectLink = new PerfectLink(clientSocket);
         Scanner input = new Scanner(System.in);
+        
         while (true) {
             String cmd = input.nextLine();
-            // when we type "QUIT", client goes bye-bye
             if (cmd.equals("QUIT")) {
                 clientSocket.close();
-                System.exit(1);
+                input.close();
+                System.exit(0);
             }
+            String msgId = UUID.randomUUID().toString();
+            cmd = msgId + "||" + cmd;
+            
             sendData = cmd.getBytes();
-
-            sendMessage(clientSocket, sendData, sendData.length, "127.0.0.1", 5001);
+            DatagramPacket sendPacket = new DatagramPacket(
+                sendData, 
+                sendData.length, 
+                InetAddress.getByName(ADDRESS), 
+                PORT);
+            perfectLink.sendMessage(sendPacket, msgId);
         }
     }
+
+    
 }
