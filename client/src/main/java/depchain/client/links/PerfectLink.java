@@ -3,6 +3,7 @@ package depchain.client.links;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.io.IOException;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -16,9 +17,11 @@ public class PerfectLink {
     private DatagramSocket socket;
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
     private final Map<String, ScheduledFuture<?>> msgTasks = new ConcurrentHashMap<>();
+    private final BlockingQueue<String> messageQueue;
 
-    public PerfectLink(DatagramSocket socket) {
+    public PerfectLink(DatagramSocket socket, BlockingQueue<String> messageQueue) {
         this.socket = socket;
+        this.messageQueue = messageQueue;
         startAckListener();
     }
 
@@ -30,7 +33,7 @@ public class PerfectLink {
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
-        }, 0, 1, TimeUnit.SECONDS);
+        }, 0, 30, TimeUnit.SECONDS);
         System.out.println("Scheduled message with id: " + msgId);
         msgTasks.put(msgId, future);
     }
@@ -44,13 +47,20 @@ public class PerfectLink {
                 try {
                     System.out.println("Waiting for ack...");
                     socket.receive(ackPacket);
+
                     String ackId = extractUUIDFromAck(ackPacket).toString();
                     System.out.println("received ack id: " + ackId);
+
                     ScheduledFuture<?> future = msgTasks.remove(ackId);
                     System.out.println("Removed task for message " + ackId);
+
                     if (future != null) {
                         future.cancel(true);
                         System.out.println("Message " + ackId + " acknowledged");
+
+                        deliverMessage(ackId);
+                        System.out.println("Delivered message " + ackId);
+
                     } else {
                         System.out.println("Received an unknown ack: " + ackId);
                     }
@@ -69,5 +79,10 @@ public class PerfectLink {
             return UUID.fromString(ack);
         }
         throw new IllegalArgumentException("Invalid ack: " + ack);
+    }
+
+    private void deliverMessage(String message) {
+        System.out.println("Delivering message: " + message);
+        messageQueue.offer(message);
     }
 }
