@@ -1,6 +1,6 @@
 #!/bin/bash
 
-KEYS_DIR="../client/keys"
+KEYS_DIR="../member/membership"
 
 # check if the KEYS_DIR exists and remove all contents inside it
 if [ -d "$KEYS_DIR" ]; then

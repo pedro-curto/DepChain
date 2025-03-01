@@ -611,3 +611,4 @@ security/inputs/seqnumber.txt
 *.pubkey
 *.privkey
 keys/
+membership.txt

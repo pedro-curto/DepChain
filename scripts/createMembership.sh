@@ -1,10 +1,18 @@
 #!/bin/bash
 # blockchain members
 users=("pedrocurto" "pedroribeiro" "rodrigogreedy" "dybizantino")
-KEYS_DIR="../client/keys"
-mkdir -p $KEYS_DIR
+KEYS_DIR="../member/membership"
+MEMBERSHIP_FILE="$KEYS_DIR/membership.txt"
+BASE_PORT=5001
+ADDRESS="localhost"
 
-for user in "${users[@]}"; do
+# creates keys dir and clears membership file
+mkdir -p $KEYS_DIR
+> "$MEMBERSHIP_FILE"
+
+for i in "${!users[@]}"; do
+    user=${users[$i]}
+    port=$((BASE_PORT + i))
     echo "Generating keys for user: ${user}"
     mkdir -p "$KEYS_DIR/$user"
 
@@ -27,6 +35,9 @@ for user in "${users[@]}"; do
     echo "Keys for ${user} are stored in $KEYS_DIR/${user}/"
     echo "  - ${user}.privkey"
     echo "  - ${user}.pubkey"
+
+    # append membership entry: memberName,address,port,publicKeyPath
+    echo "${user},${ADDRESS},${port},$KEYS_DIR/${user}/${user}.pubkey" >> "$MEMBERSHIP_FILE"
 done
 
 echo "All keys generated successfully."
