@@ -5,15 +5,16 @@ import java.net.*;
 import java.security.PrivateKey;
 import java.util.Scanner;
 import java.util.UUID;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 import com.google.gson.Gson;
 import depchain.client.utils.KeyUtils;
-import depchain.library.Message;
-import depchain.library.SignatureUtils;
+import depchain.common.Message;
+import depchain.common.SignatureUtils;
 import depchain.client.links.PerfectLink;
 
 public class ClientMain {
-    private static PerfectLink perfectLink;
     private static final String ADDRESS = "localhost";
     private static final int SERVER_PORT = 5001;
     private static int clientPort;
@@ -31,7 +32,10 @@ public class ClientMain {
         System.out.println("Client " + clientName + " started and listening on port " + clientPort);
         byte[] sendData;
         DatagramSocket clientSocket = new DatagramSocket();
-        perfectLink = new PerfectLink(clientSocket);
+        BlockingQueue<String> messageQueue = new LinkedBlockingQueue<>();
+        PerfectLink perfectLink = new PerfectLink(clientSocket, messageQueue);
+        Thread messageDeliveringThread = new Thread(() -> deliverMessage(messageQueue));
+        messageDeliveringThread.start();
         Scanner input = new Scanner(System.in);
         
         while (true) {
@@ -47,12 +51,12 @@ public class ClientMain {
             // loads private key from keys/clientName/clientName.privkey and signs dataToSign
             PrivateKey privateKey = KeyUtils.readPrivateKey(privKeyPath);
             String signature = SignatureUtils.makeDS(dataToSign, privateKey);
+
             Message msg = new Message(msgId, "client", content, signature);
             Gson gson = new Gson();
             String json = gson.toJson(msg);
-            //content = msgId + "||" + content;
-            
             sendData = json.getBytes();
+
             System.out.println("Sending message: " + json);
             DatagramPacket sendPacket = new DatagramPacket(
                 sendData, 
@@ -63,5 +67,15 @@ public class ClientMain {
         }
     }
 
-    
+    private static void deliverMessage(BlockingQueue<String> messageQueue) {
+        while (true) {
+            String message = null;
+            try {
+                message = messageQueue.take();
+            } catch (InterruptedException e) {
+                continue;
+            }
+            System.out.println("[SERVER GOT]: " + message);
+        }
+    }
 }

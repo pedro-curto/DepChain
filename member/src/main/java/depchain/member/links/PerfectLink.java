@@ -1,4 +1,6 @@
-package depchain.server.links;
+package depchain.member.links;
+
+import com.google.gson.Gson;
 
 import java.net.*;
 import java.io.IOException;
@@ -6,6 +8,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import depchain.common.Message;
 
 public class PerfectLink {
 
@@ -34,9 +37,8 @@ public class PerfectLink {
 
                 System.out.println("Received message: " + new String(packet.getData(), 0, packet.getLength()));
 
-                String[] parts = new String[2];
-                UUID msgId = extractUUIDFromMessage(packet, parts);
-                String message = parts[1];
+                String message = new String(packet.getData(), 0, packet.getLength());
+                UUID msgId = extractUUIDFromMessage(message);
 
                 System.out.println("Checking if message is already received...");
                 if (messageMap.containsKey(msgId.toString())) {
@@ -55,7 +57,7 @@ public class PerfectLink {
                 deliverMessage(message);
 
             } catch (IOException e) {
-                e.printStackTrace();
+                throw new RuntimeException(e);
             }
         }
     }
@@ -68,7 +70,7 @@ public class PerfectLink {
             System.out.println("Sending ack: " + ackMessage + " to " + address + ":" + port);
             socket.send(ackPacket);
         } catch (IOException e) {
-            e.printStackTrace();
+            throw new RuntimeException(e);
         }
     }
 
@@ -80,14 +82,10 @@ public class PerfectLink {
         }
         System.out.println("Message delivered: " + message);
     }
-    
-    private UUID extractUUIDFromMessage(DatagramPacket packet, String[] parts) {
-        String message = new String(packet.getData(), 0, packet.getLength());
-        String[] splitParts = message.split("\\|\\|", 2);
-        parts[0] = splitParts[0];
-        parts[1] = splitParts[1];
-        System.out.println("received message: " + parts[1]);
-        System.out.println("received message id: " + parts[0]);   
-        return UUID.fromString(parts[0]);
+
+    private UUID extractUUIDFromMessage(String message) {
+        Gson gson = new Gson();
+        Message msg = gson.fromJson(message, Message.class);
+        return UUID.fromString(msg.getMsgId());
     }
 }

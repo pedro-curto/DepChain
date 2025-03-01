@@ -3,12 +3,11 @@ package depchain.member;
 import java.security.KeyPair;
 import java.util.ArrayList;
 
-import static depchain.library.SignatureUtils.getMemberKeyPair;
+import static depchain.common.SignatureUtils.getMemberKeyPair;
 
 public class Member {
 
 	private KeyPair keyPair;
-
 	private ArrayList<MemberData> members;
 
 	public Member(String memberName, ArrayList<MemberData> members) {

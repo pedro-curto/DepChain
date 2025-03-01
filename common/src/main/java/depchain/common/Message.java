@@ -1,4 +1,4 @@
-package depchain.library;
+package depchain.common;
 
 import java.security.Signature;
 
