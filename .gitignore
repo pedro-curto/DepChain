@@ -607,3 +607,7 @@ security/inputs/seqnumber.txt
 
 .idea
 .idea/
+# ignores keys
+*.pubkey
+*.privkey
+keys/
