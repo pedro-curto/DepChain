@@ -7,20 +7,29 @@ mvn clean install
 ```
 
 ## Running the Project
-**Server**
+### Configuration
 
-To run the server:
+First of all, you need to generate the configuration file (with the membership). To do that, run the following command:
 ```bash
-cd server
-mvn compile exec:java
+cd scripts
+./createMembership.sh
+```
+### Members
+
+To run the members:
+```bash
+cd member
+./startMembers.sh
 ```
 
-**Client**
+You can check each member's log at the `member/logs` directory.
 
-To run the client:
+### Client
+
+To run a client (it's **very important** to pass it the client name specifically)
 ```bash
 cd client
-mvn compile exec:java -Dexec.args="<client port> <client name>"
+mvn compile exec:java -Dexec.args="2000 client"
 ```
 
 Now, at the client, you can send messages to the server:
