@@ -20,21 +20,13 @@ mvn compile exec:java
 To run the client:
 ```bash
 cd client
-mvn compile exec:java
+mvn compile exec:java -Dexec.args="<client port> <client name>"
 ```
 
 Now, at the client, you can send messages to the server:
 ```bash
 foo 
 bar
-``` 
-
-At the server, you should see the following output:
-```bash
-Received: foo
-From: /<IP>:<port>
-Received: bar
-From: /<IP>:<port>
 ```
 
 ## Tests

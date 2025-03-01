@@ -1,13 +1,13 @@
-package depchain.server;
+package depchain.member;
 
 import java.io.IOException;
 import java.net.DatagramSocket;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
-import depchain.server.links.PerfectLink;
+import depchain.member.links.PerfectLink;
 
-public class UDPServer {
+public class MemberMain {
     private static final int port = 5001;
 
     public static void main (String[] args) throws IOException {

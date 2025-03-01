@@ -11,30 +11,11 @@
 
     <modelVersion>4.0.0</modelVersion>
     <artifactId>common</artifactId>
-    <name>library</name>
+    <name>common</name>
     <packaging>jar</packaging>
 
     <dependencies>
+        
     </dependencies>
-
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>exec-maven-plugin</artifactId>
-                <version>3.0.0</version>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>java</goal>
-                        </goals>
-                    </execution>
-                </executions>
-                <configuration>
-                    <mainClass>depchain.library.SecurityLibrary</mainClass>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
 
 </project>

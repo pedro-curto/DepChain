@@ -27,7 +27,7 @@ public class PerfectLink {
 
     public void sendMessage(DatagramPacket packet, String msgId) {
         System.out.println("Sending message with id: " + msgId);
-        ScheduledFuture<?> future = scheduler.scheduleAtFixedRate(() -> {
+        ScheduledFuture<?> task = scheduler.scheduleAtFixedRate(() -> {
             try {
                 socket.send(packet);
             } catch (IOException e) {
@@ -35,7 +35,7 @@ public class PerfectLink {
             }
         }, 0, 30, TimeUnit.SECONDS);
         System.out.println("Scheduled message with id: " + msgId);
-        msgTasks.put(msgId, future);
+        msgTasks.put(msgId, task);
     }
 
     private void startAckListener() {
@@ -50,12 +50,11 @@ public class PerfectLink {
 
                     String ackId = extractUUIDFromAck(ackPacket).toString();
                     System.out.println("received ack id: " + ackId);
-
-                    ScheduledFuture<?> future = msgTasks.remove(ackId);
+                    ScheduledFuture<?> task = msgTasks.remove(ackId);
                     System.out.println("Removed task for message " + ackId);
-
-                    if (future != null) {
-                        future.cancel(true);
+                    System.out.println("Remaining tasks: " + msgTasks.keySet());
+                    if (task != null) {
+                        task.cancel(true);
                         System.out.println("Message " + ackId + " acknowledged");
 
                         deliverMessage(ackId);
