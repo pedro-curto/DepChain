@@ -1,7 +1,5 @@
 package depchain.common;
 
-import java.security.Signature;
-
 public class Message {
 	private String msgId;
 	private String senderId;

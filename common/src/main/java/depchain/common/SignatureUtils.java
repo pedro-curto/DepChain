@@ -7,6 +7,9 @@ import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 
+import static depchain.common.KeyUtils.readPrivateKey;
+import static depchain.common.KeyUtils.readPublicKey;
+
 public final class SignatureUtils {
 
 	private static final String SIGNATURE_ALGO = "SHA256withRSA";
@@ -38,25 +41,16 @@ public final class SignatureUtils {
 
 
 	public static KeyPair getMemberKeyPair(String member) {
-
-		String publicKeyPath = "keys/" + member + "/" + member + ".pubkey";
-		String privateKeyPath = "keys/" + member + "/" + member + ".privkey";
+		// reads both PEM keys
+		String publicKeyPath = "membership/" + member + "/" + member + ".pubkey";
+		String privateKeyPath = "membership/" + member + "/" + member + ".privkey";
 
 		try {
-			byte[] pubEncoded = readFile(publicKeyPath);
-			X509EncodedKeySpec pubSpec = new X509EncodedKeySpec(pubEncoded);
-			KeyFactory keyFacPub = KeyFactory.getInstance(ASYM_ALGO);
-			PublicKey pub = keyFacPub.generatePublic(pubSpec);
-
-			byte[] privEncoded = readFile(privateKeyPath);
-			PKCS8EncodedKeySpec privSpec = new PKCS8EncodedKeySpec(privEncoded);
-			KeyFactory keyFacPriv = KeyFactory.getInstance(ASYM_ALGO);
-			PrivateKey priv = keyFacPriv.generatePrivate(privSpec);
-
+			PublicKey pub = readPublicKey(publicKeyPath);
+			PrivateKey priv = readPrivateKey(privateKeyPath);
 			return new KeyPair(pub, priv);
 		} catch(Exception e) {
-			System.err.println("Error reading key pair: " + member);
-			e.printStackTrace();
+			System.err.println("Error reading key pair at " + "membership/" + member + "/" + member + ".pubkey");
 		}
 		return null;
 	}

@@ -1,25 +1,21 @@
 package depchain.client;
 
-import java.io.*;
 import java.net.*;
-import java.security.PrivateKey;
 import java.util.Scanner;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import com.google.gson.Gson;
-import depchain.client.utils.KeyUtils;
+import depchain.common.Leader;
+import depchain.common.LeaderLoader;
 import depchain.common.Message;
-import depchain.common.SignatureUtils;
 import depchain.client.links.PerfectLink;
 
 public class ClientMain {
-    private static final String ADDRESS = "localhost";
-    private static final int SERVER_PORT = 5001;
     private static int clientPort;
     private static String clientName;
-    private static String privKeyPath;
+    private static String LEADER_FILE = "membership/leader.txt";
 
     public static void main(String[] args) throws Exception {
         if (args.length != 2) {
@@ -28,8 +24,11 @@ public class ClientMain {
         }
         clientPort = Integer.parseInt(args[0]);
         clientName = args[1];
-        privKeyPath = "keys/" + clientName + "/" + clientName + ".privkey";
-        System.out.println("Client " + clientName + " started and listening on port " + clientPort);
+        // loads leader info
+        Leader leader = LeaderLoader.leaderLoader(LEADER_FILE);
+        System.out.println("Client " + clientName + " started at port " + clientPort);
+        System.out.println("Leader is: " + leader);
+
         byte[] sendData;
         DatagramSocket clientSocket = new DatagramSocket();
         BlockingQueue<String> messageQueue = new LinkedBlockingQueue<>();
@@ -46,13 +45,8 @@ public class ClientMain {
                 System.exit(0);
             }
             String msgId = UUID.randomUUID().toString();
-            // sign msgId, senderId, msgContent
-            String dataToSign = msgId + clientName + content;
-            // loads private key from keys/clientName/clientName.privkey and signs dataToSign
-            PrivateKey privateKey = KeyUtils.readPrivateKey(privKeyPath);
-            String signature = SignatureUtils.makeDS(dataToSign, privateKey);
 
-            Message msg = new Message(msgId, "client", content, signature);
+            Message msg = new Message(msgId, "client", content, null);
             Gson gson = new Gson();
             String json = gson.toJson(msg);
             sendData = json.getBytes();
@@ -61,8 +55,8 @@ public class ClientMain {
             DatagramPacket sendPacket = new DatagramPacket(
                 sendData, 
                 sendData.length, 
-                InetAddress.getByName(ADDRESS), 
-                SERVER_PORT);
+                InetAddress.getByName(leader.getAddress()),
+                leader.getPort());
             perfectLink.sendMessage(sendPacket, msgId);
         }
     }

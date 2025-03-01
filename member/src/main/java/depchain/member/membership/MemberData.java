@@ -1,4 +1,4 @@
-package depchain.member;
+package depchain.member.membership;
 
 import java.security.PublicKey;
 
@@ -17,6 +17,27 @@ public class MemberData {
 		this.memberName = memberName;
 		this.address = address;
 		this.port = port;
+	}
+
+	public PublicKey getPublicKey() {
+		return publicKey;
+	}
+
+	public String getMemberName() {
+		return memberName;
+	}
+
+	public String getAddress() {
+		return address;
+	}
+
+	public int getPort() {
+		return port;
+	}
+
+	@Override
+	public String toString() {
+		return memberName + " " + address + " " + port;
 	}
 
 }

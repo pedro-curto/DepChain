@@ -612,3 +612,4 @@ security/inputs/seqnumber.txt
 *.privkey
 keys/
 membership.txt
+leader.txt
