@@ -38,5 +38,10 @@ foo
 bar
 ```
 
-## Tests
-- TODO: Add tests
+## To Do
+- Add JUnit tests for perfect links
+- Broadcast a message to all members from the leader when we receive a message from the client
+- Read about conditional collect and implement it
+    - Add JUnit tests for conditional collect
+- Read about Byzantine Read/Write Epoch Consensus and implement it without cryptographic operations
+    - Add JUnit tests to detect Byzantine behaviours
