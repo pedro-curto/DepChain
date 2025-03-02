@@ -5,12 +5,14 @@ public class Message {
 	private String senderId;
 	private String msgContent;
 	private String signature;
+	private String msgType;
 
-	public Message(String msgId, String senderId, String msgContent, String signature) {
+	public Message(String msgId, String senderId, String msgContent, String signature, String msgType) {
 		this.msgId = msgId;
 		this.senderId = senderId;
 		this.msgContent = msgContent;
 		this.signature = signature;
+		this.msgType = msgType;
 	}
 
 	public String getMsgId() {
@@ -45,8 +47,16 @@ public class Message {
 		this.signature = signature;
 	}
 
+	public String getMsgType() {
+		return msgType;
+	}
+
+	public void setMsgType(String msgType) {
+		this.msgType = msgType;
+	}
+
 	@Override
 	public String toString() {
-		return msgId + "||" + senderId + "||" + msgContent + "||" + signature;
+		return msgId + "||" + senderId + "||" + msgContent + "||" + signature + "||" + msgType;
 	}
 }

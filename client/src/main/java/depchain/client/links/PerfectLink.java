@@ -1,5 +1,8 @@
 package depchain.client.links;
 
+import com.google.gson.Gson;
+import depchain.common.Message;
+
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.io.IOException;
@@ -18,6 +21,7 @@ public class PerfectLink {
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(8);
     private final Map<String, ScheduledFuture<?>> msgTasks = new ConcurrentHashMap<>();
     private final BlockingQueue<String> messageQueue;
+    private final Gson gson = new Gson();
 
     public PerfectLink(DatagramSocket socket, BlockingQueue<String> messageQueue) {
         this.socket = socket;
@@ -26,14 +30,14 @@ public class PerfectLink {
     }
 
     public void sendMessage(DatagramPacket packet, String msgId) {
-        System.out.println("Sending message with id: " + msgId);
+        //System.out.println("Sending message with id: " + msgId);
         ScheduledFuture<?> task = scheduler.scheduleAtFixedRate(() -> {
             try {
                 socket.send(packet);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
-        }, 0, 1, TimeUnit.SECONDS);
+        }, 0, 5, TimeUnit.SECONDS);
         System.out.println("Scheduled message with id: " + msgId);
         msgTasks.put(msgId, task);
     }
@@ -47,11 +51,14 @@ public class PerfectLink {
                 try {
                     System.out.println("Waiting for ack...");
                     socket.receive(ackPacket);
-
-                    String ackId = extractUUIDFromAck(ackPacket).toString();
-                    System.out.println("received ack id: " + ackId);
+                    String ackString = new String(ackPacket.getData(), 0, ackPacket.getLength());
+                    // gets message and checks if we already received it
+                    Message ack = gson.fromJson(ackString, Message.class);
+                    String ackId = UUID.fromString(ack.getMsgId()).toString();
+                    // the client will only receive clientAcks but still, we check
+                    System.out.println("Received ack: " + ack);
                     ScheduledFuture<?> task = msgTasks.remove(ackId);
-                    System.out.println("Removed task for message " + ackId);
+                    System.out.println("Removed task with id " + ackId);
                     System.out.println("Remaining tasks: " + msgTasks.keySet());
                     if (task != null) {
                         task.cancel(true);

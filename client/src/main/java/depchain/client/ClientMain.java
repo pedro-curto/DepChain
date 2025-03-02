@@ -16,6 +16,7 @@ public class ClientMain {
     private static int clientPort;
     private static String clientName;
     private static String LEADER_FILE = "membership/leader.txt";
+    private static final Gson gson = new Gson();
 
     public static void main(String[] args) throws Exception {
         if (args.length != 2) {
@@ -46,8 +47,7 @@ public class ClientMain {
             }
             String msgId = UUID.randomUUID().toString();
 
-            Message msg = new Message(msgId, "client", content, null);
-            Gson gson = new Gson();
+            Message msg = new Message(msgId, clientName, content, null, "client");
             String json = gson.toJson(msg);
             sendData = json.getBytes();
 

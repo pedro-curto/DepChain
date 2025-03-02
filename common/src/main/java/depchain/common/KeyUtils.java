@@ -17,7 +17,7 @@ public class KeyUtils {
 				.replace("-----BEGIN PRIVATE KEY-----", "")
 				.replaceAll(System.lineSeparator(), "")
 				.replace("-----END PRIVATE KEY-----", "");
-		System.out.println("Private key:" + privateKeyPEM);
+		//System.out.println("Private key:" + privateKeyPEM);
 		byte[] encoded = java.util.Base64.getDecoder().decode(privateKeyPEM);
 		KeyFactory keyFactory = KeyFactory.getInstance("RSA");
 		PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(encoded);
@@ -31,7 +31,7 @@ public class KeyUtils {
 				.replace("-----BEGIN PUBLIC KEY-----", "")
 				.replaceAll(System.lineSeparator(), "")
 				.replace("-----END PUBLIC KEY-----", "");
-		System.out.println("Public key:" + publicKeyPEM);
+		//System.out.println("Public key:" + publicKeyPEM);
 		byte[] encoded = java.util.Base64.getDecoder().decode(publicKeyPEM);
 		KeyFactory keyFactory = KeyFactory.getInstance("RSA");
 		X509EncodedKeySpec keySpec = new X509EncodedKeySpec(encoded);

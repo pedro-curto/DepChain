@@ -46,16 +46,17 @@ public class MembershipManager {
 				return null;
 			}
 			String[] tokens = line.split(",");
-			if (tokens.length != 4) {
+			// format of leader.txt is pedrocurto,localhost,5001, e.g.
+			if (tokens.length != 3) {
 				System.err.println("Invalid leader entry: " + line);
 				return null;
 			}
 			String memberName = tokens[0].trim();
 			String address = tokens[1].trim();
 			int port = Integer.parseInt(tokens[2].trim());
-			String pubKeyPath = tokens[3].trim();
-			PublicKey pubKey = KeyUtils.readPublicKey(pubKeyPath);
-			return new MemberData(memberName, pubKey, address, port);
+			//String pubKeyPath = tokens[3].trim();
+			//PublicKey pubKey = KeyUtils.readPublicKey(pubKeyPath);
+			return new MemberData(memberName, null, address, port);
 		} catch (Exception e) {
 			System.err.println("Error reading leader file: " + e.getMessage());
 			return null;

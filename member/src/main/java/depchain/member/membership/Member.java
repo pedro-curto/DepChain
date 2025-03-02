@@ -23,7 +23,9 @@ private KeyPair keyPair;
 
 	public boolean isLeader() {
 		MemberData leader = MembershipManager.getLeader();
+		System.out.println("Leader: " + leader);
 		if (leader == null) {
+			System.out.println("No leader found");
 			return false;
 		}
 		return leader.getMemberName().equalsIgnoreCase(memberName);

@@ -54,7 +54,7 @@ public class PerfectLink {
 
     public void start() {
         new Thread(this::startListening).start();
-        new Thread(this::startAckListener).start();
+        //new Thread(this::startAckListener).start();
     }
 
     private void startListening() {
@@ -85,8 +85,8 @@ public class PerfectLink {
                     messageHandler.handleMessage(received, packet.getAddress(), packet.getPort());
                 }
                 // sends ack
-                System.out.println("Sending ack for message " + msgId);
-                sendAck(packet.getAddress(), packet.getPort(), msgId);
+                //System.out.println("Sending ack for message " + msgId);
+                //sendAck(packet.getAddress(), packet.getPort(), msgId);
                 // delivers message
                 System.out.println("Delivering message...");
                 deliverMessage(message.getMsgContent());
@@ -97,6 +97,38 @@ public class PerfectLink {
         }
     }
 
+    private void sendAck(InetAddress address, int port, UUID msgId) {
+        // message with msgType clientAck and msgId of myself
+        Message ack = new Message(msgId.toString(), myself.getMemberName(), null, null, "clientAck");
+        byte[] ackData = ack.toString().getBytes();
+        DatagramPacket ackPacket = new DatagramPacket(ackData, ackData.length, address, port);
+        try {
+            System.out.println("Sending ack: " + ack + " to " + address + ":" + port);
+            socket.send(ackPacket);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private void deliverMessage(String message) {
+        System.out.println("Delivering message: " + message);
+        if (messageQueue.offer(message) == false) {
+            System.out.println("Message queue is full, unable to deliver message: " + message);
+            return;
+        }
+        System.out.println("Message delivered: " + message);
+    }
+
+    public void sendAckToClient(DatagramPacket ackPacket, String msgId) {
+        try {
+            System.out.println("[PerfectLink] Sending ack to client with id: " + msgId);
+            socket.send(ackPacket);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    // TODO -> acho que o ackListener é inútil
     private void startAckListener() {
         byte[] buffer = new byte[1024];
         while (true) {
@@ -121,26 +153,4 @@ public class PerfectLink {
             }
         }
     }
-
-    private void sendAck(InetAddress address, int port, UUID msgId) {
-        String ackMessage = "ACK:" + msgId.toString();
-        byte[] ackData = ackMessage.getBytes();
-        DatagramPacket ackPacket = new DatagramPacket(ackData, ackData.length, address, port);
-        try {
-            System.out.println("Sending ack: " + ackMessage + " to " + address + ":" + port);
-            socket.send(ackPacket);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private void deliverMessage(String message) {
-        System.out.println("Delivering message: " + message);
-        if (messageQueue.offer(message) == false) {
-            System.out.println("Message queue is full, unable to deliver message: " + message);
-            return;
-        }
-        System.out.println("Message delivered: " + message);
-    }
-
 }
