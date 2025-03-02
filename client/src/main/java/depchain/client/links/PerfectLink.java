@@ -15,7 +15,7 @@ import java.util.UUID;
 public class PerfectLink {
 
     private DatagramSocket socket;
-    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(8);
     private final Map<String, ScheduledFuture<?>> msgTasks = new ConcurrentHashMap<>();
     private final BlockingQueue<String> messageQueue;
 
@@ -33,7 +33,7 @@ public class PerfectLink {
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
-        }, 0, 30, TimeUnit.SECONDS);
+        }, 0, 1, TimeUnit.SECONDS);
         System.out.println("Scheduled message with id: " + msgId);
         msgTasks.put(msgId, task);
     }

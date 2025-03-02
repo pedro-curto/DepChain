@@ -1,11 +1,11 @@
-package depchain.member.links;
+package depchain.member.messaging;
 
 import com.google.gson.Gson;
 import depchain.common.Message;
 import depchain.common.SignatureUtils;
+import depchain.member.links.PerfectLink;
 import depchain.member.membership.Member;
 import depchain.member.membership.MemberData;
-import depchain.member.messaging.MessageHandler;
 
 import java.net.DatagramPacket;
 import java.net.InetAddress;

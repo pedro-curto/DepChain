@@ -5,12 +5,11 @@ import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
-import depchain.member.links.MessageHandlerImpl;
+import depchain.member.messaging.MessageHandlerImpl;
 import depchain.member.links.PerfectLink;
 import depchain.member.membership.Member;
 import depchain.member.membership.MemberData;
 import depchain.member.membership.MembershipManager;
-import depchain.member.messaging.MessageHandler;
 
 public class MemberMain {
     private static int port;

@@ -26,7 +26,7 @@ public class PerfectLink {
     private final Gson gson = new Gson();
     private final Member myself;
     // tasks to resend a message until an ack is received
-    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(8);
     private final Map<String, ScheduledFuture<?>> msgTasks = new ConcurrentHashMap<>();
 
     public PerfectLink(DatagramSocket socket, BlockingQueue<String> messageQueue, Member myself) {
