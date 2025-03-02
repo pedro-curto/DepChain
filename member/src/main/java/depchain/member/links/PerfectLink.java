@@ -100,7 +100,7 @@ public class PerfectLink {
     private void sendAck(InetAddress address, int port, UUID msgId) {
         // message with msgType clientAck and msgId of myself
         Message ack = new Message(msgId.toString(), myself.getMemberName(), null, null, "clientAck");
-        byte[] ackData = ack.toString().getBytes();
+        byte[] ackData = gson.toJson(ack).getBytes();
         DatagramPacket ackPacket = new DatagramPacket(ackData, ackData.length, address, port);
         try {
             System.out.println("Sending ack: " + ack + " to " + address + ":" + port);

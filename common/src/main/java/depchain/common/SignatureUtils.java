@@ -25,14 +25,14 @@ public final class SignatureUtils {
 		return Base64.getEncoder().encodeToString(signature);
 	}
 
-	public static boolean verifyDS(byte[] receivedSignature, byte[] bytes, PublicKey publicKey)
-			throws Exception {
+	public static boolean verifyDS(String receivedSignature, String data, PublicKey publicKey) throws Exception {
 		// verify the signature with the public key
 		Signature sig = Signature.getInstance(SIGNATURE_ALGO);
 		sig.initVerify(publicKey);
-		sig.update(bytes);
+		sig.update(data.getBytes());
+		byte[] signatureBytes = Base64.getDecoder().decode(receivedSignature);
 		try {
-			return sig.verify(receivedSignature);
+			return sig.verify(signatureBytes);
 		} catch (SignatureException se) {
 			System.err.println("Caught exception while verifying " + se);
 			return false;
@@ -61,5 +61,15 @@ public final class SignatureUtils {
 		fis.read(content);
 		fis.close();
 		return content;
+	}
+
+	public static PublicKey getMemberPublicKey(String senderId) {
+		String publicKeyPath = "membership/" + senderId + "/" + senderId + ".pubkey";
+		try {
+			return readPublicKey(publicKeyPath);
+		} catch (Exception e) {
+			System.err.println("Error reading public key at " + publicKeyPath);
+		}
+		return null;
 	}
 }
