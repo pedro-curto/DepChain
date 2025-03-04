@@ -5,14 +5,17 @@ public class Message {
 	private String senderId;
 	private String msgContent;
 	private String signature;
+
+	private String request;
 	private String msgType;
 
-	public Message(String msgId, String senderId, String msgContent, String signature, String msgType) {
+	public Message(String msgId, String senderId, String msgContent, String signature, String msgType, String request) {
 		this.msgId = msgId;
 		this.senderId = senderId;
 		this.msgContent = msgContent;
 		this.signature = signature;
 		this.msgType = msgType;
+		this.request = request;
 	}
 
 	public String getMsgId() {
@@ -29,6 +32,10 @@ public class Message {
 
 	public String getSignature() {
 		return signature;
+	}
+
+	public String getRequest() {
+		return request;
 	}
 
 	public void setMsgId(String msgId) {

@@ -1,6 +1,7 @@
 package depchain.member;
 
 import java.net.DatagramSocket;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -10,6 +11,9 @@ import depchain.member.links.PerfectLink;
 import depchain.member.membership.Member;
 import depchain.member.membership.MemberData;
 import depchain.member.membership.MembershipManager;
+import depchain.member.state.BlockchainState;
+import depchain.common.Request;
+import depchain.member.state.RequestHandler;
 
 public class MemberMain {
     private static int port;
@@ -33,7 +37,10 @@ public class MemberMain {
         Member myself = new Member(memberName, membershipInfo);
         System.out.println("Am I leader? " + myself.isLeader());
         DatagramSocket serverSocket = new DatagramSocket(port);
-        BlockingQueue<String> messageQueue = new LinkedBlockingQueue<>();
+        BlockingQueue<Request> messageQueue = new LinkedBlockingQueue<>();
+
+        // initializing blockchain
+        RequestHandler requestHandler = new RequestHandler(new BlockchainState(new ArrayList<>()));
 
         // starts message handler and perfect link
         PerfectLink perfectLink = new PerfectLink(serverSocket, messageQueue, myself);
@@ -41,8 +48,10 @@ public class MemberMain {
         perfectLink.start();
 
         while (true) {
-            String message = messageQueue.take();
-            System.out.println("[MESSAGE]: " + message);
+            Request request = messageQueue.take();
+            if (request.getAction() != null && request.getContent() != null) {
+                requestHandler.handleRequest(request);
+            }
         }
     }
 

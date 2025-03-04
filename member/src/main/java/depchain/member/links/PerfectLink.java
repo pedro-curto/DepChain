@@ -3,16 +3,14 @@ package depchain.member.links;
 import com.google.gson.Gson;
 
 import depchain.common.Message;
-import depchain.common.SignatureUtils;
 import depchain.member.membership.Member;
-import depchain.member.membership.MemberData;
 import depchain.member.messaging.MessageHandler;
+import depchain.common.Request;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.*;
@@ -21,7 +19,7 @@ public class PerfectLink {
 
     private DatagramSocket socket;
     private MessageHandler messageHandler;
-    private final BlockingQueue<String> messageQueue;
+    private final BlockingQueue<Request> messageQueue;
     private final Map<String, String> receivedMessages = new ConcurrentHashMap<>();
     private final Gson gson = new Gson();
     private final Member myself;
@@ -29,7 +27,7 @@ public class PerfectLink {
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(8);
     private final Map<String, ScheduledFuture<?>> msgTasks = new ConcurrentHashMap<>();
 
-    public PerfectLink(DatagramSocket socket, BlockingQueue<String> messageQueue, Member myself) {
+    public PerfectLink(DatagramSocket socket, BlockingQueue<Request> messageQueue, Member myself) {
         this.socket = socket;
         this.messageQueue = messageQueue;
         this.myself = myself;
@@ -89,7 +87,8 @@ public class PerfectLink {
                 //sendAck(packet.getAddress(), packet.getPort(), msgId);
                 // delivers message
                 System.out.println("Delivering message...");
-                deliverMessage(message.getMsgContent());
+                Request request = new Request(message.getRequest(), message.getMsgContent());
+                deliverMessage(request);
 
             } catch (IOException e) {
                 throw new RuntimeException(e);
@@ -99,7 +98,7 @@ public class PerfectLink {
 
     private void sendAck(InetAddress address, int port, UUID msgId) {
         // message with msgType clientAck and msgId of myself
-        Message ack = new Message(msgId.toString(), myself.getMemberName(), null, null, "clientAck");
+        Message ack = new Message(msgId.toString(), myself.getMemberName(), null, null, "clientAck", null);
         byte[] ackData = gson.toJson(ack).getBytes();
         DatagramPacket ackPacket = new DatagramPacket(ackData, ackData.length, address, port);
         try {
@@ -110,13 +109,14 @@ public class PerfectLink {
         }
     }
 
-    private void deliverMessage(String message) {
+    private void deliverMessage(Request message) {
         System.out.println("Delivering message: " + message);
-        if (messageQueue.offer(message) == false) {
-            System.out.println("Message queue is full, unable to deliver message: " + message);
-            return;
+        if (messageQueue.offer(message)) {
+            System.out.println("Message delivered: " + message);
         }
-        System.out.println("Message delivered: " + message);
+        else {
+            System.out.println("Message queue is full, unable to deliver message: " + message);
+        }
     }
 
     public void sendAckToClient(DatagramPacket ackPacket, String msgId) {

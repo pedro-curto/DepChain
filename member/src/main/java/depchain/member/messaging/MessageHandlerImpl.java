@@ -76,7 +76,7 @@ public class MessageHandlerImpl implements MessageHandler {
 		}
 		try {
 			// first, send ack back to client
-			Message ack = new Message(msg.getMsgId(), myself.getMemberName(), null, null, "clientAck");
+			Message ack = new Message(msg.getMsgId(), myself.getMemberName(), null, null, "clientAck", null);
 			byte[] ackData = gson.toJson(ack).getBytes();
 			DatagramPacket ackPacket = new DatagramPacket(ackData, ackData.length, senderAddress, senderPort);
 			System.out.println("[Handler] Sending ack back to client: " + ack);
@@ -87,7 +87,7 @@ public class MessageHandlerImpl implements MessageHandler {
 			String dataToSign = msgId + myself.getMemberName() + msg.getMsgContent() + "broadcast";
 			System.out.println("[Handler] Data to sign: " + dataToSign);
 			String signature = SignatureUtils.makeDS(dataToSign, myself.getKeyPair().getPrivate());
-			Message leaderMessage = new Message(msgId, myself.getMemberName(), msg.getMsgContent(), signature, "broadcast");
+			Message leaderMessage = new Message(msgId, myself.getMemberName(), msg.getMsgContent(), signature, "broadcast", msg.getRequest());
 			byte[] data = gson.toJson(leaderMessage).getBytes();
 			broadcastMessage(data);
 		} catch (Exception e) {

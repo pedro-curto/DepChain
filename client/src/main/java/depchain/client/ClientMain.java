@@ -47,7 +47,7 @@ public class ClientMain {
             }
             String msgId = UUID.randomUUID().toString();
 
-            Message msg = new Message(msgId, clientName, content, null, "client");
+            Message msg = new Message(msgId, clientName, content, null, "client", "append");
             String json = gson.toJson(msg);
             sendData = json.getBytes();
 
