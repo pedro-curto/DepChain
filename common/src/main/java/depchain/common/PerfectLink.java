@@ -1,13 +1,13 @@
-package depchain.member.links;
+package depchain.common;
 
 import com.google.gson.Gson;
-import depchain.common.Message;
-import depchain.member.membership.Member;
-import depchain.common.MessageType;
+import depchain.common.session.Session;
+
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.Map;
 import java.util.concurrent.*;
 
@@ -15,38 +15,40 @@ public class PerfectLink {
 
     private final DatagramSocket socket;
     private final BlockingQueue<Message> messageQueue;
-    private long receiveCounter;
-    private long sendCounter;
-    private final Member myself;
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(8);
     private final Map<Long, ScheduledFuture<?>> msgTasks = new ConcurrentHashMap<>();
     private final Map<Long, Message> msgsToDeliver = new ConcurrentHashMap<>();
+    private final Map<Integer, Session> sessions;
     private final Gson gson = new Gson();
 
-    public PerfectLink(DatagramSocket socket, BlockingQueue<Message> messageQueue, Member myself) {
+    public PerfectLink(DatagramSocket socket, BlockingQueue<Message> messageQueue, Map<Integer, Session> sessions) {
         this.socket = socket;
         this.messageQueue = messageQueue;
-        this.myself = myself;
-        this.sendCounter = 0;
-        this.receiveCounter = 0;
+        this.sessions = sessions;
     }
 
     public void start() {
         new Thread(this::startListening).start();
     }
 
-    public void sendMessage(Message message, InetAddress address, int port) {
-       System.out.println("[PerfectLink] Sending message with sequence number: " + this.sendCounter);
-       message.setSequenceNumber(sendCounter);
+    public void sendMessage(Message message, Session session) {
+       long sequenceNumber = session.getSendCounter();
+       System.out.println("[PerfectLink] Sending message with sequence number: " + sequenceNumber);
+       message.setSequenceNumber(sequenceNumber);
        String json = gson.toJson(message);
-       DatagramPacket packet = new DatagramPacket(
-                json.getBytes(),
-                json.length(),
-                address,
-                port);
-       scheduleMessage(packet, sendCounter);
-       msgsToDeliver.put(sendCounter, message);
-       sendCounter++;
+       try {
+           DatagramPacket packet = new DatagramPacket(
+                    json.getBytes(),
+                    json.length(),
+                    InetAddress.getByName(session.getAddress()),
+                    session.getPort());
+           scheduleMessage(packet, sequenceNumber);
+       } catch (UnknownHostException e) {
+           throw new RuntimeException(e);
+       }
+       msgsToDeliver.put(sequenceNumber, message);
+       sequenceNumber++;
+       session.setSendCounter(sequenceNumber);
     }
 
     public void scheduleMessage(DatagramPacket packet, long sequenceNumber) {
@@ -80,17 +82,19 @@ public class PerfectLink {
             long sequenceNumber = message.getSequenceNumber();
             System.out.println("[PerfectLink] Received Message with type " + type + " and sequence number " + sequenceNumber);
 
+            Session session = sessions.get(packet.getPort());
+
             if (type == MessageType.ACK) {
-                handleAck(sequenceNumber);
+                handleAck(sequenceNumber, session);
             } else {
-                handleContentMessage(sequenceNumber, message, packet.getAddress(), packet.getPort());
+                handleContentMessage(sequenceNumber, message, session);
             }
         }
     }
 
-    public void handleAck(long sequenceNumber) {
+    public void handleAck(long sequenceNumber, Session session) {
         System.out.println("[PerfectLink] Received ack for message with sequence number " + sequenceNumber);
-        if (sequenceNumber < this.sendCounter) {
+        if (sequenceNumber < session.getSendCounter()) {
             ScheduledFuture<?> task = msgTasks.remove(sequenceNumber);
             if (task != null) {
                 task.cancel(true);
@@ -107,30 +111,34 @@ public class PerfectLink {
         System.out.println("[PerfectLink-AckListener] Received an unknown ACK: " + sequenceNumber);
     }
 
-    public void handleContentMessage(long sequenceNumber, Message message, InetAddress address, int port) {
+    public void handleContentMessage(long sequenceNumber, Message message, Session session) {
         System.out.println("[PerfectLink] Received content message with sequence number " + sequenceNumber);
-        if (sequenceNumber == this.receiveCounter) {
+        long counter = session.getReceiveCounter();
+        if (sequenceNumber == counter) {
             System.out.println("[PerfectLink] Received new content message");
             deliverMessage(message);
-            this.receiveCounter++;
-            sendAck(address, port, sequenceNumber);
+            counter++;
+            session.setReceiveCounter(counter);
+            sendAck(session, sequenceNumber);
             return;
         }
-        if (sequenceNumber < this.receiveCounter) {
+        if (sequenceNumber < counter) {
             System.out.println("[PerfectLink] Already received message");
-            sendAck(address, port, sequenceNumber);
+            sendAck(session, sequenceNumber);
             return;
         }
         System.out.println("[PerfectLink] Message with invalid sequence number");
     }
 
-    private void sendAck(InetAddress address, int port, long seqNumber) {
-        Message ack = new Message(seqNumber, myself.getMemberName(), null, null, MessageType.ACK);
+    private void sendAck(Session session, long seqNumber) {
+        Message ack = new Message(seqNumber,null, null, null, MessageType.ACK);
         byte[] ackData = gson.toJson(ack).getBytes();
-        DatagramPacket ackPacket = new DatagramPacket(ackData, ackData.length, address, port);
         try {
-            System.out.println("Sending ack: " + ack + " to " + address + ":" + port);
+            DatagramPacket ackPacket = new DatagramPacket(ackData, ackData.length, InetAddress.getByName(session.getAddress()), session.getPort());
+            System.out.println("Sending ack: " + ack + " to " + session.getAddress() + ":" + session.getPort());
             socket.send(ackPacket);
+        } catch (UnknownHostException uhe) {
+            throw new RuntimeException(uhe);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

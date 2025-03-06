@@ -1,29 +1,38 @@
 package depchain.common;
 
 public class Message {
-	private String msgId;
-	private String senderId;
-	private String msgContent;
-	private String signature;
 
-	private String request;
-	private String msgType;
+	private long sequenceNumber;
+	private final String senderName;
+	private final String msgContent;
+	private final String signature;
+	private final MessageType type;
 
-	public Message(String msgId, String senderId, String msgContent, String signature, String msgType, String request) {
-		this.msgId = msgId;
-		this.senderId = senderId;
+	public Message(long sequenceNumber, String senderName, String msgContent, String signature, MessageType type) {
+		this.sequenceNumber = sequenceNumber;
+		this.senderName = senderName;
 		this.msgContent = msgContent;
 		this.signature = signature;
-		this.msgType = msgType;
-		this.request = request;
+		this.type = type;
 	}
 
-	public String getMsgId() {
-		return msgId;
+	public Message(String senderName, String msgContent, String signature, MessageType type) {
+		this.senderName = senderName;
+		this.msgContent = msgContent;
+		this.signature = signature;
+		this.type = type;
 	}
 
-	public String getSenderId() {
-		return senderId;
+	public long getSequenceNumber() {
+		return sequenceNumber;
+	}
+
+	public void setSequenceNumber(long sequenceNumber) {
+		this.sequenceNumber = sequenceNumber;
+	}
+
+	public String getSenderName() {
+		return senderName;
 	}
 
 	public String getMsgContent() {
@@ -34,36 +43,12 @@ public class Message {
 		return signature;
 	}
 
-	public String getRequest() {
-		return request;
-	}
-
-	public void setMsgId(String msgId) {
-		this.msgId = msgId;
-	}
-
-	public void setSenderId(String senderId) {
-		this.senderId = senderId;
-	}
-
-	public void setMsgContent(String msgContent) {
-		this.msgContent = msgContent;
-	}
-
-	public void setSignature(String signature) {
-		this.signature = signature;
-	}
-
-	public String getMsgType() {
-		return msgType;
-	}
-
-	public void setMsgType(String msgType) {
-		this.msgType = msgType;
+	public MessageType getType() {
+		return type;
 	}
 
 	@Override
 	public String toString() {
-		return msgId + "||" + senderId + "||" + msgContent + "||" + signature + "||" + msgType;
+		return sequenceNumber + "||" + senderName + "||" + msgContent + "||" + signature + "||" + type;
 	}
 }

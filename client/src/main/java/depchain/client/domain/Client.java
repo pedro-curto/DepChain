@@ -4,9 +4,9 @@ import com.google.gson.Gson;
 import depchain.client.links.PerfectLink;
 import depchain.common.Leader;
 import depchain.common.Message;
-import depchain.common.Request;
 import depchain.common.Security;
 import depchain.common.session.Session;
+import depchain.common.MessageType;
 
 import javax.crypto.SecretKey;
 import java.net.DatagramPacket;
@@ -43,7 +43,7 @@ public class Client {
 
         // handshake with leader to deliver the session key
         SecretKey sessionKey = Security.generateSecretKey();
-        sessionWithLeader = new Session(UUID.randomUUID().toString(), sessionKey, socket);
+        sessionWithLeader = new Session(UUID.randomUUID().toString(), sessionKey, leader.getPort(), leader.getAddress());
         sendSessionKeyToLeader(sessionKey);
 
         // start a thread to deliver incoming messages
@@ -64,8 +64,8 @@ public class Client {
         String dataForHMAC = msgId + myName + b64EncryptedKey + "clientKey";
         String hmac = Security.generateHMAC(dataForHMAC, sessionKey);
 
-        // create special handshake message (type "clientKey")
-        Message keyMsg = new Message(msgId, myName, b64EncryptedKey, hmac, "clientKey", null);
+        // create special handshake message
+        Message keyMsg = new Message(msgId, myName, b64EncryptedKey, hmac, MessageType.KEY_EXCHANGE);
         String json = gson.toJson(keyMsg);
         DatagramPacket packet = new DatagramPacket(
                 json.getBytes(),
@@ -87,7 +87,7 @@ public class Client {
                 System.exit(0);
             }
             String msgId = UUID.randomUUID().toString();
-            Message msg = new Message(msgId, myName, content, null, "client", "append");
+            Message msg = new Message(msgId, myName, content, MessageType.CLIENT_APPEND);
             String json = gson.toJson(msg);
             DatagramPacket sendPacket = new DatagramPacket(
                     json.getBytes(),

@@ -1,11 +1,18 @@
 package depchain.member.membership;
 
+import depchain.common.Message;
+import depchain.common.PerfectLink;
 import depchain.common.Security;
-import depchain.member.links.PerfectLink;
+import depchain.member.state.BlockchainState;
+import depchain.member.state.RequestHandler;
 
 import javax.crypto.SecretKey;
+import java.net.DatagramSocket;
 import java.security.KeyPair;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public class Member {
 
@@ -13,10 +20,13 @@ public class Member {
 	private List<MemberData> members;
 	private String myName;
 	private int port;
+	private String address;
 
-	public Member(String memberName, List<MemberData> members) {
+	public Member(String memberName, List<MemberData> members, int port, String address) {
 		this.myName = memberName;
 		this.members = members;
+		this.port = port;
+		this.address = address;
 		readMyKeyPair(memberName);
 	}
 
@@ -50,10 +60,10 @@ public class Member {
 		return port > this.port;
 	}
 
-	public void generateMembersSecretKeys() {
+	private void generateMembersSecretKeys() {
 		for (MemberData memberData : this.members) {
 			if (isInitializer(memberData.getPort())) {
-				// I'm responsible for generating the communication key
+				// i'm responsible for generating the communication key
 				SecretKey key = Security.generateSecretKey();
 				if (key != null) {
 					memberData.setSymKey(key);
@@ -66,4 +76,26 @@ public class Member {
 		}
 	}
 
+    public void start() throws Exception {
+		System.out.println("Am I leader? " + this.isLeader());
+		DatagramSocket serverSocket = new DatagramSocket(port);
+		BlockingQueue<Message> messageQueue = new LinkedBlockingQueue<>();
+
+		// generates symmetric keys for all processes with ports bigger than mine
+		generateMembersSecretKeys();
+
+		// initializing blockchain
+		RequestHandler requestHandler = new RequestHandler(new BlockchainState(new ArrayList<>()));
+
+		// sessions
+
+
+		// starts message handler and perfect link
+		depchain.common.PerfectLink perfectLink = new PerfectLink(serverSocket, messageQueue);
+		perfectLink.start();
+
+		while (true) {
+			Message message = messageQueue.take();
+		}
+    }
 }

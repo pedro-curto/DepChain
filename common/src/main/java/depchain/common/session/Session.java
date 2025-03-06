@@ -6,12 +6,18 @@ import java.net.DatagramSocket;
 public class Session {
     private final String sessionId;
     private final SecretKey secretKey;
-    private final DatagramSocket socket;
+    private final int port;
+    private final String address;
+    private long receiveCounter;
+    private long sendCounter;
 
-    public Session(String sessionId, SecretKey secretKey, DatagramSocket socket) {
+    public Session(String sessionId, SecretKey secretKey, int port, String address) {
         this.sessionId = sessionId;
         this.secretKey = secretKey;
-        this.socket = socket;
+        this.port = port;
+        this.address = address;
+        this.receiveCounter = 0;
+        this.sendCounter = 0;
     }
 
     public String getSessionId() {
@@ -22,8 +28,16 @@ public class Session {
         return secretKey;
     }
 
-    public DatagramSocket getSocket() {
-        return socket;
-    }
+    public int getPort() { return port; }
+
+    public String getAddress() { return address; }
+
+    public long getReceiveCounter() { return receiveCounter; }
+
+    public long getSendCounter() { return sendCounter; }
+
+    public void setReceiveCounter(long receiveCounter) { this.receiveCounter = receiveCounter; }
+
+    public void setSendCounter(long sendCounter) { this.sendCounter = sendCounter; }
 
 }

@@ -4,7 +4,6 @@ import depchain.common.Request;
 
 public class RequestHandler {
 
-    private final static String APPEND = "append";
     private final BlockchainState blockchainState;
 
     public RequestHandler(BlockchainState blockchainState) {
@@ -14,12 +13,12 @@ public class RequestHandler {
     public void handleRequest(Request request) {
         System.out.println("[MESSAGE]: " + request);
 
-        switch (request.getAction()) {
+        switch (request.getType()) {
             case APPEND:
                 handleAppend(request.getContent());
                 break;
             default:
-                System.out.println("Unkwown action");
+                System.err.println("Unknown command");
                 break;
         }
     }

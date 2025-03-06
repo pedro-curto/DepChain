@@ -14,7 +14,7 @@ import java.security.PublicKey;
 import java.util.Base64;
 import java.util.UUID;
 
-public class MessageHandlerImpl implements MessageHandler {
+public class MessageHandlerImpl {
 
 	private final Member myself;
 	private final PerfectLink perfectLink; // used to broadcast messages
@@ -25,12 +25,11 @@ public class MessageHandlerImpl implements MessageHandler {
 		this.perfectLink = perfectLink;
 	}
 
-	@Override
 	public void handleMessage(String jsonMessage, InetAddress senderAddress, int senderPort) {
 		// messages that we can receive are: from a client, a broadcast from another member, or an ack from another member
 		Message msg = gson.fromJson(jsonMessage, Message.class);
-		System.out.println("[Handler] Received message type " + msg.getMsgType() + " from " + msg.getSenderId() + ": " + msg.getMsgContent());
-		switch (msg.getMsgType()) {
+		System.out.println("[Handler] Received message type " + msg.getType() + " from " + msg.getSenderName() + ": " + msg.getMsgContent());
+		switch (msg.getType()) {
 			case "client":
 				handleClientMessage(msg, senderAddress, senderPort);
 				break;
@@ -40,7 +39,7 @@ public class MessageHandlerImpl implements MessageHandler {
 			case "clientKey":
 				handleClientKeyMessage(msg);
 			default:
-				System.err.println("[Handler] Unknown message type: " + msg.getMsgType());
+				System.err.println("[Handler] Unknown message type: " + msg.getType());
 		}
 	}
 
@@ -54,12 +53,12 @@ public class MessageHandlerImpl implements MessageHandler {
 	private void handleBroadcastMessage(Message msg) {
 		System.out.println("[Handler] Received message: " + msg);
 		// check digital signature
-		String dataToVerify = msg.getMsgId() + msg.getSenderId() + msg.getMsgContent() + msg.getMsgType();
+		String dataToVerify = msg.getMsgId() + msg.getSenderName() + msg.getMsgContent() + msg.getType();
 		System.out.println("[Handler] Data to verify: " + dataToVerify);
 		boolean verified;
 		try {
 			// gets public key of the member that sent the message
-			PublicKey senderPublicKey = Security.getMemberPublicKey(msg.getSenderId());
+			PublicKey senderPublicKey = Security.getMemberPublicKey(msg.getSenderName());
 			System.out.println("[Handler] Public key of sender: " + Base64.getEncoder().encodeToString(senderPublicKey.getEncoded()));
 			verified = Security.verifyDS(msg.getSignature(), dataToVerify, senderPublicKey);
 		} catch (Exception e) {
@@ -114,7 +113,7 @@ public class MessageHandlerImpl implements MessageHandler {
 				InetAddress address = InetAddress.getByName(member.getAddress());
 				DatagramPacket packet = new DatagramPacket(data, data.length, address, member.getPort());
 				// use PerfectLink's send method to send
-				perfectLink.sendMessage(packet, myself.getMemberName());
+				perfectLink.sendMessage();
 				System.out.println("[Handler] Broadcasted message to " + member.getMemberName());
 			} catch (UnknownHostException e) {
 				System.err.println("[Handler] Unknown host for " + member.getMemberName() + ": " + e.getMessage());
