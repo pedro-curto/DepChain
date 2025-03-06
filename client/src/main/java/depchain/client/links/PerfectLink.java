@@ -1,7 +1,6 @@
 package depchain.client.links;
 
 import com.google.gson.Gson;
-import depchain.common.Message;
 
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -22,11 +21,14 @@ public class PerfectLink {
     private final Map<String, ScheduledFuture<?>> msgTasks = new ConcurrentHashMap<>();
     private final BlockingQueue<String> messageQueue;
     private final Gson gson = new Gson();
+    AcknowledgeHandler ackHandler;
 
     public PerfectLink(DatagramSocket socket, BlockingQueue<String> messageQueue) {
         this.socket = socket;
         this.messageQueue = messageQueue;
-        startAckListener();
+        AcknowledgeHandler ackHandler = new AcknowledgeHandler(socket, msgTasks, true);
+        ackHandler.start();
+        //startAckListener();
     }
 
     public void sendMessage(DatagramPacket packet, String msgId) {
@@ -42,40 +44,42 @@ public class PerfectLink {
         msgTasks.put(msgId, task);
     }
 
-    private void startAckListener() {
-        System.out.println("Starting ack listener thread");
-        new Thread(() -> {
-            byte[] buffer = new byte[1024];
-            while (true) {
-                DatagramPacket ackPacket = new DatagramPacket(buffer, buffer.length);
-                try {
-                    System.out.println("Waiting for ack...");
-                    socket.receive(ackPacket);
-                    String ackString = new String(ackPacket.getData(), 0, ackPacket.getLength());
-                    // gets message and checks if we already received it
-                    Message ack = gson.fromJson(ackString, Message.class);
-                    String ackId = UUID.fromString(ack.getMsgId()).toString();
-                    // the client will only receive clientAcks but still, we check
-                    System.out.println("Received ack: " + ack);
-                    ScheduledFuture<?> task = msgTasks.remove(ackId);
-                    System.out.println("Removed task with id " + ackId);
-                    System.out.println("Remaining tasks: " + msgTasks.keySet());
-                    if (task != null) {
-                        task.cancel(true);
-                        System.out.println("Message " + ackId + " acknowledged");
 
-                        deliverMessage(ackId);
-                        System.out.println("Delivered message " + ackId);
-
-                    } else {
-                        System.out.println("Received an unknown ack: " + ackId);
-                    }
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-        }).start();
-    }
+    // TODO -> comment out?
+//    private void startAckListener() {
+//        System.out.println("Starting ack listener thread");
+//        new Thread(() -> {
+//            byte[] buffer = new byte[1024];
+//            while (true) {
+//                DatagramPacket ackPacket = new DatagramPacket(buffer, buffer.length);
+//                try {
+//                    System.out.println("Waiting for ack...");
+//                    socket.receive(ackPacket);
+//                    String ackString = new String(ackPacket.getData(), 0, ackPacket.getLength());
+//                    // gets message and checks if we already received it
+//                    Message ack = gson.fromJson(ackString, Message.class);
+//                    String ackId = UUID.fromString(ack.getMsgId()).toString();
+//                    // the client will only receive clientAcks but still, we check
+//                    System.out.println("Received ack: " + ack);
+//                    ScheduledFuture<?> task = msgTasks.remove(ackId);
+//                    System.out.println("Removed task with id " + ackId);
+//                    System.out.println("Remaining tasks: " + msgTasks.keySet());
+//                    if (task != null) {
+//                        task.cancel(true);
+//                        System.out.println("Message " + ackId + " acknowledged");
+//
+//                        deliverMessage(ackId);
+//                        System.out.println("Delivered message " + ackId);
+//
+//                    } else {
+//                        System.out.println("Received an unknown ack: " + ackId);
+//                    }
+//                } catch (IOException e) {
+//                    throw new RuntimeException(e);
+//                }
+//            }
+//        }).start();
+//    }
 
     private UUID extractUUIDFromAck(DatagramPacket ackPacket) {
         String ack = new String(ackPacket.getData(), 0, ackPacket.getLength());

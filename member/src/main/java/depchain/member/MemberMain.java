@@ -35,9 +35,13 @@ public class MemberMain {
 
         // UDP socket, msg queue and member object
         Member myself = new Member(memberName, membershipInfo);
+        myself.generateMembersSecretKeys();
         System.out.println("Am I leader? " + myself.isLeader());
         DatagramSocket serverSocket = new DatagramSocket(port);
         BlockingQueue<Request> messageQueue = new LinkedBlockingQueue<>();
+
+        // generates symmetric keys for all processes with ports bigger than mine
+        myself.generateMembersSecretKeys();
 
         // initializing blockchain
         RequestHandler requestHandler = new RequestHandler(new BlockchainState(new ArrayList<>()));

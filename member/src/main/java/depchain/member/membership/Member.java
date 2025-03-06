@@ -1,24 +1,27 @@
 package depchain.member.membership;
 
-import depchain.common.SignatureUtils;
+import depchain.common.Security;
+import depchain.member.links.PerfectLink;
 
+import javax.crypto.SecretKey;
 import java.security.KeyPair;
 import java.util.List;
 
 public class Member {
 
-private KeyPair keyPair;
+	private KeyPair keyPair;
 	private List<MemberData> members;
-	private String memberName;
+	private String myName;
+	private int port;
 
 	public Member(String memberName, List<MemberData> members) {
-		this.memberName = memberName;
+		this.myName = memberName;
 		this.members = members;
 		readMyKeyPair(memberName);
 	}
 
 	public void readMyKeyPair(String memberName) {
-		this.keyPair = SignatureUtils.getMemberKeyPair(memberName);
+		this.keyPair = Security.getMemberKeyPair(memberName);
 	}
 
 	public boolean isLeader() {
@@ -28,7 +31,7 @@ private KeyPair keyPair;
 			System.out.println("No leader found");
 			return false;
 		}
-		return leader.getMemberName().equalsIgnoreCase(memberName);
+		return leader.getMemberName().equalsIgnoreCase(myName);
 	}
 
 	public KeyPair getKeyPair() {
@@ -40,7 +43,27 @@ private KeyPair keyPair;
 	}
 
 	public String getMemberName() {
-		return memberName;
+		return myName;
+	}
+
+	public boolean isInitializer(int port) {
+		return port > this.port;
+	}
+
+	public void generateMembersSecretKeys() {
+		for (MemberData memberData : this.members) {
+			if (isInitializer(memberData.getPort())) {
+				// I'm responsible for generating the communication key
+				SecretKey key = Security.generateSecretKey();
+				if (key != null) {
+					memberData.setSymKey(key);
+				} else {
+					System.err.println("Error generating secret key for " + memberData.getMemberName());
+				}
+				byte[] keyPacket = Security.encryptSymKeyWithAsymKey(key, memberData.getPublicKey());
+				// TODO send private key packet to receiver member
+			}
+		}
 	}
 
 }

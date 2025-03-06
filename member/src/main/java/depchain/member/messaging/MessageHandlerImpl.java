@@ -2,7 +2,7 @@ package depchain.member.messaging;
 
 import com.google.gson.Gson;
 import depchain.common.Message;
-import depchain.common.SignatureUtils;
+import depchain.common.Security;
 import depchain.member.links.PerfectLink;
 import depchain.member.membership.Member;
 import depchain.member.membership.MemberData;
@@ -29,7 +29,7 @@ public class MessageHandlerImpl implements MessageHandler {
 	public void handleMessage(String jsonMessage, InetAddress senderAddress, int senderPort) {
 		// messages that we can receive are: from a client, a broadcast from another member, or an ack from another member
 		Message msg = gson.fromJson(jsonMessage, Message.class);
-		System.out.println("[Handler] Received message from " + msg.getSenderId() + ": " + msg.getMsgContent());
+		System.out.println("[Handler] Received message type " + msg.getMsgType() + " from " + msg.getSenderId() + ": " + msg.getMsgContent());
 		switch (msg.getMsgType()) {
 			case "client":
 				handleClientMessage(msg, senderAddress, senderPort);
@@ -37,9 +37,18 @@ public class MessageHandlerImpl implements MessageHandler {
 			case "broadcast":
 				handleBroadcastMessage(msg);
 				break;
+			case "clientKey":
+				handleClientKeyMessage(msg);
 			default:
 				System.err.println("[Handler] Unknown message type: " + msg.getMsgType());
 		}
+	}
+
+	private void handleClientKeyMessage(Message msg) {
+		// this message provides us with the symmetric key to communicate with the client
+		System.out.println("[Handler] Received client key message: " + msg);
+		// integrity check (HMAC)
+
 	}
 
 	private void handleBroadcastMessage(Message msg) {
@@ -50,9 +59,9 @@ public class MessageHandlerImpl implements MessageHandler {
 		boolean verified;
 		try {
 			// gets public key of the member that sent the message
-			PublicKey senderPublicKey = SignatureUtils.getMemberPublicKey(msg.getSenderId());
+			PublicKey senderPublicKey = Security.getMemberPublicKey(msg.getSenderId());
 			System.out.println("[Handler] Public key of sender: " + Base64.getEncoder().encodeToString(senderPublicKey.getEncoded()));
-			verified = SignatureUtils.verifyDS(msg.getSignature(), dataToVerify, senderPublicKey);
+			verified = Security.verifyDS(msg.getSignature(), dataToVerify, senderPublicKey);
 		} catch (Exception e) {
 			System.err.println("[Handler] Error verifying signature: " + e.getMessage());
 			return;
@@ -86,7 +95,7 @@ public class MessageHandlerImpl implements MessageHandler {
 			String msgId = UUID.randomUUID().toString();
 			String dataToSign = msgId + myself.getMemberName() + msg.getMsgContent() + "broadcast";
 			System.out.println("[Handler] Data to sign: " + dataToSign);
-			String signature = SignatureUtils.makeDS(dataToSign, myself.getKeyPair().getPrivate());
+			String signature = Security.makeDS(dataToSign, myself.getKeyPair().getPrivate());
 			Message leaderMessage = new Message(msgId, myself.getMemberName(), msg.getMsgContent(), signature, "broadcast", msg.getRequest());
 			byte[] data = gson.toJson(leaderMessage).getBytes();
 			broadcastMessage(data);

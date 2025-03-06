@@ -1,6 +1,7 @@
 #!/bin/bash
 # blockchain members
-users=("pedrocurto" "pedroribeiro" "rodrigogreedy" "dybizantino")
+users=("pedroribeiro" "pedrocurto" "rodrigogreedy" "dybizantino")
+client=("paulo")
 MEMBERS_DIR="../member/membership"
 CLIENTS_DIR="../client/membership"
 MEMBERSHIP_FILE="$MEMBERS_DIR/membership.txt"
@@ -49,11 +50,43 @@ for i in "${!users[@]}"; do
     # append membership entry: memberName,address,port,publicKeyPath
     echo "${user},${ADDRESS},${port},$MEMBERS_DIR/${user}/${user}.pubkey" >> "$MEMBERSHIP_FILE"
 
-    # create client leader file (only the first member, if i == 0)
+    # create client leader file and places leader's public key for client to access
+    # (only the first member, if i == 0)
     if [ $i -eq 0 ]; then
       echo "${user},${ADDRESS},${port}" >> "$CLIENT_LEADER_FILE"
       echo "${user},${ADDRESS},${port}" >> "$MEMBERS_LEADER_FILE"
+      mkdir -p "$CLIENTS_DIR/$user"
+      cp "$MEMBERS_DIR/$user/${user}.pubkey" "$CLIENTS_DIR/$user/${user}.pubkey"
     fi
 done
+
+# generate private/public key for client
+user=${client[0]}
+echo "Generating keys for user: ${user}"
+mkdir -p "$CLIENTS_DIR/$user"
+mkdir -p "$MEMBERS_DIR/$user"
+
+# generate privkey
+openssl genpkey -algorithm RSA -out "$CLIENTS_DIR/$user/${user}.privkey" -pkeyopt rsa_keygen_bits:2048
+
+if [ $? -ne 0 ]; then
+    echo "Error: Failed to generate private key for ${user}"
+    exit 1
+fi
+
+echo "Generated private key for ${user}"
+
+# generate pubkey from privkey
+openssl rsa -pubout -in "$CLIENTS_DIR/$user/${user}.privkey" -out "$CLIENTS_DIR/$user/${user}.pubkey"
+
+if [ $? -ne 0 ]; then
+    echo "Error: Failed to generate public key for ${user}"
+    exit 1
+fi
+
+echo "Generated public key for ${user}"
+
+# copy both to members dir
+cp "$CLIENTS_DIR/$user/${user}.privkey" "$MEMBERS_DIR/$user/${user}.privkey"
 
 echo "All keys generated successfully."
