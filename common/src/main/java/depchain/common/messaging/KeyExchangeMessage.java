@@ -27,7 +27,6 @@ public class KeyExchangeMessage extends Message {
         return "KeyExchangeMessage{" +
                 "publicKey='" + publicKey + '\'' +
                 ", encryptedSessionKey='" + encryptedSessionKey + '\'' +
-                ", signature='" + signature + '\'' +
                 '}';
     }
 }

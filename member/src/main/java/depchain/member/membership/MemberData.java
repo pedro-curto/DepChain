@@ -19,6 +19,7 @@ public class MemberData {
 	public MemberData(String memberName, PublicKey publicKey, String address, int port) {
 		this.publicKey = publicKey;
 		this.memberName = memberName;
+		this.address = address;
 		this.port = port;
 	}
 

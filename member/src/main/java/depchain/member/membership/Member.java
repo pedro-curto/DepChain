@@ -1,12 +1,14 @@
 package depchain.member.membership;
 
+import depchain.common.DCLogger;
 import depchain.common.messaging.Message;
 import depchain.common.PerfectLink;
 import depchain.common.Security;
+
+import depchain.member.messaging.*;
 import depchain.member.state.BlockchainState;
 import depchain.member.state.RequestHandler;
 
-import javax.crypto.SecretKey;
 import java.net.DatagramSocket;
 import java.security.KeyPair;
 import java.util.ArrayList;
@@ -21,6 +23,8 @@ public class Member {
 	private String myName;
 	private int port;
 	private String address;
+	private PerfectLink perfectLink;
+	private DCLogger dcLogger;
 
 	public Member(String memberName, List<MemberData> members, int port, String address) {
 		this.myName = memberName;
@@ -44,56 +48,91 @@ public class Member {
 		return leader.getMemberName().equalsIgnoreCase(myName);
 	}
 
-	public KeyPair getKeyPair() {
-		return keyPair;
-	}
-
-	public List<MemberData> getMembers() {
-		return members;
-	}
-
-	public String getMemberName() {
-		return myName;
-	}
-
 	public boolean isInitializer(int port) {
 		return port > this.port;
 	}
 
-	private void generateMembersSecretKeys() {
-		for (MemberData memberData : this.members) {
-			if (isInitializer(memberData.getPort())) {
-				// i'm responsible for generating the communication key
-				SecretKey key = Security.generateSecretKey();
-				if (key != null) {
-					memberData.setSymKey(key);
-				} else {
-					System.err.println("Error generating secret key for " + memberData.getMemberName());
-				}
-				byte[] keyPacket = Security.encryptSymKeyWithAsymKey(key, memberData.getPublicKey());
-				// TODO send private key packet to receiver member
+	private void startSessionsWithOtherMembers() {
+		for (MemberData otherMember : this.members) {
+			if (isInitializer(otherMember.getPort())) {
+				dcLogger.log("Starting session with " + otherMember.getMemberName());
+				perfectLink.startSession(
+						otherMember.getAddress(),
+						otherMember.getPort(),
+						keyPair,
+						otherMember.getPublicKey());
 			}
 		}
 	}
 
     public void start() throws Exception {
-		System.out.println("Am I leader? " + this.isLeader());
+		this.dcLogger = new DCLogger(Member.class);
+		dcLogger.log("Am I leader? " + this.isLeader());
 		DatagramSocket serverSocket = new DatagramSocket(port);
 		BlockingQueue<Message> messageQueue = new LinkedBlockingQueue<>();
-
-		// generates symmetric keys for all processes with ports bigger than mine
-		generateMembersSecretKeys();
 
 		// initializing blockchain
 		RequestHandler requestHandler = new RequestHandler(new BlockchainState(new ArrayList<>()));
 
 		// start sessions
 		KeyPair myKeyPair = Security.getMemberKeyPair(myName);
-		PerfectLink perfectLink = new PerfectLink(serverSocket, messageQueue, myKeyPair);
+		this.perfectLink = new PerfectLink(serverSocket, messageQueue, myKeyPair);
 		perfectLink.start();
 
+		// starts sessions for all processes with ports bigger than mine
+		startSessionsWithOtherMembers();
+		dcLogger.log("My sessions: " + perfectLink.getSessions());
+
 		while (true) {
+
 			Message message = messageQueue.take();
+
+			dcLogger.log("Received message of type: " + message.getType());
+
+			switch (message.getType()) {
+				case APPEND:
+					// TODO
+					// call init() or propose()?
+					// then they send READ messages to all members
+					break;
+				case READ:
+					ReadMessage readMessage = (ReadMessage) message;
+					requestHandler.handleRead(readMessage);
+					break;
+				case STATE:
+					StateMessage stateMessage = (StateMessage) message;
+					requestHandler.handleState(stateMessage);
+					break;
+				case COLLECTED:
+					CollectedMessage collectedMessage = (CollectedMessage) message;
+					requestHandler.handleCollected(collectedMessage);
+					break;
+				case WRITE:
+					WriteMessage writeMessage = (WriteMessage) message;
+					requestHandler.handleWrite(writeMessage);
+					break;
+				case ACCEPT:
+					AcceptMessage acceptMessage = (AcceptMessage) message;
+					requestHandler.handleAccept(acceptMessage);
+					break;
+				default:
+					dcLogger.log("Unknown message type");
+			}
 		}
     }
+
+	public void init() {
+		// TODO
+		// do this in Member or ConsensusLeaderState?
+	}
+
+	public void propose() {
+		// TODO
+		// do this in Member or ConsensusLeaderState?
+	}
+
+	public void decide() {
+		// TODO
+		// do this in Member or ConsensusLeaderState?
+	}
 }

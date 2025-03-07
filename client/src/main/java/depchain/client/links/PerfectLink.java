@@ -26,8 +26,8 @@ public class PerfectLink {
     public PerfectLink(DatagramSocket socket, BlockingQueue<String> messageQueue) {
         this.socket = socket;
         this.messageQueue = messageQueue;
-        AcknowledgeHandler ackHandler = new AcknowledgeHandler(socket, msgTasks, true);
-        ackHandler.start();
+        //AcknowledgeHandler ackHandler = new AcknowledgeHandler(socket, msgTasks, true);
+        //ackHandler.start();
         //startAckListener();
     }
 

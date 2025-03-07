@@ -37,4 +37,14 @@ public class Session {
 
     public void incrementSendCounter() { sendCounter++; }
 
+    @Override
+    public String toString() {
+        return "Session{" +
+                ", port=" + port +
+                ", address='" + address + '\'' +
+                ", receiveCounter=" + receiveCounter +
+                ", sendCounter=" + sendCounter +
+                '}';
+    }
+
 }
