@@ -42,6 +42,10 @@
                 </executions>
                 <configuration>
                     <mainClass>depchain.client.ClientMain</mainClass>
+                    <arguments>
+                        <argument>2000</argument>
+                        <argument>paulo</argument>
+                    </arguments>
                 </configuration>
             </plugin>
         </plugins>

@@ -1,30 +1,34 @@
 package depchain.member.state;
 
-import depchain.common.Request;
+import depchain.member.messaging.*;
 
 public class RequestHandler {
 
-    private final static String APPEND = "append";
     private final BlockchainState blockchainState;
 
     public RequestHandler(BlockchainState blockchainState) {
         this.blockchainState = blockchainState;
     }
 
-    public void handleRequest(Request request) {
-        System.out.println("[MESSAGE]: " + request);
-
-        switch (request.getAction()) {
-            case APPEND:
-                handleAppend(request.getContent());
-                break;
-            default:
-                System.out.println("Unkwown action");
-                break;
-        }
-    }
-
     public void handleAppend(String content) {
         blockchainState.appendString(content);
+    }
+
+    public void handleRead(ReadMessage readMessage) {
+        // TODO
+    }
+    public void handleState(StateMessage stateMessage) {
+        // TODO
+        // send consensus state
+    }
+    public void handleCollected(CollectedMessage collectedMessage) {
+        // TODO
+        // send all states received
+    }
+    public void handleWrite(WriteMessage writeMessage) {
+        // TODO
+    }
+    public void handleAccept(AcceptMessage acceptMessage) {
+        // TODO
     }
 }

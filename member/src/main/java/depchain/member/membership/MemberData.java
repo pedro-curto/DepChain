@@ -1,12 +1,16 @@
 package depchain.member.membership;
 
+import javax.crypto.SecretKey;
+import java.security.Key;
 import java.security.PublicKey;
 
 public class MemberData {
 
+	private String memberName;
+
 	private PublicKey publicKey;
 
-	private String memberName;
+	private SecretKey symKey = null;
 
 	private String address;
 
@@ -19,25 +23,34 @@ public class MemberData {
 		this.port = port;
 	}
 
+	public void setSymKey(SecretKey key) {
+		this.symKey = key;
+	}
+
 	public PublicKey getPublicKey() {
 		return publicKey;
-	}
-
-	public String getMemberName() {
-		return memberName;
-	}
-
-	public String getAddress() {
-		return address;
 	}
 
 	public int getPort() {
 		return port;
 	}
 
-	@Override
-	public String toString() {
-		return memberName + " " + address + " " + port;
+	public String getMemberName() {
+		return memberName;
 	}
 
+	public SecretKey getSymKey() {
+		return symKey;
+	}
+
+	public String getAddress() {
+		return address;
+	}
+
+	@Override
+	public String toString() {
+		return "memberName='" + memberName + '\'' +
+				", address='" + address + '\'' +
+				", port=" + port;
+	}
 }

@@ -1,18 +1,19 @@
 package depchain.common;
 
+import javax.crypto.*;
+import javax.crypto.spec.SecretKeySpec;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.security.*;
-import java.security.spec.PKCS8EncodedKeySpec;
-import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 
 import static depchain.common.KeyUtils.readPrivateKey;
 import static depchain.common.KeyUtils.readPublicKey;
 
-public final class SignatureUtils {
+public final class Security {
 
 	private static final String SIGNATURE_ALGO = "SHA256withRSA";
+	private static final String HMAC_ALGO = "HmacSHA256";
 	private static final String ASYM_ALGO = "RSA";
 
 	/** Calculates digital signature from text. */
@@ -38,7 +39,6 @@ public final class SignatureUtils {
 			return false;
 		}
 	}
-
 
 	public static KeyPair getMemberKeyPair(String member) {
 		// reads both PEM keys
@@ -69,6 +69,52 @@ public final class SignatureUtils {
 			return readPublicKey(publicKeyPath);
 		} catch (Exception e) {
 			System.err.println("Error reading public key at " + publicKeyPath);
+		}
+		return null;
+	}
+
+	public static SecretKey generateSecretKey() {
+		try {
+			KeyGenerator keyGenerator = KeyGenerator.getInstance("AES");
+			keyGenerator.init(256);
+			return keyGenerator.generateKey();
+		} catch (NoSuchAlgorithmException e) {
+			System.err.println("Error: Algorithm not found.");
+		}
+		return null;
+	}
+
+	public static byte[] encryptSymKeyWithAsymKey(SecretKey symKey, PublicKey pubKey) {
+		try {
+			Cipher cipher = Cipher.getInstance("RSA");
+			cipher.init(Cipher.ENCRYPT_MODE, pubKey);
+			return cipher.doFinal(symKey.getEncoded());
+		} catch (Exception e) {
+			System.err.println("Error: Encrypting symmetric key");
+		}
+		return null;
+	}
+
+	public static SecretKey decryptSymKey(String encryptedKey, PrivateKey privateKey) {
+		try {
+			Cipher cipher = Cipher.getInstance("RSA");
+			cipher.init(Cipher.DECRYPT_MODE, privateKey);
+			byte[] byteKey = cipher.doFinal(Base64.getDecoder().decode(encryptedKey));
+			return new SecretKeySpec(byteKey, "AES");
+		} catch (Exception e) {
+			System.err.println("Error: Decrypting symmetric key");
+		}
+		return null;
+	}
+
+	public static String generateHMAC(String data, SecretKey key) {
+		try {
+			Mac authenticator = Mac.getInstance(HMAC_ALGO);
+			authenticator.init(key);
+			byte[] msgAuthenticator = authenticator.doFinal(data.getBytes());
+			return Base64.getEncoder().encodeToString(msgAuthenticator);
+		} catch (Exception e) {
+			System.err.println("Error: Generating HMAC");
 		}
 		return null;
 	}

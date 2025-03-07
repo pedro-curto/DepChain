@@ -37,4 +37,10 @@ public class KeyUtils {
 		X509EncodedKeySpec keySpec = new X509EncodedKeySpec(encoded);
 		return keyFactory.generatePublic(keySpec);
 	}
+
+	public static PublicKey getPublicKeyFromString(String publicKeyString) throws Exception {
+		byte[] encoded = java.util.Base64.getDecoder().decode(publicKeyString);
+		KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+		return keyFactory.generatePublic(new X509EncodedKeySpec(encoded));
+	}
 }
