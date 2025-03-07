@@ -1,7 +1,9 @@
 package depchain.common;
 
 import com.google.gson.Gson;
-import depchain.common.Security;
+import depchain.common.messaging.KeyExchangeMessage;
+import depchain.common.messaging.Message;
+import depchain.common.messaging.MessageType;
 import depchain.common.session.Session;
 
 import javax.crypto.SecretKey;
@@ -12,6 +14,7 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.security.KeyPair;
 import java.security.PublicKey;
+import java.util.Base64;
 import java.util.Map;
 import java.util.concurrent.*;
 
@@ -24,10 +27,12 @@ public class PerfectLink {
     private final Map<Long, Message> msgsToDeliver = new ConcurrentHashMap<>();
     private final Map<Integer, Session> sessions = new ConcurrentHashMap<>();
     private final Gson gson = new Gson();
+    private final DCLogger dcLogger;
 
     public PerfectLink(DatagramSocket socket, BlockingQueue<Message> messageQueue) {
         this.socket = socket;
         this.messageQueue = messageQueue;
+        this.dcLogger = new DCLogger(PerfectLink.class);
     }
 
     public void start() {
@@ -36,27 +41,30 @@ public class PerfectLink {
 
     public void startSession(String address, int port, KeyPair memberKey, PublicKey otherPub) {
         SecretKey sessionKey = Security.generateSecretKey();
+        if (sessionKey == null) dcLogger.log("Failed to generate session key");
         Session newSession = new Session(sessionKey, port, address);
-        // content = encrypt session key with otherPub || memberKey.pubkey.
-
-        String content = "";
-        // signature
-        String signature = "";
-
-        Message connectionMessage = new Message(
-            newSession.getSendCounter(),
-            content,
-            signature,
-            MessageType.KEY_EXCHANGE);
-
         sessions.put(port, newSession);
-        sendMessage(connectionMessage, port);
+        // content = encrypt session key with otherPub || memberKey.pubkey.
+        byte[] encryptKeyBytes = Security.encryptSymKeyWithAsymKey(sessionKey, otherPub);
+        String encryptKey = Base64.getEncoder().encodeToString(encryptKeyBytes);
+        String myPubKey = Base64.getEncoder().encodeToString(memberKey.getPublic().getEncoded());
+        // mac
+        String dataForMac = encryptKey + myPubKey;
+        String mac = Security.generateHMAC(dataForMac, sessionKey);
+        if (mac == null) dcLogger.log("Failed to generate HMAC");
+        // TODO -> é suposto mandar uma signature?
+        //String signature = "";
+
+        // send message and increase send counter
+        KeyExchangeMessage message = new KeyExchangeMessage(newSession.getSendCounter(), myPubKey, encryptKey, mac);
+        sendMessage(message, port);
+        newSession.incrementSendCounter();
     }
 
     public void sendMessage(Message message, int port) {
        Session session = sessions.get(port);
        long sequenceNumber = session.getSendCounter();
-       System.out.println("[PerfectLink] Sending message with sequence number: " + sequenceNumber);
+       dcLogger.log("Sending message with sequence number: " + sequenceNumber);
        message.setSequenceNumber(sequenceNumber);
        String json = gson.toJson(message);
        try {
@@ -83,13 +91,13 @@ public class PerfectLink {
             }
         }, 0, 1, TimeUnit.SECONDS);
         msgTasks.put(sequenceNumber, task);
-        System.out.println("[PerfectLink] Scheduled message with sequenceNumber: " + sequenceNumber);
+        dcLogger.log("Scheduled message with sequenceNumber: " + sequenceNumber);
     }
 
     private void startListening() {
         byte[] buffer = new byte[1024];
         while (true) {
-            System.out.println("[PerfectLink] Waiting for message...");
+            dcLogger.log("Waiting for message...");
             DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
             try {
                 socket.receive(packet);
@@ -99,11 +107,11 @@ public class PerfectLink {
 
             String received = new String(packet.getData(), 0, packet.getLength());
             Message message = gson.fromJson(received, Message.class);
-            System.out.println("[PerfectLink] Received message: " + received);
+            dcLogger.log("Received message: " + received);
 
             MessageType type = message.getType();
             long sequenceNumber = message.getSequenceNumber();
-            System.out.println("[PerfectLink] Received Message with type " + type + " and sequence number " + sequenceNumber);
+            dcLogger.log("Received Message with type " + type + " and sequence number " + sequenceNumber);
 
             if (type == MessageType.KEY_EXCHANGE) {
                 handleSessionRequest(String.valueOf(packet.getAddress()), packet.getPort(), message);
@@ -123,12 +131,12 @@ public class PerfectLink {
     private void handleSessionRequest(String address, int port, Message message) {}
 
     private void handleAck(long sequenceNumber, Session session) {
-        System.out.println("[PerfectLink] Received ack for message with sequence number " + sequenceNumber);
+        dcLogger.log("Received ack for message with sequence number " + sequenceNumber);
         if (sequenceNumber < session.getSendCounter()) {
             ScheduledFuture<?> task = msgTasks.remove(sequenceNumber);
             if (task != null) {
                 task.cancel(true);
-                System.out.println("[PerfectLink-AckListener] ACK received, cancelled retransmission for message " + sequenceNumber);
+                dcLogger.log("[PerfectLink-AckListener] ACK received, cancelled retransmission for message " + sequenceNumber);
 
                 Message message = msgsToDeliver.remove(sequenceNumber);
                 if (message != null) {
@@ -136,16 +144,16 @@ public class PerfectLink {
                 }
                 return;
             }
-            System.out.println("[PerfectLink-AckListener] Received a duplicate ACK: " + sequenceNumber);
+            dcLogger.log("[PerfectLink-AckListener] Received a duplicate ACK: " + sequenceNumber);
         }
-        System.out.println("[PerfectLink-AckListener] Received an unknown ACK: " + sequenceNumber);
+        dcLogger.log("[PerfectLink-AckListener] Received an unknown ACK: " + sequenceNumber);
     }
 
     private void handleContentMessage(long sequenceNumber, Message message, Session session) {
-        System.out.println("[PerfectLink] Received content message with sequence number " + sequenceNumber);
+        dcLogger.log("Received content message with sequence number " + sequenceNumber);
         long counter = session.getReceiveCounter();
         if (sequenceNumber == counter) {
-            System.out.println("[PerfectLink] Received new content message");
+            dcLogger.log("Received new content message");
             deliverMessage(message);
             counter++;
             session.setReceiveCounter(counter);
@@ -153,11 +161,11 @@ public class PerfectLink {
             return;
         }
         if (sequenceNumber < counter) {
-            System.out.println("[PerfectLink] Already received message");
+            dcLogger.log("Already received message");
             sendAck(session, sequenceNumber);
             return;
         }
-        System.out.println("[PerfectLink] Message with invalid sequence number");
+        dcLogger.log("Message with invalid sequence number");
     }
 
     private void sendAck(Session session, long seqNumber) {
@@ -165,7 +173,7 @@ public class PerfectLink {
         byte[] ackData = gson.toJson(ack).getBytes();
         try {
             DatagramPacket ackPacket = new DatagramPacket(ackData, ackData.length, InetAddress.getByName(session.getAddress()), session.getPort());
-            System.out.println("Sending ack: " + ack + " to " + session.getAddress() + ":" + session.getPort());
+            dcLogger.log("Sending ack: " + ack + " to " + session.getAddress() + ":" + session.getPort());
             socket.send(ackPacket);
         } catch (UnknownHostException uhe) {
             throw new RuntimeException(uhe);
@@ -175,12 +183,12 @@ public class PerfectLink {
     }
 
     private void deliverMessage(Message message) {
-        System.out.println("Delivering message: " + message);
+        dcLogger.log("Delivering message: " + message);
         if (messageQueue.offer(message)) {
-            System.out.println("Message delivered: " + message);
+            dcLogger.log("Message delivered: " + message);
         }
         else {
-            System.out.println("Message queue is full, unable to deliver message: " + message);
+            dcLogger.log("Message queue is full, unable to deliver message: " + message);
         }
     }
 }

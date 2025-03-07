@@ -1,5 +1,7 @@
 package depchain.common;
 
+import depchain.common.messaging.MessageType;
+
 public class Request {
 
     private final MessageType type;

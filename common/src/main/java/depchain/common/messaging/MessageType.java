@@ -1,4 +1,4 @@
-package depchain.common;
+package depchain.common.messaging;
 
 public enum MessageType {
     CLIENT_APPEND,

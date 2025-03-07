@@ -1,7 +1,6 @@
 package depchain.common.session;
 
 import javax.crypto.SecretKey;
-import java.net.DatagramSocket;
 
 public class Session {
     private final SecretKey secretKey;
@@ -33,5 +32,9 @@ public class Session {
     public void setReceiveCounter(long receiveCounter) { this.receiveCounter = receiveCounter; }
 
     public void setSendCounter(long sendCounter) { this.sendCounter = sendCounter; }
+
+    public void incrementReceiveCounter() { receiveCounter++; }
+
+    public void incrementSendCounter() { sendCounter++; }
 
 }

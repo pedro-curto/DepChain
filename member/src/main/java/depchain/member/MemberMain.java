@@ -1,20 +1,10 @@
 package depchain.member;
 
-import java.net.DatagramSocket;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
 
-import depchain.common.Message;
-import depchain.common.PerfectLink;
-import depchain.common.session.Session;
 import depchain.member.membership.Member;
 import depchain.member.membership.MemberData;
 import depchain.member.membership.MembershipManager;
-import depchain.member.state.BlockchainState;
-import depchain.member.state.RequestHandler;
 
 public class MemberMain {
 //    private static int port;

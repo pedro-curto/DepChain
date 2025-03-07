@@ -1,4 +1,4 @@
-package depchain.common;
+package depchain.common.messaging;
 
 public class Message {
 
@@ -28,6 +28,13 @@ public class Message {
 		this.msgContent = msgContent;
 		this.signature = signature;
 		this.type = type;
+	}
+
+	public Message(long sequenceNumber, MessageType messageType) {
+		this.sequenceNumber = sequenceNumber;
+		this.msgContent = null;
+		this.signature = null;
+		this.type = messageType;
 	}
 
 	public long getSequenceNumber() {

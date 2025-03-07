@@ -1,9 +1,9 @@
 package depchain.member.links;
 
 import com.google.gson.Gson;
-import depchain.common.Message;
+import depchain.common.messaging.Message;
 import depchain.member.membership.Member;
-import depchain.common.MessageType;
+import depchain.common.messaging.MessageType;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;

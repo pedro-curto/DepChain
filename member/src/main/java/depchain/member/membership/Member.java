@@ -1,6 +1,6 @@
 package depchain.member.membership;
 
-import depchain.common.Message;
+import depchain.common.messaging.Message;
 import depchain.common.PerfectLink;
 import depchain.common.Security;
 import depchain.member.state.BlockchainState;
@@ -87,8 +87,8 @@ public class Member {
 		// initializing blockchain
 		RequestHandler requestHandler = new RequestHandler(new BlockchainState(new ArrayList<>()));
 
-		// start sesssions
-		PerfectLink perfectLink = new PerfectLink(serverSocket, messageQueue, this.members);
+		// start sessions
+		PerfectLink perfectLink = new PerfectLink(serverSocket, messageQueue);
 		perfectLink.start();
 
 		while (true) {

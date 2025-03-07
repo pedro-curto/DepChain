@@ -45,4 +45,11 @@ public class MemberData {
 	public String getAddress() {
 		return address;
 	}
+
+	@Override
+	public String toString() {
+		return "memberName='" + memberName + '\'' +
+				", address='" + address + '\'' +
+				", port=" + port;
+	}
 }
