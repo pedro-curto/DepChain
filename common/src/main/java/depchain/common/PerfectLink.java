@@ -49,14 +49,20 @@ public class PerfectLink {
         String encryptKey = Base64.getEncoder().encodeToString(encryptKeyBytes);
         String myPubKey = Base64.getEncoder().encodeToString(memberKey.getPublic().getEncoded());
         // mac
-        String dataForMac = encryptKey + myPubKey;
-        String mac = Security.generateHMAC(dataForMac, sessionKey);
-        if (mac == null) dcLogger.log("Failed to generate HMAC");
-        // TODO -> é suposto mandar uma signature?
-        //String signature = "";
-
+        String dataForSig = encryptKey + myPubKey;
+        String signature = null;
+        try {
+            signature = Security.makeDS(dataForSig, memberKey.getPrivate());
+        } catch (Exception e) {
+           dcLogger.log("Error generating signature");
+        }
+        if (signature == null) {
+            dcLogger.log("signature generation failed, aborting session");
+            sessions.remove(port);
+            return;
+        }
         // send message and increase send counter
-        KeyExchangeMessage message = new KeyExchangeMessage(newSession.getSendCounter(), myPubKey, encryptKey, mac);
+        KeyExchangeMessage message = new KeyExchangeMessage(newSession.getSendCounter(), myPubKey, encryptKey, signature);
         sendMessage(message, port);
         newSession.incrementSendCounter();
     }
@@ -128,7 +134,15 @@ public class PerfectLink {
         }
     }
 
-    private void handleSessionRequest(String address, int port, Message message) {}
+    private void handleSessionRequest(String address, int port, KeyExchangeMessage message) {
+        dcLogger.log("Received session request: " + address + ":" + port);
+        if (message.getSequenceNumber() != 0) {
+            dcLogger.log("Expected sequence number 0 but got " + message.getSequenceNumber());
+        }
+        String pubkey = message.getPublicKey();
+        String encryptedSessionKey = message.getEncryptedSessionKey();
+        String signature = message.getSignature();
+    }
 
     private void handleAck(long sequenceNumber, Session session) {
         dcLogger.log("Received ack for message with sequence number " + sequenceNumber);
