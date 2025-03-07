@@ -1,6 +1,7 @@
 package depchain.common;
 
 import javax.crypto.*;
+import javax.crypto.spec.SecretKeySpec;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.security.*;
@@ -38,7 +39,6 @@ public final class Security {
 			return false;
 		}
 	}
-
 
 	public static KeyPair getMemberKeyPair(String member) {
 		// reads both PEM keys
@@ -91,6 +91,18 @@ public final class Security {
 			return cipher.doFinal(symKey.getEncoded());
 		} catch (Exception e) {
 			System.err.println("Error: Encrypting symmetric key");
+		}
+		return null;
+	}
+
+	public static SecretKey decryptSymKey(String encryptedKey, PrivateKey privateKey) {
+		try {
+			Cipher cipher = Cipher.getInstance("RSA");
+			cipher.init(Cipher.DECRYPT_MODE, privateKey);
+			byte[] byteKey = cipher.doFinal(Base64.getDecoder().decode(encryptedKey));
+			return new SecretKeySpec(byteKey, "AES");
+		} catch (Exception e) {
+			System.err.println("Error: Decrypting symmetric key");
 		}
 		return null;
 	}

@@ -22,6 +22,7 @@ public class PerfectLink {
 
     private final DatagramSocket socket;
     private final BlockingQueue<Message> messageQueue;
+    private final KeyPair personalKeys;
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(8);
     private final Map<Long, ScheduledFuture<?>> msgTasks = new ConcurrentHashMap<>();
     private final Map<Long, Message> msgsToDeliver = new ConcurrentHashMap<>();
@@ -29,10 +30,11 @@ public class PerfectLink {
     private final Gson gson = new Gson();
     private final DCLogger dcLogger;
 
-    public PerfectLink(DatagramSocket socket, BlockingQueue<Message> messageQueue) {
+    public PerfectLink(DatagramSocket socket, BlockingQueue<Message> messageQueue, KeyPair personalKeys) {
         this.socket = socket;
         this.messageQueue = messageQueue;
         this.dcLogger = new DCLogger(PerfectLink.class);
+        this.personalKeys = personalKeys;
     }
 
     public void start() {
@@ -44,20 +46,15 @@ public class PerfectLink {
         if (sessionKey == null) dcLogger.log("Failed to generate session key");
         Session newSession = new Session(sessionKey, port, address);
         sessions.put(port, newSession);
-        // content = encrypt session key with otherPub || memberKey.pubkey.
         byte[] encryptKeyBytes = Security.encryptSymKeyWithAsymKey(sessionKey, otherPub);
         String encryptKey = Base64.getEncoder().encodeToString(encryptKeyBytes);
         String myPubKey = Base64.getEncoder().encodeToString(memberKey.getPublic().getEncoded());
-        // mac
         String dataForSig = encryptKey + myPubKey;
-        String signature = null;
+        String signature;
         try {
             signature = Security.makeDS(dataForSig, memberKey.getPrivate());
         } catch (Exception e) {
            dcLogger.log("Error generating signature");
-        }
-        if (signature == null) {
-            dcLogger.log("signature generation failed, aborting session");
             sessions.remove(port);
             return;
         }
@@ -101,7 +98,7 @@ public class PerfectLink {
     }
 
     private void startListening() {
-        byte[] buffer = new byte[1024];
+        byte[] buffer = new byte[8096];
         while (true) {
             dcLogger.log("Waiting for message...");
             DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
@@ -120,7 +117,8 @@ public class PerfectLink {
             dcLogger.log("Received Message with type " + type + " and sequence number " + sequenceNumber);
 
             if (type == MessageType.KEY_EXCHANGE) {
-                handleSessionRequest(String.valueOf(packet.getAddress()), packet.getPort(), message);
+                KeyExchangeMessage keyExchangeMessage = gson.fromJson(received, KeyExchangeMessage.class);
+                handleSessionRequest(String.valueOf(packet.getAddress()), packet.getPort(), keyExchangeMessage);
                 return;
             }
 
@@ -139,9 +137,30 @@ public class PerfectLink {
         if (message.getSequenceNumber() != 0) {
             dcLogger.log("Expected sequence number 0 but got " + message.getSequenceNumber());
         }
-        String pubkey = message.getPublicKey();
+        String pubkeyString = message.getPublicKey();
+        PublicKey pubkey;
+        try {
+            pubkey = KeyUtils.getPublicKeyFromString(pubkeyString);
+        } catch (Exception e) {
+            dcLogger.log("Error reading public key");
+            return;
+        }
         String encryptedSessionKey = message.getEncryptedSessionKey();
         String signature = message.getSignature();
+        String dataForSig = encryptedSessionKey + pubkeyString;
+        boolean verified = false;
+        try {
+            verified = Security.verifyDS(signature, dataForSig, pubkey);
+        } catch (Exception e) {
+           dcLogger.log("Error verifying digital signature");
+        }
+        if (!verified) {
+           dcLogger.log("Failed to verify signature, aborting session");
+        }
+        SecretKey sessionKey = Security.decryptSymKey(encryptedSessionKey, personalKeys.getPrivate());
+        Session session = new Session(sessionKey, port, address);
+        sessions.put(port, session);
+        sendAck(session, 0);
     }
 
     private void handleAck(long sequenceNumber, Session session) {

@@ -42,8 +42,9 @@ public class Client {
     public void start() throws Exception {
         // init socket, messageQueue and the perfectLink abstraction
         DatagramSocket socket = new DatagramSocket(port);
+        KeyPair myKeyPair = Security.getMemberKeyPair(myName);
         messageQueue = new LinkedBlockingQueue<>();
-        perfectLink = new PerfectLink(socket, messageQueue);
+        perfectLink = new PerfectLink(socket, messageQueue, myKeyPair);
 
         // handshake with leader to deliver the session key
         KeyPair memberKeyPair = Security.getMemberKeyPair(myName);

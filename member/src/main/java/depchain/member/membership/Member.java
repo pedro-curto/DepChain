@@ -88,7 +88,8 @@ public class Member {
 		RequestHandler requestHandler = new RequestHandler(new BlockchainState(new ArrayList<>()));
 
 		// start sessions
-		PerfectLink perfectLink = new PerfectLink(serverSocket, messageQueue);
+		KeyPair myKeyPair = Security.getMemberKeyPair(myName);
+		PerfectLink perfectLink = new PerfectLink(serverSocket, messageQueue, myKeyPair);
 		perfectLink.start();
 
 		while (true) {
