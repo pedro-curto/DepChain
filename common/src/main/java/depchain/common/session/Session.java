@@ -4,24 +4,18 @@ import javax.crypto.SecretKey;
 import java.net.DatagramSocket;
 
 public class Session {
-    private final String sessionId;
     private final SecretKey secretKey;
     private final int port;
     private final String address;
     private long receiveCounter;
     private long sendCounter;
 
-    public Session(String sessionId, SecretKey secretKey, int port, String address) {
-        this.sessionId = sessionId;
+    public Session(SecretKey secretKey, int port, String address) {
         this.secretKey = secretKey;
         this.port = port;
         this.address = address;
         this.receiveCounter = 0;
         this.sendCounter = 0;
-    }
-
-    public String getSessionId() {
-        return sessionId;
     }
 
     public SecretKey getSecretKey() {

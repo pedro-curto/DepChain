@@ -3,10 +3,17 @@ package depchain.common;
 public class Message {
 
 	private long sequenceNumber;
-	private final String senderName;
+	private String senderName = null;
 	private final String msgContent;
 	private final String signature;
 	private final MessageType type;
+
+	public Message(long sequenceNumber, String msgContent, String signature, MessageType type) {
+		this.sequenceNumber = sequenceNumber;
+		this.msgContent = msgContent;
+		this.signature = signature;
+		this.type = type;
+	}
 
 	public Message(long sequenceNumber, String senderName, String msgContent, String signature, MessageType type) {
 		this.sequenceNumber = sequenceNumber;

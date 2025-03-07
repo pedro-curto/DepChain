@@ -1,13 +1,17 @@
 package depchain.common;
 
 import com.google.gson.Gson;
+import depchain.common.Security;
 import depchain.common.session.Session;
 
+import javax.crypto.SecretKey;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.security.KeyPair;
+import java.security.PublicKey;
 import java.util.Map;
 import java.util.concurrent.*;
 
@@ -18,20 +22,39 @@ public class PerfectLink {
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(8);
     private final Map<Long, ScheduledFuture<?>> msgTasks = new ConcurrentHashMap<>();
     private final Map<Long, Message> msgsToDeliver = new ConcurrentHashMap<>();
-    private final Map<Integer, Session> sessions;
+    private final Map<Integer, Session> sessions = new ConcurrentHashMap<>();
     private final Gson gson = new Gson();
 
-    public PerfectLink(DatagramSocket socket, BlockingQueue<Message> messageQueue, Map<Integer, Session> sessions) {
+    public PerfectLink(DatagramSocket socket, BlockingQueue<Message> messageQueue) {
         this.socket = socket;
         this.messageQueue = messageQueue;
-        this.sessions = sessions;
     }
 
     public void start() {
         new Thread(this::startListening).start();
     }
 
-    public void sendMessage(Message message, Session session) {
+    public void startSession(String address, int port, KeyPair memberKey, PublicKey otherPub) {
+        SecretKey sessionKey = Security.generateSecretKey();
+        Session newSession = new Session(sessionKey, port, address);
+        // content = encrypt session key with otherPub || memberKey.pubkey.
+
+        String content = "";
+        // signature
+        String signature = "";
+
+        Message connectionMessage = new Message(
+            newSession.getSendCounter(),
+            content,
+            signature,
+            MessageType.KEY_EXCHANGE);
+
+        sessions.put(port, newSession);
+        sendMessage(connectionMessage, port);
+    }
+
+    public void sendMessage(Message message, int port) {
+       Session session = sessions.get(port);
        long sequenceNumber = session.getSendCounter();
        System.out.println("[PerfectLink] Sending message with sequence number: " + sequenceNumber);
        message.setSequenceNumber(sequenceNumber);
@@ -51,7 +74,7 @@ public class PerfectLink {
        session.setSendCounter(sequenceNumber);
     }
 
-    public void scheduleMessage(DatagramPacket packet, long sequenceNumber) {
+    private void scheduleMessage(DatagramPacket packet, long sequenceNumber) {
         ScheduledFuture<?> task = scheduler.scheduleAtFixedRate(() -> {
             try {
                 socket.send(packet);
@@ -82,17 +105,24 @@ public class PerfectLink {
             long sequenceNumber = message.getSequenceNumber();
             System.out.println("[PerfectLink] Received Message with type " + type + " and sequence number " + sequenceNumber);
 
+            if (type == MessageType.KEY_EXCHANGE) {
+                handleSessionRequest(String.valueOf(packet.getAddress()), packet.getPort(), message);
+                return;
+            }
+
             Session session = sessions.get(packet.getPort());
 
             if (type == MessageType.ACK) {
                 handleAck(sequenceNumber, session);
-            } else {
-                handleContentMessage(sequenceNumber, message, session);
+                return;
             }
+            handleContentMessage(sequenceNumber, message, session);
         }
     }
 
-    public void handleAck(long sequenceNumber, Session session) {
+    private void handleSessionRequest(String address, int port, Message message) {}
+
+    private void handleAck(long sequenceNumber, Session session) {
         System.out.println("[PerfectLink] Received ack for message with sequence number " + sequenceNumber);
         if (sequenceNumber < session.getSendCounter()) {
             ScheduledFuture<?> task = msgTasks.remove(sequenceNumber);
@@ -111,7 +141,7 @@ public class PerfectLink {
         System.out.println("[PerfectLink-AckListener] Received an unknown ACK: " + sequenceNumber);
     }
 
-    public void handleContentMessage(long sequenceNumber, Message message, Session session) {
+    private void handleContentMessage(long sequenceNumber, Message message, Session session) {
         System.out.println("[PerfectLink] Received content message with sequence number " + sequenceNumber);
         long counter = session.getReceiveCounter();
         if (sequenceNumber == counter) {

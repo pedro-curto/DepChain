@@ -87,11 +87,8 @@ public class Member {
 		// initializing blockchain
 		RequestHandler requestHandler = new RequestHandler(new BlockchainState(new ArrayList<>()));
 
-		// sessions
-
-
-		// starts message handler and perfect link
-		depchain.common.PerfectLink perfectLink = new PerfectLink(serverSocket, messageQueue);
+		// start sesssions
+		PerfectLink perfectLink = new PerfectLink(serverSocket, messageQueue, this.members);
 		perfectLink.start();
 
 		while (true) {
