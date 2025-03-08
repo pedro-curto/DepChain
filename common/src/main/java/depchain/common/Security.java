@@ -5,6 +5,7 @@ import javax.crypto.spec.SecretKeySpec;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.security.*;
+import java.util.Arrays;
 import java.util.Base64;
 
 import static depchain.common.KeyUtils.readPrivateKey;
@@ -118,4 +119,18 @@ public final class Security {
 		}
 		return null;
 	}
+
+	public static boolean checkHMAC(String data, SecretKey key, String hmacToCompare) {
+		try {
+			Mac authenticator = Mac.getInstance(HMAC_ALGO);
+			authenticator.init(key);
+			byte[] computedHMAC = authenticator.doFinal(data.getBytes());
+			byte[] receivedHMAC = Base64.getDecoder().decode(hmacToCompare);
+			return Arrays.equals(computedHMAC, receivedHMAC);
+		} catch (Exception e) {
+			System.err.println("Error: Checking HMAC");
+		}
+		return false;
+	}
+
 }

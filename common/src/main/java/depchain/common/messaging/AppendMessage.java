@@ -12,4 +12,9 @@ public class AppendMessage extends Message {
 	public String getValue() {
 		return value;
 	}
+
+	@Override
+	public String getHmacData() {
+		return super.getHmacData() + value;
+	}
 }

@@ -7,9 +7,6 @@ import depchain.member.membership.MemberData;
 import depchain.member.membership.MembershipManager;
 
 public class MemberMain {
-//    private static int port;
-//    private static String address;
-//    private static String memberName;
     private static final String MEMBERSHIP_FILE = "membership/membership.txt";
 
     public static void main (String[] args) throws Exception {
@@ -29,23 +26,6 @@ public class MemberMain {
         // create my member object and run start (creates other relevant structures and listener)
         Member myself = new Member(memberName, membershipInfo, port, address);
         myself.start();
-//        System.out.println("Am I leader? " + myself.isLeader());
-//        DatagramSocket serverSocket = new DatagramSocket(port);
-//        BlockingQueue<Message> messageQueue = new LinkedBlockingQueue<>();
-//
-//        // generates symmetric keys for all processes with ports bigger than mine
-//        myself.generateMembersSecretKeys();
-//
-//        // initializing blockchain
-//        RequestHandler requestHandler = new RequestHandler(new BlockchainState(new ArrayList<>()));
-//
-//        // starts message handler and perfect link
-//        PerfectLink perfectLink = new PerfectLink(serverSocket, messageQueue);
-//        perfectLink.start();
-//
-//        while (true) {
-//            Message message = messageQueue.take();
-//        }
     }
 
 }

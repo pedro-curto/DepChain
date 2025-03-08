@@ -4,6 +4,7 @@ public class Message {
 
 	private long sequenceNumber;
 	private final MessageType type;
+	private String hmac = null;
 
 	public enum MessageType {
 		APPEND,
@@ -33,8 +34,15 @@ public class Message {
 		this.sequenceNumber = sequenceNumber;
 	}
 
+	public String getHmac() { return hmac; }
+	public void setHmac(String hmac) { this.hmac = hmac; }
+
 	public MessageType getType() {
 		return type;
+	}
+
+	public String getHmacData() {
+		return "" + sequenceNumber + type;
 	}
 
 	@Override

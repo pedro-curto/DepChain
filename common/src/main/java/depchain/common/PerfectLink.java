@@ -2,6 +2,7 @@ package depchain.common;
 
 import com.google.gson.Gson;
 import depchain.common.messaging.AckMessage;
+import depchain.common.messaging.AppendMessage;
 import depchain.common.messaging.KeyExchangeMessage;
 import depchain.common.messaging.Message;
 import depchain.common.messaging.Message.MessageType;
@@ -72,6 +73,13 @@ public class PerfectLink {
        long sequenceNumber = session.getSendCounter();
        dcLogger.log("Sending message with sequence number: " + sequenceNumber);
        message.setSequenceNumber(sequenceNumber);
+       // if we already exchanged a session key, we use a mac
+       if (message.getType() != MessageType.KEY_EXCHANGE) {
+           String data = message.getHmacData();
+           String hmac = Security.generateHMAC(data, session.getSecretKey());
+           dcLogger.log("Generated hmac: " + hmac);
+           message.setHmac(hmac);
+       }
        String json = gson.toJson(message);
        SessionTaskKey key = new SessionTaskKey(session.getPort(), sequenceNumber);
        try {
@@ -112,9 +120,7 @@ public class PerfectLink {
             }
             dcLogger.log("Received message from " + packet.getAddress() + ":" + packet.getPort() + ". Message: " + new String(packet.getData(), 0, packet.getLength()));
             String received = new String(packet.getData(), 0, packet.getLength(), StandardCharsets.UTF_8);
-            Message message = gson.fromJson(received, Message.class);
-            dcLogger.log("Received message: " + received);
-
+            Message message = messageFromJson(received);
             MessageType type = message.getType();
             long sequenceNumber = message.getSequenceNumber();
             dcLogger.log("Received Message with type " + type + " and sequence number " + sequenceNumber);
@@ -127,7 +133,7 @@ public class PerfectLink {
 
             Session session = sessions.get(packet.getPort());
             if (type == MessageType.ACK) {
-                handleAck(sequenceNumber, session);
+                handleAck(message, session);
                 continue;
             }
             handleContentMessage(sequenceNumber, message, session);
@@ -168,8 +174,10 @@ public class PerfectLink {
         dcLogger.log("Current sessions: " + sessions);
     }
 
-    private void handleAck(long sequenceNumber, Session session) {
+    private void handleAck(Message ackMessage, Session session) {
+        long sequenceNumber = ackMessage.getSequenceNumber();
         dcLogger.log("Received ack for message with sequence number " + sequenceNumber);
+        if (!checkIntegrity(session, ackMessage)) { return; }
         if (sequenceNumber < session.getSendCounter()) {
             SessionTaskKey key = new SessionTaskKey(session.getPort(), sequenceNumber);
             ScheduledFuture<?> task = msgTasks.remove(key);
@@ -191,6 +199,7 @@ public class PerfectLink {
 
     private void handleContentMessage(long sequenceNumber, Message message, Session session) {
         dcLogger.log("Received content message with sequence number " + sequenceNumber);
+        if (!checkIntegrity(session, message)) { return; }
         long counter = session.getReceiveCounter();
         if (sequenceNumber == counter) {
             dcLogger.log("Received new content message");
@@ -208,8 +217,23 @@ public class PerfectLink {
         dcLogger.log("Message with invalid sequence number");
     }
 
+    private boolean checkIntegrity(Session session, Message message) {
+        SecretKey sessionKey = session.getSecretKey();
+        String hmac = message.getHmac();
+        String data = message.getHmacData();
+        if (!Security.checkHMAC(data, sessionKey, hmac)) {
+            dcLogger.log("HMAC check failed");
+            return false;
+        }
+        return true;
+    }
+
     private void sendAck(Session session, long seqNumber) {
         Message ack = new AckMessage(seqNumber);
+        String data = ack.getHmacData();
+        String hmac = Security.generateHMAC(data, session.getSecretKey());
+        dcLogger.log("Generated hmac: " + hmac);
+        ack.setHmac(hmac);
         byte[] ackData = gson.toJson(ack).getBytes();
         try {
             DatagramPacket ackPacket = new DatagramPacket(ackData, ackData.length, InetAddress.getByName(session.getAddress()), session.getPort());
@@ -229,6 +253,27 @@ public class PerfectLink {
         }
         else {
             dcLogger.log("Message queue is full, unable to deliver message: " + message);
+        }
+    }
+
+    /***
+     * This method is necessary to cast a message received
+     * from gson to a particular subclass as gson does not
+     * do that
+     * @param received String received from socket
+     * @return the message cast to the particular subclass
+     */
+    private Message messageFromJson(String received) {
+        Message message = gson.fromJson(received, Message.class);
+        switch (message.getType()) {
+            case KEY_EXCHANGE:
+                return gson.fromJson(received, KeyExchangeMessage.class);
+            case APPEND:
+                return gson.fromJson(received, AppendMessage.class);
+            case ACK:
+                return gson.fromJson(received, AckMessage.class);
+            default:
+                return message;
         }
     }
 
