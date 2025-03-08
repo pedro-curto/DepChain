@@ -20,25 +20,20 @@ import java.util.concurrent.LinkedBlockingQueue;
 public class Member {
 	private static final String LEADER_FILE = "membership/leader.txt";
 	private static final String CLIENT_FILE = "membership/client.txt";
-	private KeyPair keyPair;
 	private List<Entity> members;
+	private List<Entity> clients;
 	private String myName;
 	private int port;
 	private String address;
 	private PerfectLink perfectLink;
 	private DCLogger dcLogger;
-	private Entity client;
 
-	public Member(String memberName, List<Entity> members, int port, String address) {
+	public Member(String memberName, List<Entity> members, List<Entity> clients, int port, String address) {
 		this.myName = memberName;
 		this.members = members;
+		this.clients = clients;
 		this.port = port;
 		this.address = address;
-		readMyKeyPair(memberName);
-	}
-
-	public void readMyKeyPair(String memberName) {
-		this.keyPair = Security.getMemberKeyPair(memberName);
 	}
 
 	public boolean isLeader() {
@@ -59,11 +54,7 @@ public class Member {
 		for (Entity otherMember : this.members) {
 			if (isInitializer(otherMember.getPort())) {
 				dcLogger.log("Starting session with " + otherMember.getEntityName());
-				perfectLink.startSession(
-						otherMember.getAddress(),
-						otherMember.getPort(),
-						keyPair,
-						otherMember.getPublicKey());
+				perfectLink.startSession(otherMember.getPort());
 			}
 		}
 	}
@@ -73,16 +64,14 @@ public class Member {
 		dcLogger.log("Am I leader? " + this.isLeader());
 		DatagramSocket serverSocket = new DatagramSocket(port);
 		BlockingQueue<Message> messageQueue = new LinkedBlockingQueue<>();
-		client = CommonUtils.loadMembership(CLIENT_FILE).get(0);
-		dcLogger.log("Client: " + client);
-		dcLogger.log("Public key: " + Base64.getEncoder().encodeToString(client.getPublicKey().getEncoded()));
+		dcLogger.log("Clients: " + this.clients);
 
 		// initializing blockchain
 		RequestHandler requestHandler = new RequestHandler(new BlockchainState(new ArrayList<>()));
 
 		// start sessions
 		List<Entity> entities = new ArrayList<>();
-		entities.add(client);
+		entities.addAll(clients);
 		entities.addAll(members);
 		KeyPair myKeyPair = Security.getMemberKeyPair(myName);
 		this.perfectLink = new PerfectLink(serverSocket, messageQueue, myKeyPair, entities);
@@ -95,7 +84,6 @@ public class Member {
 		while (true) {
 
 			Message message = messageQueue.take();
-
 			dcLogger.log("Received message of type: " + message.getType());
 
 			switch (message.getType()) {

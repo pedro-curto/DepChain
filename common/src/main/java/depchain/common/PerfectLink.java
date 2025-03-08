@@ -62,17 +62,25 @@ public class PerfectLink {
         new Thread(this::startListening).start();
     }
 
-    public void startSession(String address, int port, KeyPair memberKey, PublicKey otherPub) {
+    public void startSession(int port) {
         SecretKey sessionKey = Security.generateSecretKey();
-        if (sessionKey == null) dcLogger.log("Failed to generate session key");
+        if (sessionKey == null) {
+            dcLogger.log("Failed to generate session key");
+            return;
+        }
+        PublicKey otherPub = entities.get(port).getPublicKey();
+        if (otherPub == null) {
+            dcLogger.log("Couldn't fetch other public key");
+            return;
+        }
+        String address = entities.get(port).getAddress();
         Session newSession = new Session(sessionKey, port, address);
         sessions.put(port, newSession);
         byte[] encryptKeyBytes = Security.encryptSymKeyWithAsymKey(sessionKey, otherPub);
         String encryptKey = Base64.getEncoder().encodeToString(encryptKeyBytes);
         String signature;
         try {
-            // we only sign the encrypted session key
-            signature = Security.makeDS(encryptKey, memberKey.getPrivate());
+            signature = Security.makeDS(encryptKey, this.personalKeys.getPrivate());
         } catch (Exception e) {
            dcLogger.log("Error generating signature");
             sessions.remove(port);
@@ -161,13 +169,12 @@ public class PerfectLink {
         if (message.getSequenceNumber() != 0) {
             dcLogger.log("Expected sequence number 0 but got " + message.getSequenceNumber());
         }
-        PublicKey pubkey = entities.get(port).getPublicKey();
+        PublicKey pubKey = entities.get(port).getPublicKey();
         String encryptedSessionKey = message.getEncryptedSessionKey();
         String signature = message.getSignature();
         boolean verified = false;
         try {
-            // the data that was used to sign is the encrypted session key
-            verified = Security.verifyDS(signature, encryptedSessionKey, pubkey);
+            verified = Security.verifyDS(signature, encryptedSessionKey, pubKey);
         } catch (Exception e) {
            dcLogger.log("Error verifying digital signature");
         }
@@ -179,7 +186,6 @@ public class PerfectLink {
         sessions.put(port, session);
         sendAck(session, 0);
         session.incrementReceiveCounter();
-        // logs my current sessions
         dcLogger.log("Current sessions: " + sessions);
     }
 

@@ -8,6 +8,7 @@ import depchain.member.domain.Member;
 
 public class MemberMain {
     private static final String MEMBERSHIP_FILE = "membership/membership.txt";
+    private static final String CLIENT_FILE = "membership/client.txt";
 
     public static void main (String[] args) throws Exception {
         if (args.length != 3) {
@@ -21,10 +22,11 @@ public class MemberMain {
 
         // load membership from file
         List<Entity> membershipInfo = CommonUtils.loadMembership(MEMBERSHIP_FILE);
+        List<Entity> clients = CommonUtils.loadMembership(CLIENT_FILE);
         System.out.println("Membership: " + membershipInfo);
 
         // create my member object and run start (creates other relevant structures and listener)
-        Member myself = new Member(memberName, membershipInfo, port, address);
+        Member myself = new Member(memberName, membershipInfo, clients, port, address);
         myself.start();
     }
 

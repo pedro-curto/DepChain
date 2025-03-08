@@ -2,10 +2,12 @@ package depchain.client;
 
 import java.net.*;
 import java.security.PrivateKey;
+import java.util.List;
 
 import com.google.gson.Gson;
 import depchain.client.domain.Client;
 import depchain.common.*;
+import depchain.common.domain.Entity;
 
 public class ClientMain {
     private static int clientPort;
@@ -13,6 +15,7 @@ public class ClientMain {
     private static final Gson gson = new Gson();
     private static DatagramSocket socketToLeader;
     private static PrivateKey privateKey;
+    private static final String MEMBERSHIP_FILE = "membership/membership.txt";
 
     public static void main(String[] args) throws Exception {
         if (args.length != 2) {
@@ -23,7 +26,8 @@ public class ClientMain {
         // IMPORTANT -> if the client's name isn't "paulo", we're cooked
         String clientName = args[1];
         System.out.println("Client " + clientName + " started at port " + clientPort);
-        Client client = new Client(clientName, clientPort);
+        List<Entity> membershipInfo = CommonUtils.loadMembership(MEMBERSHIP_FILE);
+        Client client = new Client(clientName, clientPort, membershipInfo);
         client.start();
     }
 }

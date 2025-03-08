@@ -2,7 +2,6 @@ package depchain.client.domain;
 
 import depchain.common.DCLogger;
 import depchain.common.PerfectLink;
-import depchain.common.CommonUtils;
 import depchain.common.domain.Entity;
 import depchain.common.messaging.AppendMessage;
 import depchain.common.messaging.Message;
@@ -10,38 +9,39 @@ import depchain.common.Security;
 
 import java.net.DatagramSocket;
 import java.security.KeyPair;
-import java.security.PublicKey;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Scanner;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 public class Client {
-    private static String LEADER_FILE = "membership/leader.txt";
     private final int port;
     private final String myName;
-    private Entity leader;
+    private final int leaderPort;
+    private final List<Entity> members;
     private PerfectLink perfectLink;
     private BlockingQueue<Message> messageQueue;
     private DCLogger dcLogger;
 
-    public Client(String clientName, int port) {
+    public Client(String clientName, int port, List<Entity> members) {
         this.myName = clientName;
         this.port = port;
+        this.members = members;
+        this.leaderPort = members.get(0).getPort();
         this.dcLogger = new DCLogger(Client.class);
     }
 
     public void start() throws Exception {
-        // loads leader
-        leader = CommonUtils.leaderLoader(LEADER_FILE);
         // init socket, messageQueue and the perfectLink abstraction
-        DatagramSocket socket = new DatagramSocket(port);
-        KeyPair myKeyPair = Security.getMemberKeyPair(myName);
+        DatagramSocket socket = new DatagramSocket(port);;
         messageQueue = new LinkedBlockingQueue<>();
-        perfectLink = new PerfectLink(socket, messageQueue, myKeyPair);
-        // handshake with leader to deliver the session key
-        PublicKey leaderPubKey = Security.getMemberPublicKey(leader.getEntityName());
+        // start sessions
+        List<Entity> entities = new ArrayList<>(members);
+        KeyPair myKeyPair = Security.getMemberKeyPair(myName);
+        this.perfectLink = new PerfectLink(socket, messageQueue, myKeyPair, entities);
         perfectLink.start();
-        perfectLink.startSession(leader.getAddress(), leader.getPort(), myKeyPair, leaderPubKey);
+        perfectLink.startSession(this.leaderPort);
         // start a thread to deliver incoming messages
         Thread messageDeliveringThread = new Thread(() -> deliverMessage(messageQueue));
         messageDeliveringThread.start();
@@ -58,7 +58,7 @@ public class Client {
                 System.exit(0);
             }
             AppendMessage msg = new AppendMessage(content);
-            perfectLink.sendMessage(msg, leader.getPort());
+            perfectLink.sendMessage(msg, leaderPort);
             dcLogger.log("Sent message: " + msg);
         }
     }

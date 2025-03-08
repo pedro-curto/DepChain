@@ -6,6 +6,7 @@ MEMBERS_DIR="../member/membership"
 CLIENTS_DIR="../client/membership"
 MEMBERSHIP_FILE="$MEMBERS_DIR/membership.txt"
 MEMBERS_LEADER_FILE="$MEMBERS_DIR/leader.txt"
+MEMBERSHIP_CLIENT_FILE="$CLIENTS_DIR/membership.txt"
 CLIENT_LEADER_FILE="$CLIENTS_DIR/leader.txt"
 CLIENT_FILE="$MEMBERS_DIR/client.txt"
 CLIENT_PORT=2000
@@ -17,10 +18,12 @@ mkdir -p "$MEMBERS_DIR"
 mkdir -p "$CLIENTS_DIR"
 # creates files if they don't exist and clears them
 touch "$MEMBERSHIP_FILE"
+touch "$MEMBERSHIP_CLIENT_FILE"
 touch "$CLIENT_LEADER_FILE"
 touch "$MEMBERS_LEADER_FILE"
 touch "$CLIENT_FILE"
 > "$MEMBERSHIP_FILE"
+> "$MEMBERSHIP_CLIENT_FILE"
 > "$CLIENT_LEADER_FILE"
 > "$MEMBERS_LEADER_FILE"
 > "$CLIENT_FILE"
@@ -54,6 +57,7 @@ for i in "${!users[@]}"; do
 
     # append membership entry: memberName,address,port,publicKeyPath
     echo "${user},${ADDRESS},${port},$MEMBERS_DIR/${user}/${user}.pubkey" >> "$MEMBERSHIP_FILE"
+    echo "${user},${ADDRESS},${port},$MEMBERS_DIR/${user}/${user}.pubkey" >> "$MEMBERSHIP_CLIENT_FILE"
 
     # create client leader file and places leader's public key for client to access
     # (only the first member, if i == 0)
