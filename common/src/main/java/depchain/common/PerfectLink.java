@@ -1,6 +1,7 @@
 package depchain.common;
 
 import com.google.gson.Gson;
+import depchain.common.domain.Entity;
 import depchain.common.messaging.AckMessage;
 import depchain.common.messaging.AppendMessage;
 import depchain.common.messaging.KeyExchangeMessage;
@@ -19,6 +20,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.PublicKey;
 import java.util.Base64;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
 
@@ -27,10 +30,11 @@ public class PerfectLink {
     private final DatagramSocket socket;
     private final BlockingQueue<Message> messageQueue;
     private final KeyPair personalKeys;
-    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(8);
+    private final ScheduledThreadPoolExecutor scheduler = new ScheduledThreadPoolExecutor(8);
     private final Map<SessionTaskKey, ScheduledFuture<?>> msgTasks = new ConcurrentHashMap<>();
     private final Map<Long, Message> msgsToDeliver = new ConcurrentHashMap<>();
     private final Map<Integer, Session> sessions = new ConcurrentHashMap<>();
+    private final Map<Integer, Entity> entities = new HashMap<>();
     private final Gson gson = new Gson();
     private final DCLogger dcLogger;
 
@@ -39,6 +43,19 @@ public class PerfectLink {
         this.messageQueue = messageQueue;
         this.dcLogger = new DCLogger(PerfectLink.class);
         this.personalKeys = personalKeys;
+        this.scheduler.setRemoveOnCancelPolicy(true);
+    }
+
+    public PerfectLink(DatagramSocket socket, BlockingQueue<Message> messageQueue, KeyPair personalKeys, List<Entity> entities) {
+        this.socket = socket;
+        this.messageQueue = messageQueue;
+        this.dcLogger = new DCLogger(PerfectLink.class);
+        this.personalKeys = personalKeys;
+        this.scheduler.setRemoveOnCancelPolicy(true);
+        // creates a mapping {port: entity} for all entities
+        for (Entity entity : entities) {
+            this.entities.put(entity.getPort(), entity);
+        }
     }
 
     public void start() {
@@ -52,18 +69,17 @@ public class PerfectLink {
         sessions.put(port, newSession);
         byte[] encryptKeyBytes = Security.encryptSymKeyWithAsymKey(sessionKey, otherPub);
         String encryptKey = Base64.getEncoder().encodeToString(encryptKeyBytes);
-        String myPubKey = Base64.getEncoder().encodeToString(memberKey.getPublic().getEncoded());
-        String dataForSig = encryptKey + myPubKey;
         String signature;
         try {
-            signature = Security.makeDS(dataForSig, memberKey.getPrivate());
+            // we only sign the encrypted session key
+            signature = Security.makeDS(encryptKey, memberKey.getPrivate());
         } catch (Exception e) {
            dcLogger.log("Error generating signature");
             sessions.remove(port);
             return;
         }
         // send message and increase send counter
-        KeyExchangeMessage message = new KeyExchangeMessage(newSession.getSendCounter(), myPubKey, encryptKey, signature);
+        KeyExchangeMessage message = new KeyExchangeMessage(newSession.getSendCounter(), encryptKey, signature);
         dcLogger.log("Sending key exchange message: " + gson.toJson(message));
         sendMessage(message, port);
     }
@@ -103,7 +119,7 @@ public class PerfectLink {
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
-        }, 0, 1, TimeUnit.SECONDS);
+        }, 0, 2, TimeUnit.SECONDS);
         msgTasks.put(key, task);
         dcLogger.log("Scheduled message with sequenceNumber: " + key);
     }
@@ -145,20 +161,13 @@ public class PerfectLink {
         if (message.getSequenceNumber() != 0) {
             dcLogger.log("Expected sequence number 0 but got " + message.getSequenceNumber());
         }
-        String pubkeyString = message.getPublicKey();
-        PublicKey pubkey;
-        try {
-            pubkey = KeyUtils.getPublicKeyFromString(pubkeyString);
-        } catch (Exception e) {
-            dcLogger.log("Error reading public key");
-            return;
-        }
+        PublicKey pubkey = entities.get(port).getPublicKey();
         String encryptedSessionKey = message.getEncryptedSessionKey();
         String signature = message.getSignature();
-        String dataForSig = encryptedSessionKey + pubkeyString;
         boolean verified = false;
         try {
-            verified = Security.verifyDS(signature, dataForSig, pubkey);
+            // the data that was used to sign is the encrypted session key
+            verified = Security.verifyDS(signature, encryptedSessionKey, pubkey);
         } catch (Exception e) {
            dcLogger.log("Error verifying digital signature");
         }

@@ -2,9 +2,9 @@ package depchain.member;
 
 import java.util.List;
 
-import depchain.member.membership.Member;
-import depchain.member.membership.MemberData;
-import depchain.member.membership.MembershipManager;
+import depchain.common.CommonUtils;
+import depchain.common.domain.Entity;
+import depchain.member.domain.Member;
 
 public class MemberMain {
     private static final String MEMBERSHIP_FILE = "membership/membership.txt";
@@ -20,7 +20,7 @@ public class MemberMain {
         System.out.println("Member " + memberName + " started at port " + port);
 
         // load membership from file
-        List<MemberData> membershipInfo = MembershipManager.loadMembership(MEMBERSHIP_FILE);
+        List<Entity> membershipInfo = CommonUtils.loadMembership(MEMBERSHIP_FILE);
         System.out.println("Membership: " + membershipInfo);
 
         // create my member object and run start (creates other relevant structures and listener)

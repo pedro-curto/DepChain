@@ -611,5 +611,5 @@ security/inputs/seqnumber.txt
 *.pubkey
 *.privkey
 keys/
-membership.txt
-leader.txt
+# ignores files from membership and client
+*.txt

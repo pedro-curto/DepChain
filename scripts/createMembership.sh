@@ -7,6 +7,8 @@ CLIENTS_DIR="../client/membership"
 MEMBERSHIP_FILE="$MEMBERS_DIR/membership.txt"
 MEMBERS_LEADER_FILE="$MEMBERS_DIR/leader.txt"
 CLIENT_LEADER_FILE="$CLIENTS_DIR/leader.txt"
+CLIENT_FILE="$MEMBERS_DIR/client.txt"
+CLIENT_PORT=2000
 BASE_PORT=5001
 ADDRESS="localhost"
 
@@ -17,10 +19,13 @@ mkdir -p "$CLIENTS_DIR"
 touch "$MEMBERSHIP_FILE"
 touch "$CLIENT_LEADER_FILE"
 touch "$MEMBERS_LEADER_FILE"
+touch "$CLIENT_FILE"
 > "$MEMBERSHIP_FILE"
 > "$CLIENT_LEADER_FILE"
 > "$MEMBERS_LEADER_FILE"
+> "$CLIENT_FILE"
 
+# --- MEMBERS AND LEADER KEYS ---
 for i in "${!users[@]}"; do
     user=${users[$i]}
     port=$((BASE_PORT + i))
@@ -60,6 +65,7 @@ for i in "${!users[@]}"; do
     fi
 done
 
+# --- CLIENT KEYS ---
 # generate private/public key for client
 user=${client[0]}
 echo "Generating keys for user: ${user}"
@@ -68,25 +74,24 @@ mkdir -p "$MEMBERS_DIR/$user"
 
 # generate privkey
 openssl genpkey -algorithm RSA -out "$CLIENTS_DIR/$user/${user}.privkey" -pkeyopt rsa_keygen_bits:2048
-
 if [ $? -ne 0 ]; then
     echo "Error: Failed to generate private key for ${user}"
     exit 1
 fi
-
 echo "Generated private key for ${user}"
 
 # generate pubkey from privkey
 openssl rsa -pubout -in "$CLIENTS_DIR/$user/${user}.privkey" -out "$CLIENTS_DIR/$user/${user}.pubkey"
-
 if [ $? -ne 0 ]; then
     echo "Error: Failed to generate public key for ${user}"
     exit 1
 fi
-
 echo "Generated public key for ${user}"
 
-# copy both to members dir
-cp "$CLIENTS_DIR/$user/${user}.privkey" "$MEMBERS_DIR/$user/${user}.privkey"
+# copy pubkey to members dir
+cp "$CLIENTS_DIR/$user/${user}.pubkey" "$MEMBERS_DIR/$user/${user}.pubkey"
+
+# create a client.txt at the membership directory similar to the membership
+echo "${user},${ADDRESS},${CLIENT_PORT},$MEMBERS_DIR/${user}/${user}.pubkey" >> "$CLIENT_FILE"
 
 echo "All keys generated successfully."
