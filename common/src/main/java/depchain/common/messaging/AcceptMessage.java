@@ -1,6 +1,4 @@
-package depchain.member.messaging;
-
-import depchain.common.messaging.Message;
+package depchain.common.messaging;
 
 public class AcceptMessage extends Message {
 

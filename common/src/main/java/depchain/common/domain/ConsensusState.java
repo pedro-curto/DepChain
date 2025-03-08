@@ -1,6 +1,7 @@
-package depchain.member.domain;
+package depchain.common.domain;
 
 import java.util.ArrayList;
+import java.util.List;
 
 public class ConsensusState {
 
@@ -8,7 +9,7 @@ public class ConsensusState {
 
 	private ValueTimestampPair current;
 
-	private ArrayList<ValueTimestampPair> writeset;
+	private List<ValueTimestampPair> writeset;
 
 	public ConsensusState(String memberName) {
 		// Initial State
@@ -25,5 +26,14 @@ public class ConsensusState {
 
 	public boolean isInitialState() {
 		return this.current == null;
+	}
+
+	@Override
+	public String toString() {
+		return "ConsensusState{" +
+				"memberName='" + memberName + '\'' +
+				", current=" + current +
+				", writeset=" + writeset +
+				'}';
 	}
 }

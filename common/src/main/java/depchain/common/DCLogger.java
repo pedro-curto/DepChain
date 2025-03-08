@@ -10,4 +10,8 @@ public class DCLogger {
     public void log(String message) {
         System.out.println("[" + className + "] " + message);
     }
+
+	public void error(String s) {
+		System.err.println("[" + className + "] " + s);
+	}
 }

@@ -1,32 +1,31 @@
 package depchain.member.domain;
 
+import com.google.gson.Gson;
 import depchain.common.*;
+import depchain.common.domain.ConsensusState;
 import depchain.common.domain.Entity;
-import depchain.common.messaging.Message;
+import depchain.common.messaging.*;
 
-import depchain.member.messaging.*;
 import depchain.member.state.BlockchainState;
-import depchain.member.state.RequestHandler;
 
 import java.net.DatagramSocket;
 import java.security.KeyPair;
-import java.security.PublicKey;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 public class Member {
 	private static final String LEADER_FILE = "membership/leader.txt";
-	private static final String CLIENT_FILE = "membership/client.txt";
 	private List<Entity> members;
 	private List<Entity> clients;
+	private int leaderPort;
 	private String myName;
 	private int port;
 	private String address;
 	private PerfectLink perfectLink;
-	private DCLogger dcLogger;
+	private DCLogger dcLogger = new DCLogger(Member.class);
+	private ConsensusState consensusState;
 
 	public Member(String memberName, List<Entity> members, List<Entity> clients, int port, String address) {
 		this.myName = memberName;
@@ -36,7 +35,7 @@ public class Member {
 		this.address = address;
 	}
 
-	public boolean isLeader() {
+	private boolean isLeader() {
 		Entity leader = CommonUtils.getLeader(LEADER_FILE);
 		System.out.println("Leader: " + leader);
 		if (leader == null) {
@@ -46,7 +45,7 @@ public class Member {
 		return leader.getEntityName().equalsIgnoreCase(myName);
 	}
 
-	public boolean isInitializer(int port) {
+	private boolean isInitializer(int port) {
 		return port > this.port;
 	}
 
@@ -60,14 +59,23 @@ public class Member {
 	}
 
     public void start() throws Exception {
-		this.dcLogger = new DCLogger(Member.class);
-		dcLogger.log("Am I leader? " + this.isLeader());
+		// inits consensus state
+		if (isLeader()) {
+			dcLogger.log("I am the leader");
+			this.consensusState = new ConsensusLeaderState(myName);
+		} else {
+			dcLogger.log("I am not the leader");
+			this.consensusState = new ConsensusState(myName);
+		}
+		this.leaderPort = CommonUtils.getLeader(LEADER_FILE).getPort();
 		DatagramSocket serverSocket = new DatagramSocket(port);
 		BlockingQueue<Message> messageQueue = new LinkedBlockingQueue<>();
 		dcLogger.log("Clients: " + this.clients);
 
-		// initializing blockchain
-		RequestHandler requestHandler = new RequestHandler(new BlockchainState(new ArrayList<>()));
+		// initializing blockchain and consensus state
+		BlockchainState blockchainState = new BlockchainState(new ArrayList<>());
+		ConsensusState consensusState = new ConsensusState(myName);
+		//RequestHandler requestHandler = new RequestHandler(blockchainState);
 
 		// start sessions
 		List<Entity> entities = new ArrayList<>();
@@ -81,55 +89,102 @@ public class Member {
 		startSessionsWithOtherMembers();
 		dcLogger.log("My sessions: " + perfectLink.getSessions());
 
+		// start a thread (executor) to pop messages from the queue and process them
+//		try (ExecutorService consensusExecutor = Executors.newSingleThreadExecutor()) {
+//			consensusExecutor.submit(new ConsensusHandler(messageQueue, this, consensusState, blockchainState));
+//		} catch (Exception e) {
+//			dcLogger.error("Error while processing message: " + e.getMessage());
+//		}
+
+		// handle incoming messages
 		while (true) {
+			try {
+				Message message = messageQueue.take();
+				dcLogger.log("Received message of type: " + message.getType());
 
-			Message message = messageQueue.take();
-			dcLogger.log("Received message of type: " + message.getType());
-
-			switch (message.getType()) {
-				case APPEND:
-					// TODO
-					// call init() or propose()?
-					// then they send READ messages to all members
-					break;
-				case READ:
-					ReadMessage readMessage = (ReadMessage) message;
-					requestHandler.handleRead(readMessage);
-					break;
-				case STATE:
-					StateMessage stateMessage = (StateMessage) message;
-					requestHandler.handleState(stateMessage);
-					break;
-				case COLLECTED:
-					CollectedMessage collectedMessage = (CollectedMessage) message;
-					requestHandler.handleCollected(collectedMessage);
-					break;
-				case WRITE:
-					WriteMessage writeMessage = (WriteMessage) message;
-					requestHandler.handleWrite(writeMessage);
-					break;
-				case ACCEPT:
-					AcceptMessage acceptMessage = (AcceptMessage) message;
-					requestHandler.handleAccept(acceptMessage);
-					break;
-				default:
-					dcLogger.log("Unknown message type");
+				switch (message.getType()) {
+					case APPEND:
+						AppendMessage appendMessage = (AppendMessage) message;
+						dcLogger.log("Received append message: " + appendMessage);
+						handleAppend(appendMessage);
+						break;
+					case READ:
+						ReadMessage readMessage = (ReadMessage) message;
+						// TODO -> tive de incluir este if, mas como é que o próprio leader sequer recebe esta mensagem?
+						if (isLeader()) continue;
+						handleRead(readMessage);
+						break;
+					case STATE:
+						StateMessage stateMessage = (StateMessage) message;
+						handleState(stateMessage);
+						break;
+					case COLLECTED:
+						CollectedMessage collectedMessage = (CollectedMessage) message;
+						handleCollected(collectedMessage);
+						break;
+					case WRITE:
+						WriteMessage writeMessage = (WriteMessage) message;
+						handleWrite(writeMessage);
+						break;
+					case ACCEPT:
+						AcceptMessage acceptMessage = (AcceptMessage) message;
+						handleAccept(acceptMessage);
+						break;
+					default:
+						dcLogger.log("Unknown message type");
+				}
+			} catch (InterruptedException e) {
+				dcLogger.error("Error while processing message: " + e.getMessage());
 			}
 		}
+
     }
 
-	public void init() {
-		// TODO
-		// do this in Member or ConsensusLeaderState?
+	private void handleAppend(AppendMessage appendMessage) {
+		// sends a READ message to all members to collect their states
+		for (Entity member : members) {
+			if (member.getPort() == port) {
+				// skip myself
+				dcLogger.log("Skipping myself at port " + port);
+				continue;
+			}
+			// TODO -> como é que o membro depois recebe a mensagem e contacta o líder?
+			ReadMessage readMessage = new ReadMessage();
+			perfectLink.sendMessage(readMessage, member.getPort());
+		}
 	}
 
-	public void propose() {
-		// TODO
-		// do this in Member or ConsensusLeaderState?
+	private void handleRead(ReadMessage readMessage) {
+		dcLogger.log("Received read message: " + readMessage);
+		// send state message back
+		StateMessage stateMessage = new StateMessage(consensusState);
+		dcLogger.log("Going to reply to leader on port " + leaderPort + " with state message: " + stateMessage);
+		perfectLink.sendMessage(stateMessage, leaderPort);
 	}
 
-	public void decide() {
-		// TODO
-		// do this in Member or ConsensusLeaderState?
+	private void handleAccept(AcceptMessage acceptMessage) {
 	}
+
+	private void handleWrite(WriteMessage writeMessage) {
+
+	}
+
+	private void handleCollected(CollectedMessage collectedMessage) {
+
+	}
+
+	private void handleState(StateMessage stateMessage) {
+		if (isLeader()) {
+			dcLogger.log("Received state message: " + stateMessage);
+			// leader: append the state to my consensus state
+			//ConsensusLeaderState leaderState = (ConsensusLeaderState) consensusState;
+			//leaderState.addMemberState(stateMessage.getState());
+			//dcLogger.log("Received state message: " + stateMessage + ". Appended to leader state");
+		} else {
+			dcLogger.log("Received state message but not the leader");
+		}
+
+
+	}
+
 }

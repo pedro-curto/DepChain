@@ -17,19 +17,19 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 public class Client {
     private final int port;
-    private final String myName;
-    private final int leaderPort;
+	private final int leaderPort;
     private final List<Entity> members;
+    private final KeyPair clientKeys;
     private PerfectLink perfectLink;
     private BlockingQueue<Message> messageQueue;
-    private DCLogger dcLogger;
+    private final DCLogger dcLogger;
 
     public Client(String clientName, int port, List<Entity> members) {
-        this.myName = clientName;
-        this.port = port;
+		this.port = port;
         this.members = members;
         this.leaderPort = members.get(0).getPort();
         this.dcLogger = new DCLogger(Client.class);
+        this.clientKeys = Security.getMemberKeyPair(clientName);
     }
 
     public void start() throws Exception {
@@ -38,8 +38,7 @@ public class Client {
         messageQueue = new LinkedBlockingQueue<>();
         // start sessions
         List<Entity> entities = new ArrayList<>(members);
-        KeyPair myKeyPair = Security.getMemberKeyPair(myName);
-        this.perfectLink = new PerfectLink(socket, messageQueue, myKeyPair, entities);
+        this.perfectLink = new PerfectLink(socket, messageQueue, this.clientKeys, entities);
         perfectLink.start();
         perfectLink.startSession(this.leaderPort);
         // start a thread to deliver incoming messages
@@ -57,7 +56,9 @@ public class Client {
                 input.close();
                 System.exit(0);
             }
-            AppendMessage msg = new AppendMessage(content);
+            AppendMessage msg = new AppendMessage(content, this.port);
+            String signature = Security.makeDS(msg.getDataToSign(), clientKeys.getPrivate());
+            msg.setSignature(signature);
             perfectLink.sendMessage(msg, leaderPort);
             dcLogger.log("Sent message: " + msg);
         }

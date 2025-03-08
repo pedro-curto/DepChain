@@ -1,7 +1,6 @@
-package depchain.member.messaging;
+package depchain.common.messaging;
 
-import depchain.common.messaging.Message;
-import depchain.member.domain.ConsensusState;
+import depchain.common.domain.ConsensusState;
 
 import java.util.ArrayList;
 

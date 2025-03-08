@@ -2,10 +2,7 @@ package depchain.common;
 
 import com.google.gson.Gson;
 import depchain.common.domain.Entity;
-import depchain.common.messaging.AckMessage;
-import depchain.common.messaging.AppendMessage;
-import depchain.common.messaging.KeyExchangeMessage;
-import depchain.common.messaging.Message;
+import depchain.common.messaging.*;
 import depchain.common.messaging.Message.MessageType;
 import depchain.common.session.Session;
 import depchain.common.session.SessionTaskKey;
@@ -37,14 +34,6 @@ public class PerfectLink {
     private final Map<Integer, Entity> entities = new HashMap<>();
     private final Gson gson = new Gson();
     private final DCLogger dcLogger;
-
-    public PerfectLink(DatagramSocket socket, BlockingQueue<Message> messageQueue, KeyPair personalKeys) {
-        this.socket = socket;
-        this.messageQueue = messageQueue;
-        this.dcLogger = new DCLogger(PerfectLink.class);
-        this.personalKeys = personalKeys;
-        this.scheduler.setRemoveOnCancelPolicy(true);
-    }
 
     public PerfectLink(DatagramSocket socket, BlockingQueue<Message> messageQueue, KeyPair personalKeys, List<Entity> entities) {
         this.socket = socket;
@@ -93,6 +82,9 @@ public class PerfectLink {
     }
 
     public void sendMessage(Message message, int port) {
+       dcLogger.log("Sessions: " + sessions);
+       dcLogger.log("Sending message: " + message);
+       dcLogger.log("Port: " + port);
        Session session = sessions.get(port);
        long sequenceNumber = session.getSendCounter();
        dcLogger.log("Sending message with sequence number: " + sequenceNumber);
@@ -287,7 +279,18 @@ public class PerfectLink {
                 return gson.fromJson(received, AppendMessage.class);
             case ACK:
                 return gson.fromJson(received, AckMessage.class);
+            case READ:
+                return gson.fromJson(received, ReadMessage.class);
+            case STATE:
+                return gson.fromJson(received, StateMessage.class);
+            case COLLECTED:
+                return gson.fromJson(received, CollectedMessage.class);
+            case WRITE:
+                return gson.fromJson(received, WriteMessage.class);
+            case ACCEPT:
+                return gson.fromJson(received, AcceptMessage.class);
             default:
+                dcLogger.log("(messageFromJson) Unknown message type");
                 return message;
         }
     }

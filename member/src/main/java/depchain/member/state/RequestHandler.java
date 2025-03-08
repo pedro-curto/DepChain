@@ -1,6 +1,6 @@
 package depchain.member.state;
 
-import depchain.member.messaging.*;
+import depchain.common.messaging.*;
 
 public class RequestHandler {
 

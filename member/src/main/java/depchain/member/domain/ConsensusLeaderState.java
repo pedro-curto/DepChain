@@ -1,5 +1,7 @@
 package depchain.member.domain;
 
+import depchain.common.domain.ConsensusState;
+
 import java.util.ArrayList;
 
 public class ConsensusLeaderState extends ConsensusState {
@@ -9,5 +11,9 @@ public class ConsensusLeaderState extends ConsensusState {
 
 	public ConsensusLeaderState(String leaderName) {
 		super(leaderName);
+	}
+
+	public void addMemberState(ConsensusState state) {
+		memberStates.add(state);
 	}
 }

@@ -1,4 +1,4 @@
-package depchain.member.domain;
+package depchain.common.domain;
 
 public class ValueTimestampPair {
 
@@ -17,5 +17,13 @@ public class ValueTimestampPair {
 
 	public String getValue() {
 		return value;
+	}
+
+	@Override
+	public String toString() {
+		return "ValueTimestampPair{" +
+				"timestamp=" + timestamp +
+				", value='" + value + '\'' +
+				'}';
 	}
 }
