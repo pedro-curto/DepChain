@@ -22,10 +22,11 @@ public class Member {
 	private int leaderPort;
 	private String myName;
 	private int port;
-	private String address;
+	private final String address;
 	private PerfectLink perfectLink;
 	private DCLogger dcLogger = new DCLogger(Member.class);
 	private ConsensusState consensusState;
+	private final int faultyProcesses;
 
 	public Member(String memberName, List<Entity> members, List<Entity> clients, int port, String address) {
 		this.myName = memberName;
@@ -33,6 +34,8 @@ public class Member {
 		this.clients = clients;
 		this.port = port;
 		this.address = address;
+		// floor of (n-1)/3
+		this.faultyProcesses = Math.floorDiv(members.size() - 1, 3);
 	}
 
 	private boolean isLeader() {
@@ -60,6 +63,7 @@ public class Member {
 
     public void start() throws Exception {
 		// inits consensus state
+		dcLogger.log("Faulty processes ceiling (f): " + faultyProcesses);
 		if (isLeader()) {
 			dcLogger.log("I am the leader");
 			this.consensusState = new ConsensusLeaderState(myName);
@@ -141,24 +145,51 @@ public class Member {
     }
 
 	private void handleAppend(AppendMessage appendMessage) {
+		if (!isLeader()) {
+			dcLogger.log("I'm not the leader. Skipping append message");
+			return;
+		}
+		// if I'm the leader, my consensusState is a ConsensusLeaderState
+		ConsensusLeaderState leaderState = (ConsensusLeaderState) consensusState;
 		// sends a READ message to all members to collect their states
 		for (Entity member : members) {
 			if (member.getPort() == port) {
 				// skip myself
-				dcLogger.log("Skipping myself at port " + port);
+				dcLogger.log("Skipping ReadMessage to myself at port " + port);
 				continue;
 			}
 			// TODO -> como é que o membro depois recebe a mensagem e contacta o líder?
 			ReadMessage readMessage = new ReadMessage();
 			perfectLink.sendMessage(readMessage, member.getPort());
 		}
+		// at this point, we must wait for at least N -f STATE messages
+		// we spawn a new thread to wait for the quorum and the main thread processes incoming STATE messages
+		new Thread(() -> {
+			int quorumSize = members.size() - faultyProcesses;
+			dcLogger.log("Waiting for quorum of size " + quorumSize);
+
+			leaderState.waitForQuorum(members.size() - faultyProcesses);
+			dcLogger.log("Quorum of STATE reached");
+			// after we receive N - f STATE messages, we send a COLLECTED message to all members
+			List<ConsensusState> states = leaderState.getMemberStates();
+			CollectedMessage collectedMessage = new CollectedMessage(states);
+			dcLogger.log("Sending collected message: " + collectedMessage);
+			for (Entity member : members) {
+				if (member.getPort() == port) {
+					// skip myself
+					dcLogger.log("Skipping CollectedMessage to myself at port " + port);
+					continue;
+				}
+				perfectLink.sendMessage(collectedMessage, member.getPort());
+			}
+		}).start();
 	}
 
 	private void handleRead(ReadMessage readMessage) {
 		dcLogger.log("Received read message: " + readMessage);
 		// send state message back
 		StateMessage stateMessage = new StateMessage(consensusState);
-		dcLogger.log("Going to reply to leader on port " + leaderPort + " with state message: " + stateMessage);
+		dcLogger.log("Sending state message: " + stateMessage);
 		perfectLink.sendMessage(stateMessage, leaderPort);
 	}
 
@@ -170,16 +201,15 @@ public class Member {
 	}
 
 	private void handleCollected(CollectedMessage collectedMessage) {
-
+		dcLogger.log("Received collected message: " + collectedMessage);
 	}
 
 	private void handleState(StateMessage stateMessage) {
 		if (isLeader()) {
-			dcLogger.log("Received state message: " + stateMessage);
 			// leader: append the state to my consensus state
-			//ConsensusLeaderState leaderState = (ConsensusLeaderState) consensusState;
-			//leaderState.addMemberState(stateMessage.getState());
-			//dcLogger.log("Received state message: " + stateMessage + ". Appended to leader state");
+			ConsensusLeaderState leaderState = (ConsensusLeaderState) consensusState;
+			leaderState.addMemberState(stateMessage.getState());
+			dcLogger.log("Received state message: " + stateMessage + ". Appended to leader state");
 		} else {
 			dcLogger.log("Received state message but not the leader");
 		}

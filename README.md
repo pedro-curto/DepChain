@@ -1,5 +1,11 @@
 # DepChain
 
+## To Do
+- Add JUnit tests (!!!)
+- Add signature to StateMessages
+- Check each StateMessage signature when we receive a COLLECTED at a member
+- Write, Accept, Decide phases
+
 ## Building the Project
 From the root directory of the project, run the following command:
 ```bash
@@ -38,10 +44,3 @@ foo
 bar
 ```
 
-## To Do
-- Add JUnit tests for perfect links
-- Broadcast a message to all members from the leader when we receive a message from the client
-- Read about conditional collect and implement it
-    - Add JUnit tests for conditional collect
-- Read about Byzantine Read/Write Epoch Consensus and implement it without cryptographic operations
-    - Add JUnit tests to detect Byzantine behaviours
