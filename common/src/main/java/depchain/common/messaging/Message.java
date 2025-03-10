@@ -11,6 +11,7 @@ public class Message {
 	public enum MessageType {
 		APPEND,
 		ACK,
+		CLIENT_REPLY,
 		KEY_EXCHANGE,
 		READ,
 		WRITE,

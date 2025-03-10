@@ -51,6 +51,10 @@ public class ConsensusState {
         return writeset;
     }
 
+    public int getCurrentConsensusInstance() {
+        return currentConsensusInstance;
+    }
+
     public void setCurrent(ValueTimestampPair current) {
         this.current = current;
     }

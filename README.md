@@ -2,8 +2,9 @@
 
 ## To Do
 - Add JUnit tests (!!!)
-- At the member, wait for a quorum of writes of the value that we decided
-- Accept, Decide phases
+- Decide phase
+- Check client signature at other members
+- Deal with a client that can send many requests at once (?)
 
 ## Building the Project
 From the root directory of the project, run the following command:

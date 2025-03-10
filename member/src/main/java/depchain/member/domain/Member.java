@@ -74,7 +74,7 @@ public class Member {
 		dcLogger.log("Faulty processes ceiling (f): " + faultyProcesses);
 		if (isLeader()) {
 			dcLogger.log("I am the leader");
-			this.consensusState = new ConsensusLeaderState(myName);
+			this.consensusState = new ConsensusLeaderState(myName, 0);
 		} else {
 			dcLogger.log("I am not the leader");
 			this.consensusState = new ConsensusState(myName, 0);
@@ -200,6 +200,7 @@ public class Member {
 				}
 				perfectLink.sendMessage(collectedMessage, member.getPort());
 			}
+			proceedToWritePhase(newValue);
 		}).start();
 	}
 
@@ -269,12 +270,30 @@ public class Member {
 		}
 		dcLogger.log("Highest value: " + highest);
 		ValueTimestampPair proposedValue;
+		// TODO -> aqui tem de ser adicionado a escolha ao writeset
 		if (count >= this.faultyProcesses+1) {
 			// proposed value is highest found
 			proposedValue = highest;
 		} else {
 			proposedValue = leaderValts;
 		}
+		proceedToWritePhase(proposedValue);
+	}
+
+	private void handleState(StateMessage stateMessage) {
+		if (isLeader()) {
+			// leader: append the state to my consensus state
+			ConsensusLeaderState leaderState = (ConsensusLeaderState) consensusState;
+			leaderState.addMemberState(stateMessage);
+			dcLogger.log("Received state message: " + stateMessage + ". Appended to leader state");
+		} else {
+			dcLogger.log("Received state message but not the leader");
+		}
+
+
+	}
+
+	private void proceedToWritePhase(ValueTimestampPair proposedValue) {
 		// at this point, I'm going to broadcast the proposed value in a WRITE message
 		// if I do so, I need to append it to my state's writeset
 		this.consensusState.addWritesetEntry(proposedValue);
@@ -315,24 +334,22 @@ public class Member {
 			// wait for quorum of ACCEPT and either ep-decide or abort
 			List<AcceptMessage> accepts = this.consensusState.waitForAcceptQuorum(this.byzantineQuorum);
 			dcLogger.log("Quorum of ACCEPT reached");
-			// decide or abort
+			// TODO -> decide or abort
 			this.blockchainState.appendString(consensusState.getCurrent().getValue());
-
-
+			int instance = consensusState.getCurrentConsensusInstance();
+			// TODO -> answer back to the client if I'm the leader: if it's successful, implement logic to return false
+			if (isLeader()) {
+				String value = consensusState.getCurrent().getValue();
+				// if value is different from null, we decided; otherwise, we aborted
+				boolean success = value != null;
+				ClientReplyMessage clientReplyMessage = new ClientReplyMessage(value, success, instance);
+				// TODO -> corrigir lógica para dar handle a mais que um cliente (?)
+				perfectLink.sendMessage(clientReplyMessage, clients.get(0).getPort());
+				this.consensusState = new ConsensusLeaderState(myName, instance + 1);
+			} else {
+				this.consensusState = new ConsensusState(myName, instance + 1);
+			}
 		}).start();
-	}
-
-	private void handleState(StateMessage stateMessage) {
-		if (isLeader()) {
-			// leader: append the state to my consensus state
-			ConsensusLeaderState leaderState = (ConsensusLeaderState) consensusState;
-			leaderState.addMemberState(stateMessage);
-			dcLogger.log("Received state message: " + stateMessage + ". Appended to leader state");
-		} else {
-			dcLogger.log("Received state message but not the leader");
-		}
-
-
 	}
 
 }

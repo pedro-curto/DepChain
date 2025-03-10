@@ -11,8 +11,8 @@ public class ConsensusLeaderState extends ConsensusState {
 	// Store member states for collected message
 	private List<StateMessage> memberStates = new ArrayList<>();
 
-	public ConsensusLeaderState(String leaderName) {
-		super(leaderName, 0);
+	public ConsensusLeaderState(String leaderName, int consensusInstance) {
+		super(leaderName, consensusInstance);
 	}
 
 	public void addMemberState(StateMessage state) {

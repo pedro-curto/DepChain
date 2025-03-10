@@ -289,6 +289,8 @@ public class PerfectLink {
                 return gson.fromJson(received, WriteMessage.class);
             case ACCEPT:
                 return gson.fromJson(received, AcceptMessage.class);
+            case CLIENT_REPLY:
+                return gson.fromJson(received, ClientReplyMessage.class);
             default:
                 dcLogger.log("(messageFromJson) Unknown message type");
                 return message;
