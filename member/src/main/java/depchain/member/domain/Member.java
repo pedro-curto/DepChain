@@ -27,6 +27,7 @@ public class Member {
 	private PerfectLink perfectLink;
 	private DCLogger dcLogger;
 	private ConsensusState consensusState;
+	private BlockchainState blockchainState;
 	private final int faultyProcesses;
 	private final int byzantineQuorum;
 	private List<ConsensusState> memberStates;
@@ -83,7 +84,7 @@ public class Member {
 		dcLogger.log("Clients: " + this.clients);
 
 		// initializing blockchain and consensus state
-		BlockchainState blockchainState = new BlockchainState(new ArrayList<>());
+		this.blockchainState = new BlockchainState(new ArrayList<>());
 		//ConsensusState consensusState = new ConsensusState(myName);
 		//RequestHandler requestHandler = new RequestHandler(blockchainState);
 
@@ -205,7 +206,7 @@ public class Member {
 	private void handleRead(ReadMessage readMessage) {
 		dcLogger.log("Received read message: " + readMessage);
 		// send state message back
-		// TODO -> assino o quê? o consensusState?
+		// TODO -> assino o quê? o consensusState? fazemo
 		String mySignature = Security.makeDS(consensusState.toString(), Security.getMyPrivateKey(myName));
 		StateMessage stateMessage = new StateMessage(consensusState, mySignature);
 		dcLogger.log("Sending state message: " + stateMessage);
@@ -213,12 +214,16 @@ public class Member {
 	}
 
 	private void handleAccept(AcceptMessage acceptMessage) {
+		dcLogger.log("Received accept message: " + acceptMessage);
+		consensusState.addAcceptMessage(acceptMessage);
 	}
 
 	private void handleWrite(WriteMessage writeMessage) {
 		dcLogger.log("Received write message: " + writeMessage);
 		// TODO -> only add the write to the set of writes if it matches our currently decided value (?)
-		consensusState.addWriteMessage(writeMessage);
+		if (writeMessage.getValts().getValue().equals(consensusState.getCurrent().getValue())) {
+			consensusState.addWriteMessage(writeMessage);
+		}
 
 	}
 
@@ -275,6 +280,8 @@ public class Member {
 		this.consensusState.addWritesetEntry(proposedValue);
 		this.consensusState.setCurrent(proposedValue);
 		WriteMessage writeMessage = new WriteMessage(proposedValue);
+		// TODO -> add write message to our own quorum: isto está certo?
+		consensusState.addWriteMessage(writeMessage);
 		dcLogger.log("Sending write message: " + writeMessage);
 		for (Entity member : members) {
 			if (member.getPort() == port) {
@@ -290,8 +297,12 @@ public class Member {
 			// TODO -> do we count our own write message for the N - f quorum?
 			List<WriteMessage> writes = this.consensusState.waitForWriteQuorum(this.byzantineQuorum);
 			dcLogger.log("Quorum of WRITE reached");
+			// add current value to writeset
+			consensusState.addWritesetEntry(consensusState.getCurrent());
 			// after we receive a quorum of WRITE messages, we send an ACCEPT message to all members
 			AcceptMessage acceptMessage = new AcceptMessage(this.consensusState.getCurrent().getValue());
+			// TODO -> add accept message to our own quorum: isto está certo?
+			consensusState.addAcceptMessage(acceptMessage);
 			dcLogger.log("Sending accept message: " + acceptMessage);
 			for (Entity member : members) {
 				if (member.getPort() == port) {
@@ -301,7 +312,12 @@ public class Member {
 				}
 				perfectLink.sendMessage(acceptMessage, member.getPort());
 			}
-			// TODO -> wait for quorum of ACCEPT and either ep-decide or abort
+			// wait for quorum of ACCEPT and either ep-decide or abort
+			List<AcceptMessage> accepts = this.consensusState.waitForAcceptQuorum(this.byzantineQuorum);
+			dcLogger.log("Quorum of ACCEPT reached");
+			// decide or abort
+			this.blockchainState.appendString(consensusState.getCurrent().getValue());
+
 
 		}).start();
 	}

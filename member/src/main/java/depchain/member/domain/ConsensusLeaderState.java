@@ -37,7 +37,9 @@ public class ConsensusLeaderState extends ConsensusState {
 	}
 
 	public List<StateMessage> getMemberStates() {
-		return memberStates;
+		synchronized (lock) {
+			return memberStates;
+		}
 	}
 
 
