@@ -2,9 +2,8 @@
 
 ## To Do
 - Add JUnit tests (!!!)
-- Add signature to StateMessages
-- Check each StateMessage signature when we receive a COLLECTED at a member
-- Write, Accept, Decide phases
+- At the member, wait for a quorum of writes of the value that we decided
+- Accept, Decide phases
 
 ## Building the Project
 From the root directory of the project, run the following command:

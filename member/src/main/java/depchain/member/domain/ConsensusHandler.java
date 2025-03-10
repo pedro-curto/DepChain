@@ -18,7 +18,7 @@ public class ConsensusHandler implements Runnable {
 	private Map<Integer, Entity> members;
 	private ConsensusState state;
 	private BlockchainState blockchainState;
-	private final DCLogger dcLogger = new DCLogger(ConsensusHandler.class);
+	private final DCLogger dcLogger = new DCLogger(ConsensusHandler.class, true);
 
 	public ConsensusHandler(BlockingQueue<Message> messageQueue,
 							Member member,

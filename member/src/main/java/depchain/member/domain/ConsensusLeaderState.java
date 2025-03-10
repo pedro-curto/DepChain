@@ -1,6 +1,7 @@
 package depchain.member.domain;
 
 import depchain.common.domain.ConsensusState;
+import depchain.common.messaging.StateMessage;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -8,20 +9,20 @@ import java.util.List;
 public class ConsensusLeaderState extends ConsensusState {
 	private Object lock = new Object();
 	// Store member states for collected message
-	private List<ConsensusState> memberStates = new ArrayList<>();
+	private List<StateMessage> memberStates = new ArrayList<>();
 
 	public ConsensusLeaderState(String leaderName) {
-		super(leaderName);
+		super(leaderName, 0);
 	}
 
-	public void addMemberState(ConsensusState state) {
+	public void addMemberState(StateMessage state) {
 		synchronized (lock) {
 			memberStates.add(state);
 			lock.notifyAll();
 		}
 	}
 
-	public List<ConsensusState> waitForQuorum(int quorumSize) {
+	public List<StateMessage> waitForQuorum(int quorumSize) {
 		synchronized (lock) {
 			while (memberStates.size() < quorumSize) {
 				try {
@@ -35,7 +36,7 @@ public class ConsensusLeaderState extends ConsensusState {
 		}
 	}
 
-	public List<ConsensusState> getMemberStates() {
+	public List<StateMessage> getMemberStates() {
 		return memberStates;
 	}
 

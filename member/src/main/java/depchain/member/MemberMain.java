@@ -26,7 +26,8 @@ public class MemberMain {
         System.out.println("Membership: " + membershipInfo);
 
         // create my member object and run start (creates other relevant structures and listener)
-        Member myself = new Member(memberName, membershipInfo, clients, port, address);
+        boolean debug = true;
+        Member myself = new Member(memberName, membershipInfo, clients, port, address, debug);
         myself.start();
     }
 

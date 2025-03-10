@@ -18,27 +18,42 @@ public final class Security {
 	private static final String ASYM_ALGO = "RSA";
 
 	/** Calculates digital signature from text. */
-	public static String makeDS(String data, PrivateKey privateKey) throws Exception {
+	public static String makeDS(String data, PrivateKey privateKey) {
 		// get a signature object and sign the plain text with the private key
-		Signature sig = Signature.getInstance(SIGNATURE_ALGO);
-		sig.initSign(privateKey);
-		sig.update(data.getBytes());
-		byte[] signature = sig.sign();
-		return Base64.getEncoder().encodeToString(signature);
+		try {
+			Signature sig = Signature.getInstance(SIGNATURE_ALGO);
+			sig.initSign(privateKey);
+			sig.update(data.getBytes());
+			byte[] signature = sig.sign();
+			return Base64.getEncoder().encodeToString(signature);
+		} catch (NoSuchAlgorithmException e) {
+			System.err.println("No Such Algorithm exception: " + e);
+		} catch (InvalidKeyException e) {
+			System.err.println("InvalidKeyException: " + e);
+		} catch (SignatureException e) {
+			System.err.println("SignatureException: " + e);
+		}
+		return null;
 	}
 
-	public static boolean verifyDS(String receivedSignature, String data, PublicKey publicKey) throws Exception {
+	public static boolean verifyDS(String receivedSignature, String data, PublicKey publicKey) {
 		// verify the signature with the public key
-		Signature sig = Signature.getInstance(SIGNATURE_ALGO);
-		sig.initVerify(publicKey);
-		sig.update(data.getBytes());
-		byte[] signatureBytes = Base64.getDecoder().decode(receivedSignature);
+		Signature sig = null;
+		byte[] signatureBytes = null;
 		try {
+			sig = Signature.getInstance(SIGNATURE_ALGO);
+			sig.initVerify(publicKey);
+			sig.update(data.getBytes());
+			signatureBytes = Base64.getDecoder().decode(receivedSignature);
 			return sig.verify(signatureBytes);
-		} catch (SignatureException se) {
-			System.err.println("Caught exception while verifying " + se);
-			return false;
+		} catch (NoSuchAlgorithmException e) {
+			System.err.println("Caught exception while verifying " + e);
+		} catch (InvalidKeyException e) {
+			System.err.println("Caught exception while verifying " + e);
+		} catch (SignatureException e) {
+			System.err.println("Caught exception while verifying " + e);
 		}
+		return false;
 	}
 
 	public static KeyPair getMemberKeyPair(String member) {
@@ -133,4 +148,13 @@ public final class Security {
 		return false;
 	}
 
+	public static PrivateKey getMyPrivateKey(String myName) {
+		String keyPath = "membership/" + myName + "/" + myName + ".privkey";
+		try {
+			return readPrivateKey(keyPath);
+		} catch (Exception e) {
+			System.err.println("Error reading private key at " + keyPath);
+		}
+		return null;
+	}
 }

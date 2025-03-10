@@ -23,12 +23,14 @@ public class Client {
     private PerfectLink perfectLink;
     private BlockingQueue<Message> messageQueue;
     private final DCLogger dcLogger;
+    private final boolean debug;
 
-    public Client(String clientName, int port, List<Entity> members) {
+    public Client(String clientName, int port, List<Entity> members, boolean debug) {
+        this.debug = debug;
 		this.port = port;
         this.members = members;
         this.leaderPort = members.get(0).getPort();
-        this.dcLogger = new DCLogger(Client.class);
+        this.dcLogger = new DCLogger(Client.class, debug);
         this.clientKeys = Security.getMemberKeyPair(clientName);
     }
 
@@ -38,7 +40,7 @@ public class Client {
         messageQueue = new LinkedBlockingQueue<>();
         // start sessions
         List<Entity> entities = new ArrayList<>(members);
-        this.perfectLink = new PerfectLink(socket, messageQueue, this.clientKeys, entities);
+        this.perfectLink = new PerfectLink(socket, messageQueue, this.clientKeys, entities, this.debug);
         perfectLink.start();
         perfectLink.startSession(this.leaderPort);
         // start a thread to deliver incoming messages

@@ -1,15 +1,15 @@
 package depchain.member.domain;
 
-import com.google.gson.Gson;
 import depchain.common.*;
 import depchain.common.domain.ConsensusState;
 import depchain.common.domain.Entity;
+import depchain.common.domain.ValueTimestampPair;
 import depchain.common.messaging.*;
 
 import depchain.member.state.BlockchainState;
-
 import java.net.DatagramSocket;
 import java.security.KeyPair;
+import java.security.PublicKey;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
@@ -19,33 +19,40 @@ public class Member {
 	private static final String LEADER_FILE = "membership/leader.txt";
 	private List<Entity> members;
 	private List<Entity> clients;
-	private int leaderPort;
+	private Entity leader;
 	private String myName;
 	private int port;
 	private final String address;
+	private final boolean debug;
 	private PerfectLink perfectLink;
-	private DCLogger dcLogger = new DCLogger(Member.class);
+	private DCLogger dcLogger;
 	private ConsensusState consensusState;
 	private final int faultyProcesses;
+	private final int byzantineQuorum;
+	private List<ConsensusState> memberStates;
 
-	public Member(String memberName, List<Entity> members, List<Entity> clients, int port, String address) {
+	public Member(String memberName, List<Entity> members, List<Entity> clients, int port, String address, boolean debug) {
 		this.myName = memberName;
 		this.members = members;
 		this.clients = clients;
 		this.port = port;
 		this.address = address;
+		this.debug = debug;
+		this.dcLogger = new DCLogger(Member.class, debug);
+		this.leader = CommonUtils.getLeader(LEADER_FILE);
 		// floor of (n-1)/3
 		this.faultyProcesses = Math.floorDiv(members.size() - 1, 3);
+		// N - f
+		this.byzantineQuorum = members.size() - faultyProcesses;
 	}
 
 	private boolean isLeader() {
-		Entity leader = CommonUtils.getLeader(LEADER_FILE);
-		System.out.println("Leader: " + leader);
-		if (leader == null) {
+		System.out.println("Leader: " + this.leader);
+		if (this.leader == null) {
 			System.out.println("No leader found");
 			return false;
 		}
-		return leader.getEntityName().equalsIgnoreCase(myName);
+		return this.leader.getEntityName().equalsIgnoreCase(myName);
 	}
 
 	private boolean isInitializer(int port) {
@@ -69,16 +76,15 @@ public class Member {
 			this.consensusState = new ConsensusLeaderState(myName);
 		} else {
 			dcLogger.log("I am not the leader");
-			this.consensusState = new ConsensusState(myName);
+			this.consensusState = new ConsensusState(myName, 0);
 		}
-		this.leaderPort = CommonUtils.getLeader(LEADER_FILE).getPort();
 		DatagramSocket serverSocket = new DatagramSocket(port);
 		BlockingQueue<Message> messageQueue = new LinkedBlockingQueue<>();
 		dcLogger.log("Clients: " + this.clients);
 
 		// initializing blockchain and consensus state
 		BlockchainState blockchainState = new BlockchainState(new ArrayList<>());
-		ConsensusState consensusState = new ConsensusState(myName);
+		//ConsensusState consensusState = new ConsensusState(myName);
 		//RequestHandler requestHandler = new RequestHandler(blockchainState);
 
 		// start sessions
@@ -86,7 +92,7 @@ public class Member {
 		entities.addAll(clients);
 		entities.addAll(members);
 		KeyPair myKeyPair = Security.getMemberKeyPair(myName);
-		this.perfectLink = new PerfectLink(serverSocket, messageQueue, myKeyPair, entities);
+		this.perfectLink = new PerfectLink(serverSocket, messageQueue, myKeyPair, entities, debug);
 		perfectLink.start();
 
 		// starts sessions for all processes with ports bigger than mine
@@ -114,8 +120,6 @@ public class Member {
 						break;
 					case READ:
 						ReadMessage readMessage = (ReadMessage) message;
-						// TODO -> tive de incluir este if, mas como é que o próprio leader sequer recebe esta mensagem?
-						if (isLeader()) continue;
 						handleRead(readMessage);
 						break;
 					case STATE:
@@ -149,8 +153,16 @@ public class Member {
 			dcLogger.log("I'm not the leader. Skipping append message");
 			return;
 		}
+		dcLogger.log("-- STARTING CONSENSUS FOR " + appendMessage.getValue() + " --");
 		// if I'm the leader, my consensusState is a ConsensusLeaderState
 		ConsensusLeaderState leaderState = (ConsensusLeaderState) consensusState;
+		// set the leader's current value to the append message
+		// TODO -> quando é que damos append do valts ao writeset? só no write?
+		ValueTimestampPair currentValts = consensusState.getCurrent();
+		int newTs = (currentValts == null) ? 0 : currentValts.getTimestamp() + 1;
+		ValueTimestampPair newValue = new ValueTimestampPair(newTs, appendMessage.getValue());
+		leaderState.setCurrent(newValue);
+
 		// sends a READ message to all members to collect their states
 		for (Entity member : members) {
 			if (member.getPort() == port) {
@@ -158,20 +170,25 @@ public class Member {
 				dcLogger.log("Skipping ReadMessage to myself at port " + port);
 				continue;
 			}
-			// TODO -> como é que o membro depois recebe a mensagem e contacta o líder?
+			dcLogger.log("Sending read message to " + member.getPort());
 			ReadMessage readMessage = new ReadMessage();
 			perfectLink.sendMessage(readMessage, member.getPort());
 		}
 		// at this point, we must wait for at least N -f STATE messages
 		// we spawn a new thread to wait for the quorum and the main thread processes incoming STATE messages
+		// TODO -> do we count our own state message as a leader for the N - f quorum, making it N - f - 1?
 		new Thread(() -> {
-			int quorumSize = members.size() - faultyProcesses;
-			dcLogger.log("Waiting for quorum of size " + quorumSize);
-
-			leaderState.waitForQuorum(members.size() - faultyProcesses);
+			dcLogger.log("Waiting for quorum of size " + byzantineQuorum);
+			// wait for N - f
+			leaderState.waitForQuorum(this.byzantineQuorum);
 			dcLogger.log("Quorum of STATE reached");
 			// after we receive N - f STATE messages, we send a COLLECTED message to all members
-			List<ConsensusState> states = leaderState.getMemberStates();
+			List<StateMessage> states = leaderState.getMemberStates();
+			// append our own state -> (also, if we use the leader's consensus state, we create a recursive loop, don't)
+			String mySignature = Security.makeDS(this.consensusState.toString(), Security.getMyPrivateKey(myName));
+			ConsensusState myState = new ConsensusState(myName, newValue, consensusState.getWriteset());
+			StateMessage myStateMsg = new StateMessage(myState, mySignature);
+			states.add(myStateMsg);
 			CollectedMessage collectedMessage = new CollectedMessage(states);
 			dcLogger.log("Sending collected message: " + collectedMessage);
 			for (Entity member : members) {
@@ -188,27 +205,112 @@ public class Member {
 	private void handleRead(ReadMessage readMessage) {
 		dcLogger.log("Received read message: " + readMessage);
 		// send state message back
-		StateMessage stateMessage = new StateMessage(consensusState);
+		// TODO -> assino o quê? o consensusState?
+		String mySignature = Security.makeDS(consensusState.toString(), Security.getMyPrivateKey(myName));
+		StateMessage stateMessage = new StateMessage(consensusState, mySignature);
 		dcLogger.log("Sending state message: " + stateMessage);
-		perfectLink.sendMessage(stateMessage, leaderPort);
+		perfectLink.sendMessage(stateMessage, leader.getPort());
 	}
 
 	private void handleAccept(AcceptMessage acceptMessage) {
 	}
 
 	private void handleWrite(WriteMessage writeMessage) {
+		dcLogger.log("Received write message: " + writeMessage);
+		// TODO -> only add the write to the set of writes if it matches our currently decided value (?)
+		consensusState.addWriteMessage(writeMessage);
 
 	}
 
+
+	/*
+	 * Members receive COLLECTED from the leader and check if there was a previously epoch decided value
+	 * If not, they adopt the leader's value and send it in their WriteMessage
+	 */
 	private void handleCollected(CollectedMessage collectedMessage) {
 		dcLogger.log("Received collected message: " + collectedMessage);
+		ValueTimestampPair leaderValts = null;
+		ValueTimestampPair highest = new ValueTimestampPair(-1, "");
+		// for each message, check if the signature is valid
+		// the conditions to decide on a value that isn't the leader, according to the lectures, are:
+		// 1. collect the value that corresponds to the highest timestamp across all state messages
+		for (StateMessage stateMessage : collectedMessage.getStates()) {
+			ConsensusState consensusSt = stateMessage.getState();
+			String memberName = consensusSt.getMemberName();
+			PublicKey memberPubKey = Security.getMemberPublicKey(memberName);
+			if (Security.verifyDS(stateMessage.getSignature(), stateMessage.getState().toString(), memberPubKey)) {
+				dcLogger.log("Signature is valid for " + memberName);
+			} else {
+				dcLogger.error("Signature is invalid for " + memberName);
+				// TODO -> what to do? simply skip this message?
+				continue;
+			}
+			ValueTimestampPair current = consensusSt.getCurrent();
+			if (current != null && current.getTimestamp() > highest.getTimestamp()) {
+				highest = current;
+			}
+			// also, it's useful to store the leader's value in case we want to adopt it
+			if (memberName.equalsIgnoreCase(leader.getEntityName())) {
+				leaderValts = current;
+			}
+		}
+		// 2. the value with highest ts must appear in the writeset of at least f+1 processes
+		int count = 0;
+		for (StateMessage stateMessage : collectedMessage.getStates()) {
+			ConsensusState consensusSt = stateMessage.getState();
+			if (consensusSt.getWriteset().contains(highest)) {
+				count++;
+			}
+		}
+		dcLogger.log("Highest value: " + highest);
+		ValueTimestampPair proposedValue;
+		if (count >= this.faultyProcesses+1) {
+			// proposed value is highest found
+			proposedValue = highest;
+		} else {
+			proposedValue = leaderValts;
+		}
+		// at this point, I'm going to broadcast the proposed value in a WRITE message
+		// if I do so, I need to append it to my state's writeset
+		this.consensusState.addWritesetEntry(proposedValue);
+		this.consensusState.setCurrent(proposedValue);
+		WriteMessage writeMessage = new WriteMessage(proposedValue);
+		dcLogger.log("Sending write message: " + writeMessage);
+		for (Entity member : members) {
+			if (member.getPort() == port) {
+				// skip myself
+				dcLogger.log("Skipping WriteMessage to myself at port " + port);
+				continue;
+			}
+			perfectLink.sendMessage(writeMessage, member.getPort());
+		}
+		// after sending the write message, we wait for a byzantine quorum of WRITE messages
+		new Thread(() -> {
+			dcLogger.log("Waiting for quorum of size " + byzantineQuorum);
+			// TODO -> do we count our own write message for the N - f quorum?
+			List<WriteMessage> writes = this.consensusState.waitForWriteQuorum(this.byzantineQuorum);
+			dcLogger.log("Quorum of WRITE reached");
+			// after we receive a quorum of WRITE messages, we send an ACCEPT message to all members
+			AcceptMessage acceptMessage = new AcceptMessage(this.consensusState.getCurrent().getValue());
+			dcLogger.log("Sending accept message: " + acceptMessage);
+			for (Entity member : members) {
+				if (member.getPort() == port) {
+					// skip myself
+					dcLogger.log("Skipping AcceptMessage to myself at port " + port);
+					continue;
+				}
+				perfectLink.sendMessage(acceptMessage, member.getPort());
+			}
+			// TODO -> wait for quorum of ACCEPT and either ep-decide or abort
+
+		}).start();
 	}
 
 	private void handleState(StateMessage stateMessage) {
 		if (isLeader()) {
 			// leader: append the state to my consensus state
 			ConsensusLeaderState leaderState = (ConsensusLeaderState) consensusState;
-			leaderState.addMemberState(stateMessage.getState());
+			leaderState.addMemberState(stateMessage);
 			dcLogger.log("Received state message: " + stateMessage + ". Appended to leader state");
 		} else {
 			dcLogger.log("Received state message but not the leader");

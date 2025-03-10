@@ -10,4 +10,15 @@ public class WriteMessage extends Message {
 		super(MessageType.WRITE);
 		this.valts = valts;
 	}
+
+	public ValueTimestampPair getValts() {
+		return valts;
+	}
+
+	@Override
+	public String toString() {
+		return "WriteMessage{" +
+				"valts=" + valts +
+				'}';
+	}
 }

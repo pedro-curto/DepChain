@@ -35,10 +35,10 @@ public class PerfectLink {
     private final Gson gson = new Gson();
     private final DCLogger dcLogger;
 
-    public PerfectLink(DatagramSocket socket, BlockingQueue<Message> messageQueue, KeyPair personalKeys, List<Entity> entities) {
+    public PerfectLink(DatagramSocket socket, BlockingQueue<Message> messageQueue, KeyPair personalKeys, List<Entity> entities, boolean debug) {
         this.socket = socket;
         this.messageQueue = messageQueue;
-        this.dcLogger = new DCLogger(PerfectLink.class);
+        this.dcLogger = new DCLogger(PerfectLink.class, debug);
         this.personalKeys = personalKeys;
         this.scheduler.setRemoveOnCancelPolicy(true);
         // creates a mapping {port: entity} for all entities
@@ -193,11 +193,11 @@ public class PerfectLink {
                 dcLogger.log("[PerfectLink-AckListener] ACK received, cancelled retransmission for message " + key);
 
                 Message message = msgsToDeliver.remove(sequenceNumber);
-                if (message != null && sequenceNumber != 0) {
-                    // sequenceNumber 0 is to establish the session, no need to deliver it
-                    deliverMessage(message);
-                }
-                return;
+//                if (message != null && sequenceNumber != 0) {
+//                    // sequenceNumber 0 is to establish the session, no need to deliver it
+//                    deliverMessage(message);
+//                }
+//                return;
             }
             dcLogger.log("[PerfectLink-AckListener] Received a duplicate ACK: " + sequenceNumber);
         }

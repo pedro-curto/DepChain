@@ -1,17 +1,18 @@
 package depchain.common.messaging;
 
-import depchain.common.domain.ConsensusState;
-
-import java.util.ArrayList;
 import java.util.List;
 
 public class CollectedMessage extends Message {
 
-	private List<ConsensusState> states;
+	private List<StateMessage> states;
 
-	public CollectedMessage(List<ConsensusState> states) {
+	public CollectedMessage(List<StateMessage> states) {
 		super(MessageType.COLLECTED);
 		this.states = states;
+	}
+
+	public List<StateMessage> getStates() {
+		return states;
 	}
 
 	@Override
