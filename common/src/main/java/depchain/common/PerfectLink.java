@@ -1,6 +1,7 @@
 package depchain.common;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonSyntaxException;
 import depchain.common.domain.Entity;
 import depchain.common.messaging.*;
 import depchain.common.messaging.Message.MessageType;
@@ -83,7 +84,7 @@ public class PerfectLink {
 
     public void sendMessage(Message message, int port) {
        dcLogger.log("Sessions: " + sessions);
-       dcLogger.log("Sending message: " + message);
+       dcLogger.log("Sending message: " + gson.toJson(message));
        dcLogger.log("Port: " + port);
        Session session = sessions.get(port);
        long sequenceNumber = session.getSendCounter();
@@ -125,7 +126,7 @@ public class PerfectLink {
     }
 
     private void startListening() {
-        byte[] buffer = new byte[8096];
+        byte[] buffer = new byte[65536];
         while (true) {
             dcLogger.log("Waiting for message...");
             DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
@@ -136,7 +137,16 @@ public class PerfectLink {
             }
             dcLogger.log("Received message from " + packet.getAddress() + ":" + packet.getPort() + ". Message: " + new String(packet.getData(), 0, packet.getLength()));
             String received = new String(packet.getData(), 0, packet.getLength(), StandardCharsets.UTF_8);
-            Message message = messageFromJson(received);
+            Message message;
+            try {
+                message = messageFromJson(received);
+            } catch (JsonSyntaxException e) {
+                int clientPort = packet.getPort();
+                dcLogger.error("(" + clientPort + ") parsing " + received + " : " + e);
+                // reply with error
+                sendMessage(new ClientReplyMessage("", false, -1), clientPort);
+                continue;
+            }
             MessageType type = message.getType();
             long sequenceNumber = message.getSequenceNumber();
             dcLogger.log("Received Message with type " + type + " and sequence number " + sequenceNumber);
@@ -155,6 +165,7 @@ public class PerfectLink {
             handleContentMessage(sequenceNumber, message, session);
         }
     }
+
 
     private void handleSessionRequest(String address, int port, KeyExchangeMessage message) {
         dcLogger.log("Received session request: " + message + " from " + address + ":" + port);

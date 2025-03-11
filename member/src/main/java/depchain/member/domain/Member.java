@@ -93,7 +93,7 @@ public class Member {
 		entities.addAll(clients);
 		entities.addAll(members);
 		KeyPair myKeyPair = Security.getMemberKeyPair(myName);
-		this.perfectLink = new PerfectLink(serverSocket, messageQueue, myKeyPair, entities, debug);
+		this.perfectLink = new PerfectLink(serverSocket, messageQueue, myKeyPair, entities, true);
 		perfectLink.start();
 
 		// starts sessions for all processes with ports bigger than mine
@@ -160,7 +160,7 @@ public class Member {
 		// set the leader's current value to the append message
 		// TODO -> quando é que damos append do valts ao writeset? só no write?
 		ValueTimestampPair currentValts = consensusState.getCurrent();
-		int newTs = (currentValts == null) ? 0 : currentValts.getTimestamp() + 1;
+		int newTs = currentValts.getTimestamp() + 1;
 		ValueTimestampPair newValue = new ValueTimestampPair(newTs, appendMessage.getValue());
 		leaderState.setCurrent(newValue);
 
@@ -186,7 +186,8 @@ public class Member {
 			// after we receive N - f STATE messages, we send a COLLECTED message to all members
 			List<StateMessage> states = leaderState.getMemberStates();
 			// append our own state -> (also, if we use the leader's consensus state, we create a recursive loop, don't)
-			String mySignature = Security.makeDS(this.consensusState.toString(), Security.getMyPrivateKey(myName));
+			String dataToSign = this.consensusState.getCurrent().toString() + this.consensusState.getWriteset();
+			String mySignature = Security.makeDS(dataToSign, Security.getMyPrivateKey(myName));
 			ConsensusState myState = new ConsensusState(myName, newValue, consensusState.getWriteset());
 			StateMessage myStateMsg = new StateMessage(myState, mySignature);
 			states.add(myStateMsg);
@@ -208,7 +209,8 @@ public class Member {
 		dcLogger.log("Received read message: " + readMessage);
 		// send state message back
 		// TODO -> assino o quê? o consensusState? fazemo
-		String mySignature = Security.makeDS(consensusState.toString(), Security.getMyPrivateKey(myName));
+		String dataToSign = consensusState.getCurrent().toString() + consensusState.getWriteset();
+		String mySignature = Security.makeDS(dataToSign, Security.getMyPrivateKey(myName));
 		StateMessage stateMessage = new StateMessage(consensusState, mySignature);
 		dcLogger.log("Sending state message: " + stateMessage);
 		perfectLink.sendMessage(stateMessage, leader.getPort());
@@ -221,8 +223,10 @@ public class Member {
 
 	private void handleWrite(WriteMessage writeMessage) {
 		dcLogger.log("Received write message: " + writeMessage);
+		// vtp is initialized to null, sanity check it first
+		ValueTimestampPair vtp = consensusState.getCurrent();
 		// TODO -> only add the write to the set of writes if it matches our currently decided value (?)
-		if (writeMessage.getValts().getValue().equals(consensusState.getCurrent().getValue())) {
+		if (vtp != null && writeMessage.getValts().getValue().equals(consensusState.getCurrent().getValue())) {
 			consensusState.addWriteMessage(writeMessage);
 		}
 
@@ -244,7 +248,8 @@ public class Member {
 			ConsensusState consensusSt = stateMessage.getState();
 			String memberName = consensusSt.getMemberName();
 			PublicKey memberPubKey = Security.getMemberPublicKey(memberName);
-			if (Security.verifyDS(stateMessage.getSignature(), stateMessage.getState().toString(), memberPubKey)) {
+			String reconstructSignatureData = consensusSt.getCurrent().toString() + consensusSt.getWriteset().toString();
+			if (Security.verifyDS(stateMessage.getSignature(), reconstructSignatureData, memberPubKey)) {
 				dcLogger.log("Signature is valid for " + memberName);
 			} else {
 				dcLogger.error("Signature is invalid for " + memberName);
@@ -257,6 +262,7 @@ public class Member {
 			}
 			// also, it's useful to store the leader's value in case we want to adopt it
 			if (memberName.equalsIgnoreCase(leader.getEntityName())) {
+				dcLogger.log("Found leader's value: " + current);
 				leaderValts = current;
 			}
 		}
@@ -277,6 +283,8 @@ public class Member {
 		} else {
 			proposedValue = leaderValts;
 		}
+		dcLogger.log("Leader valts: " + leaderValts);
+		dcLogger.log("Proposed value: " + proposedValue);
 		proceedToWritePhase(proposedValue);
 	}
 

@@ -26,7 +26,7 @@ public class ConsensusLeaderState extends ConsensusState {
 		synchronized (lock) {
 			while (memberStates.size() < quorumSize) {
 				try {
-					System.out.println("Quorum not reached yet. Current size: " + memberStates.size());
+					System.out.println("Quorum of " + quorumSize + " not reached yet. Current size: " + memberStates.size());
 					lock.wait();
 				} catch (InterruptedException e) {
 					System.out.println("Interrupted while waiting for quorum");

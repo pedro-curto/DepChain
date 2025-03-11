@@ -26,7 +26,8 @@ public class ConsensusState {
     public ConsensusState(String memberName, int currentConsensusInstance) {
         // Initial State
         this.memberName = memberName;
-        this.current = null;
+        // TODO -> rever valor com que se inicializa o current
+        this.current = new ValueTimestampPair(0, "");
         this.writeset = new ArrayList<>();
         this.currentConsensusInstance = currentConsensusInstance;
         this.writeMessages = new ArrayList<>();

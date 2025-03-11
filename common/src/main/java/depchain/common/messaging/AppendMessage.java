@@ -28,4 +28,12 @@ public class AppendMessage extends Message {
 	public String getHmacData() {
 		return super.getHmacData() + value + signature;
 	}
+
+	@Override
+	public String toString() {
+		return "AppendMessage{" +
+				"value='" + value + '\'' +
+				"sequenceNumber='" + getSequenceNumber() + '\'' +
+				'}';
+	}
 }

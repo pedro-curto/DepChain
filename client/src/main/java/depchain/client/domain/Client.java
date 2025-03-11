@@ -4,6 +4,7 @@ import depchain.common.DCLogger;
 import depchain.common.PerfectLink;
 import depchain.common.domain.Entity;
 import depchain.common.messaging.AppendMessage;
+import depchain.common.messaging.ClientReplyMessage;
 import depchain.common.messaging.Message;
 import depchain.common.Security;
 
@@ -52,6 +53,7 @@ public class Client {
 
     private void processUserInput() throws Exception {
         Scanner input = new Scanner(System.in);
+        System.out.print("> ");
         while (true) {
             String content = input.nextLine();
             if (content.equals("QUIT")) {
@@ -74,7 +76,22 @@ public class Client {
             } catch (InterruptedException e) {
                 continue;
             }
-            System.out.println("[SERVER GOT]: " + message);
+            if (message instanceof ClientReplyMessage) {
+                ClientReplyMessage appendMessage = (ClientReplyMessage) message;
+                boolean success = appendMessage.getSuccess();
+                String outcome;
+                int consensusInstance = appendMessage.getInstanceOfDecision();
+                if (success) {
+                    outcome = "successfully appended";
+                } else {
+                    outcome = "not appended";
+                }
+                System.out.println("String " + appendMessage.getValue() +
+                        " was " + outcome + " to the blockchain at timestamp " + consensusInstance);
+                System.out.print("> ");
+            } else {
+                System.out.println("[SERVER GOT]: " + message);
+            }
         }
     }
 }

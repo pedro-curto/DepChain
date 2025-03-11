@@ -15,6 +15,6 @@ public class DCLogger {
     }
 
 	public void error(String s) {
-		System.err.println("[" + className + "] " + s);
+		System.err.println("[ERROR @ " + className + "] " + s);
 	}
 }

@@ -10,11 +10,6 @@ import depchain.common.*;
 import depchain.common.domain.Entity;
 
 public class ClientMain {
-    private static int clientPort;
-    private static String clientName;
-    private static final Gson gson = new Gson();
-    private static DatagramSocket socketToLeader;
-    private static PrivateKey privateKey;
     private static final String MEMBERSHIP_FILE = "membership/membership.txt";
 
     public static void main(String[] args) throws Exception {

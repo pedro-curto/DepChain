@@ -4,6 +4,7 @@
 - Add JUnit tests (!!!)
 - Decide phase
 - Check client signature at other members
+- Deal with messages with weird characters (e.g., "º")
 - Deal with a client that can send many requests at once (?)
 
 ## Building the Project
