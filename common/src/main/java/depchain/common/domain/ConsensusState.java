@@ -15,7 +15,7 @@ public class ConsensusState {
     private ValueTimestampPair current;
     private List<ValueTimestampPair> writeset;
     private int currentConsensusInstance;
-    private final Object lock = new Object();
+    public final Object lock;
     private Map<Integer, WriteMessage> writeMessages;
     private Map<Integer, AcceptMessage> acceptMessages;
     private int epoch = 0;
@@ -29,12 +29,14 @@ public class ConsensusState {
         this.currentConsensusInstance = currentConsensusInstance;
         this.writeMessages = new HashMap<>();
         this.acceptMessages = new HashMap<>();
+        this.lock = new Object();
     }
 
     public ConsensusState(String memberName, ValueTimestampPair current, List<ValueTimestampPair> writeset) {
         this.memberName = memberName;
         this.current = current;
         this.writeset = writeset;
+        this.lock = new Object();
     }
 
     public String getMemberName() {

@@ -7,7 +7,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class ConsensusLeaderState extends ConsensusState {
-	private Object lock = new Object();
 	// Store member states for collected message
 	private List<StateMessage> memberStates = new ArrayList<>();
 

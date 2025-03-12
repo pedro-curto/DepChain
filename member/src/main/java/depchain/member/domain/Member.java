@@ -32,6 +32,9 @@ public class Member {
 	private final String address;
 	private final boolean debug;
 
+	//TODO -> temporary
+	private BlockingQueue<Message> messageQueue;
+
 	public Member(String memberName, List<Entity> members, List<Entity> clients, int port, String address, boolean debug) {
 		this.myName = memberName;
 		this.members = members;
@@ -57,7 +60,7 @@ public class Member {
 			this.consensusState = new ConsensusState(myName, 0);
 		}
 		DatagramSocket serverSocket = new DatagramSocket(port);
-		BlockingQueue<Message> messageQueue = new LinkedBlockingQueue<>();
+		this.messageQueue = new LinkedBlockingQueue<>();
 		dcLogger.log("Clients: " + this.clients);
 
 		// perfect link starts listening for messages
@@ -120,7 +123,16 @@ public class Member {
 		String mySignature = Security.makeDS(dataToSign, Security.getMyPrivateKey(myName));
 		StateMessage stateMessage = new StateMessage(consensusState, mySignature);
 		dcLogger.log("Sending state message: " + stateMessage);
-		perfectLink.sendMessage(stateMessage, leader.getPort());
+		if (this.port != leader.getPort())
+			perfectLink.sendMessage(stateMessage, leader.getPort());
+		else {
+			//TODO -> same thing, need to fix this later (dybizantino)
+            try {
+                this.messageQueue.put(stateMessage);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        }
 	}
 
 	private void handleAccept(AcceptMessage acceptMessage) {
@@ -278,6 +290,15 @@ public class Member {
 	private void broadCastMessage(Message message) {
 		dcLogger.log("BroadCasting " + message.getType() + " message...");
 		for (Entity member : members) {
+			//TODO -> fita cola eu sei... eu depois resolvo (dybizantino)
+			if (member.getPort() == this.port) {
+                try {
+                    messageQueue.put(message);
+					return;
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            }
 			dcLogger.log("[" + message.getType() + " MESSAGE]: " + member.getEntityName());
 			perfectLink.sendMessage(message, member.getPort());
 		}
