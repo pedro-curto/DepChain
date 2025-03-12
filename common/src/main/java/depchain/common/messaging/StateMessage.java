@@ -6,11 +6,13 @@ public class StateMessage extends Message {
 
 	private ConsensusState state;
 	private String signature;
+	private final int consensusInstance;
 
-	public StateMessage(ConsensusState state, String signature) {
+	public StateMessage(ConsensusState state, String signature, int consensusInstance) {
 		super(MessageType.STATE);
 		this.state = state;
 		this.signature = signature;
+		this.consensusInstance = consensusInstance;
 	}
 
 	public ConsensusState getState() {
@@ -21,11 +23,12 @@ public class StateMessage extends Message {
 		return signature;
 	}
 
+	public int getConsensusInstance() {
+		return consensusInstance;
+	}
+
 	@Override
 	public String toString() {
-		return "StateMessage{" +
-				"state=" + state +
-				", signature='" + signature + '\'' +
-				'}';
+		return state.toString() + ", Instance: " + consensusInstance;
 	}
 }

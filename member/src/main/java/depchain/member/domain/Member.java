@@ -23,14 +23,15 @@ public class Member {
 	private final String myName;
 	private final int port;
 	private PerfectLink perfectLink;
-	private final DCLogger dcLogger;
-	private ConsensusState consensusState;
+	protected final DCLogger dcLogger;
+	protected ConsensusState consensusState;
 	private final BlockchainState blockchainState;
 	private final int faultyProcesses;
 	private final int byzantineQuorum;
-	private BlockingQueue<Message> messageQueue;
 	private final String address;
 	private final boolean debug;
+	protected BlockingQueue<Message> messageQueue;
+	protected BlockingQueue<AppendMessage> appendQueue;
 
 	public Member(String memberName, List<Entity> members, List<Entity> clients, int port, String address, boolean debug) {
 		this.myName = memberName;
@@ -44,66 +45,79 @@ public class Member {
 		this.faultyProcesses = Math.floorDiv(members.size() - 1, 3);
 		this.byzantineQuorum = members.size() - faultyProcesses;
 		this.blockchainState = new BlockchainState(new ArrayList<>());
+		this.messageQueue = new LinkedBlockingQueue<>();
+		this.appendQueue = new LinkedBlockingQueue<>();
 	}
 
     public void start() throws Exception {
+		startConnections();
+		new Thread(this::doConsensus).start();
+		receiveMessages();
+    }
+
+	/***
+	 * Establishes encrypted sessions with other members
+	 * @throws Exception
+	 */
+	public void startConnections() throws Exception {
 		// init consensus state
 		dcLogger.log("Faulty processes ceiling (f): " + faultyProcesses);
 		if (isLeader()) {
-			dcLogger.log("I am the leader");
 			this.consensusState = new ConsensusLeaderState(myName, 0);
 		} else {
-			dcLogger.log("I am not the leader");
 			this.consensusState = new ConsensusState(myName, 0);
 		}
-		DatagramSocket serverSocket = new DatagramSocket(port);
-		this.messageQueue = new LinkedBlockingQueue<>();
 		dcLogger.log("Clients: " + this.clients);
-
-		// perfect link starts listening for messages
+		DatagramSocket serverSocket = new DatagramSocket(port);
 		List<Entity> entities = new ArrayList<>();
 		entities.addAll(clients);
 		entities.addAll(members);
 		KeyPair myKeyPair = Security.getMemberKeyPair(myName);
-		this.perfectLink = new PerfectLink(serverSocket, messageQueue, myKeyPair, entities, true);
+		// perfect link starts listening for messages
+		this.perfectLink = new PerfectLink(serverSocket, messageQueue, myKeyPair, entities, false);
 		perfectLink.start();
-
 		// begins encrypted sessions with all member processes running on higher ports
 		// others should do the same for this process
 		startSessionsWithOtherMembers();
 		dcLogger.log("My sessions: " + perfectLink.getSessions());
+	}
 
-		// handle messages delivered by the perfect link
+	/***
+	 * Handle messages delivered by the perfect link
+	 */
+	public void receiveMessages() {
 		while (true) {
 			try {
 				Message message = messageQueue.take();
-				dcLogger.log("Received message of type: " + message.getType());
-
 				switch (message.getType()) {
 					case APPEND:
 						AppendMessage appendMessage = (AppendMessage) message;
-						dcLogger.log("Received append message: " + appendMessage);
-						handleAppend(appendMessage);
+						this.appendQueue.put(appendMessage);
 						break;
 					case READ:
 						ReadMessage readMessage = (ReadMessage) message;
-						handleRead(readMessage);
+						if (readMessage.getConsensusInstance() == this.consensusState.getInstance())
+							handleRead(readMessage);
 						break;
 					case STATE:
 						StateMessage stateMessage = (StateMessage) message;
-						handleState(stateMessage);
+						if (stateMessage.getConsensusInstance() == this.consensusState.getInstance())
+							handleState(stateMessage);
 						break;
 					case COLLECTED:
 						CollectedMessage collectedMessage = (CollectedMessage) message;
-						handleCollected(collectedMessage);
+						if (collectedMessage.getConsensusInstance() == this.consensusState.getInstance())
+							handleCollected(collectedMessage);
 						break;
 					case WRITE:
 						WriteMessage writeMessage = (WriteMessage) message;
-						handleWrite(writeMessage);
+						if (writeMessage.getConsensusInstance() == this.consensusState.getInstance())
+							handleWrite(writeMessage);
 						break;
 					case ACCEPT:
 						AcceptMessage acceptMessage = (AcceptMessage) message;
-						handleAccept(acceptMessage);
+						if (acceptMessage.getConsensusInstance() == this.consensusState.getInstance())
+							handleAccept(acceptMessage);
 						break;
 					default:
 						dcLogger.log("Unknown message type");
@@ -112,126 +126,168 @@ public class Member {
 				dcLogger.error("Error while processing message: " + e.getMessage());
 			}
 		}
-    }
+	}
 
-	private void handleRead(ReadMessage readMessage) {
-		dcLogger.log("Received read message: " + readMessage);
+	public void handleRead(ReadMessage readMessage) {
+		dcLogger.log("Received: " + readMessage);
 		String dataToSign = consensusState.getCurrent().toString() + consensusState.getWriteset();
 		String mySignature = Security.makeDS(dataToSign, Security.getMyPrivateKey(myName));
-		// don't  instance of consensus state to message, send a copy or stack overflow error (dybizantino)
+		// don't send own instance of consensus state to message, send a copy or else stack overflow error
 		ConsensusState myState = new ConsensusState(myName, consensusState.getCurrent(), consensusState.getWriteset());
-		StateMessage stateMessage = new StateMessage(myState, mySignature);
+		StateMessage stateMessage = new StateMessage(myState, mySignature, consensusState.getInstance());
 		sendToLeader(stateMessage);
 	}
 
-	private void handleAccept(AcceptMessage acceptMessage) {
-		dcLogger.log("Received accept message: " + acceptMessage);
-		consensusState.addAcceptMessage(acceptMessage);
-	}
-
-	private void handleWrite(WriteMessage writeMessage) {
-		dcLogger.log("Received write message: " + writeMessage);
-		// TODO: verify signature (byzantine can forge other members writes)
-		consensusState.addWriteMessage(writeMessage);
-	}
-
-	private void handleState(StateMessage stateMessage) {
+	public void handleState(StateMessage stateMessage) {
+		dcLogger.log("Received: " + stateMessage);
 		if (isLeader()) {
-			// leader: append the state to my consensus state
 			ConsensusLeaderState leaderState = (ConsensusLeaderState) consensusState;
 			leaderState.addMemberState(stateMessage);
-			dcLogger.log("Received state message: " + stateMessage + ". Appended to leader state");
 		} else {
 			dcLogger.log("[ERROR] Received state message but not the leader");
 		}
 	}
 
-	private void handleAppend(AppendMessage appendMessage) {
-		if (!isLeader()) {
-			dcLogger.log("I'm not the leader. Skipping append message");
+	public void handleCollected(CollectedMessage collectedMessage) {
+		dcLogger.log("Received: " + collectedMessage);
+		if (collectedMessage.getPort() != leader.getPort()) {
 			return;
 		}
-		dcLogger.log("-- STARTING CONSENSUS FOR " + appendMessage.getValue() + " --");
-		ConsensusLeaderState leaderState = (ConsensusLeaderState) consensusState;
+		consensusState.addCollectedMessage(collectedMessage);
+	}
+
+	public void handleWrite(WriteMessage writeMessage) {
+		dcLogger.log("Received: " + writeMessage);
+		consensusState.addWriteMessage(writeMessage);
+	}
+
+	public void handleAccept(AcceptMessage acceptMessage) {
+		dcLogger.log("Received: " + acceptMessage);
+		consensusState.addAcceptMessage(acceptMessage);
+	}
+
+
+	/***
+	 * Waits for new append requests and starts consensus to add them in the blockchain
+	 */
+	public void doConsensus(){
+		while (true) {
+			if (leader.getPort() != this.port) {
+				// if not the leader, this thread will only be responsible for
+				// deciding values to write as it receives COLLECT messages
+				// from the main thread
+				decideValue();
+				continue;
+			}
+            try {
+                AppendMessage appendMessage = appendQueue.take();
+				// leader must keep the consensus going until a
+				// value is appended to the blockchain
+				boolean finished = false;
+				while (!finished) {
+					startConsensus(appendMessage);
+					finished = decideValue();
+				}
+            } catch (InterruptedException e) {
+                dcLogger.log("Consensus thread was interrupted while waiting for append messages");
+            }
+        }
+	}
+
+	/***
+	 * Conditional Collect part of the algorithm
+	 * @param appendMessage - message with value to be proposed if epoch 0
+	 */
+	public void startConsensus(AppendMessage appendMessage) {
+		dcLogger.log("Received: " + appendMessage);
+		dcLogger.log("-- STARTING CONSENSUS FOR '" + appendMessage.getValue() + "' --");
+
 		// if I am the leader and this is the first epoch I should propose the value
 		// of the message
+		ConsensusLeaderState leaderState = (ConsensusLeaderState) consensusState;
 		if (consensusState.getEpoch() == 0) {
 			ValueTimestampPair newValue = new ValueTimestampPair(0, appendMessage.getValue());
 			leaderState.setCurrent(newValue);
 		}
-		Thread thread = new Thread(() -> startConsensus(leaderState));
-		thread.start();
-	}
 
-	private void handleCollected(CollectedMessage collectedMessage) {
-		dcLogger.log("Received collected message: " + collectedMessage);
-		String value = decideOnCollectedValues(collectedMessage.getStates());
-		dcLogger.log("Decided value: " + value);
-		ValueTimestampPair decidePair = new ValueTimestampPair(this.consensusState.getEpoch(), value);
-		WriteMessage writeMessage = new WriteMessage(decidePair, this.port);
-		broadCastMessage(writeMessage);
-		Thread thread = new Thread(() -> writePhase(decidePair));
-		thread.start();
-	}
-
-	private void startConsensus(ConsensusLeaderState leaderState) {
 		// sends a READ message to all members to collect their states
-		broadCastMessage(new ReadMessage());
-
-		dcLogger.log("(Start Consensus) Waiting for quorum of size" + (byzantineQuorum));
+		ReadMessage readMessage = new ReadMessage(leaderState.getInstance());
+		dcLogger.log("Broadcasting: " + readMessage);
+		broadCastMessage(readMessage);
+		dcLogger.log("Waiting for state quorum of size: " + byzantineQuorum + "...");
 		List<StateMessage> states = leaderState.waitForQuorum(this.byzantineQuorum + 1);
-		if (states == null) {
-			//abort
-			this.consensusState.nextEpoch();
-			return;
-		}
 		dcLogger.log("Quorum of STATE reached");
 
 		// Send the collection of states to all the members
-		CollectedMessage collectedMessage = new CollectedMessage(states);
-		dcLogger.log("Sending collected message: " + collectedMessage);
+		CollectedMessage collectedMessage = new CollectedMessage(states, this.port, leaderState.getInstance());
+		dcLogger.log("Broadcasting: " + collectedMessage);
 		broadCastMessage(collectedMessage);
 	}
 
-	private void writePhase(ValueTimestampPair decidedPair) {
-		dcLogger.log("Waiting for quorum of size (consensus) (including myself): " + byzantineQuorum);
+	/***
+	 * Chooses a value from collection of states and begins write phase
+	 * @return false if it aborted, else true
+	 */
+	public boolean decideValue() {
+		dcLogger.log("Waiting for states to decide value");
+		List<StateMessage> collectedStates = this.consensusState.waitForCollectedMessage();
+		if (collectedStates == null) {
+			// abort
+			dcLogger.log("aborted after collecting states");
+			this.consensusState.nextEpoch();
+			return false;
+		}
+		String value = decideOnCollectedValues(collectedStates);
+		ValueTimestampPair decidePair = new ValueTimestampPair(this.consensusState.getEpoch(), value);
+		WriteMessage writeMessage = new WriteMessage(decidePair, this.port, consensusState.getInstance());
+		dcLogger.log("Broadcasting: " + writeMessage);
+		broadCastMessage(writeMessage);
+		return writePhase();
+	}
+
+	/***
+	 * Write phase of Consensus algorithm
+	 * @return false if aborted, true if a value was DECIDED and appended to blockchain
+	 */
+	public boolean writePhase() {
+		dcLogger.log("Waiting for write quorum of size: " + byzantineQuorum + "...");
 		String writeValue = this.consensusState.waitForWriteQuorum(this.byzantineQuorum + 1);
 		if (writeValue == null) {
 			// Abort
+			dcLogger.log("ABORTED (WRITE)");
 			this.consensusState.nextEpoch();
-			return;
+			return false;
 		}
 		dcLogger.log("Quorum of WRITE reached");
 		ValueTimestampPair writeValts = new ValueTimestampPair(this.consensusState.getEpoch(), writeValue);
 		this.consensusState.setCurrent(writeValts);
 
 		// Broadcast ACCEPT and wait for quorum to DECIDE value
-		broadCastMessage(new AcceptMessage(this.consensusState.getCurrent().getValue(), this.port));
-		dcLogger.log("Waiting for quorum of size (consensus) (including myself): " + byzantineQuorum);
+		AcceptMessage acceptMessage = new AcceptMessage(consensusState.getCurrent().getValue(), this.port, consensusState.getInstance());
+		dcLogger.log("Broadcasting: " + acceptMessage);
+		broadCastMessage(acceptMessage);
+
+		dcLogger.log("Waiting for accept quorum of size: " + byzantineQuorum + "...");
 		String accept = this.consensusState.waitForAcceptQuorum(this.byzantineQuorum + 1);
 		if (accept == null) {
 			// Abort
+			dcLogger.log("ABORTED (ACCEPT)");
 			this.consensusState.nextEpoch();
-			return;
+			return false;
 		}
-		dcLogger.log("Quorum of ACCEPT reached");
+		dcLogger.log("Quorum of accept reached");
 
 		// DECIDE value
 		this.blockchainState.appendString(consensusState.getCurrent().getValue());
 		if (isLeader()) {
-			ClientReplyMessage clientReplyMessage = new ClientReplyMessage(accept,true, consensusState.getCurrentConsensusInstance());
+			ClientReplyMessage clientReplyMessage = new ClientReplyMessage(accept,true, consensusState.getInstance());
 			broadCastToClients(clientReplyMessage);
 		}
 		this.consensusState.nextInstance();
+		return true;
 	}
 
-	private boolean verifyMemberStateAuthenticity(StateMessage stateMessage) {
-		ConsensusState consensusSt = stateMessage.getState();
-		String memberName = consensusSt.getMemberName();
-		PublicKey memberPubKey = Security.getMemberPublicKey(memberName);
-		String reconstructSignatureData = consensusSt.getCurrent().toString() + consensusSt.getWriteset().toString();
-		return Security.verifyDS(stateMessage.getSignature(), reconstructSignatureData, memberPubKey);
-	}
+
 
 	/***
 	 * Decide on a value to write based on the collection of
@@ -239,7 +295,7 @@ public class Member {
 	 * @param collectedStates collection of all the members states
 	 * @return the value to write during this epoch
 	 */
-	private String decideOnCollectedValues(List<StateMessage> collectedStates) {
+	public String decideOnCollectedValues(List<StateMessage> collectedStates) {
 		ValueTimestampPair leaderValts = null;
 		ValueTimestampPair highest = new ValueTimestampPair(-1, "");
 
@@ -272,54 +328,54 @@ public class Member {
         return count >= this.faultyProcesses + 1 ? highest.getValue() : leaderValts.getValue();
 	}
 
-	private void sendToLeader(Message message) {
-		synchronized (this) {
-			dcLogger.log("Sending to leader " + message.getType() + " message...");
-			if (this.port != leader.getPort())
-				perfectLink.sendMessage(message, leader.getPort());
-			else {
+	public boolean verifyMemberStateAuthenticity(StateMessage stateMessage) {
+		ConsensusState consensusSt = stateMessage.getState();
+		String memberName = consensusSt.getMemberName();
+		PublicKey memberPubKey = Security.getMemberPublicKey(memberName);
+		String reconstructSignatureData = consensusSt.getCurrent().toString() + consensusSt.getWriteset().toString();
+		return Security.verifyDS(stateMessage.getSignature(), reconstructSignatureData, memberPubKey);
+	}
+
+	public void sendToLeader(Message message) {
+		dcLogger.log("Sending to leader " + message.getType() + " message...");
+		if (this.port != leader.getPort())
+			perfectLink.sendMessage(message, leader.getPort());
+		else {
+			try {
+				this.messageQueue.put(message);
+			} catch (InterruptedException e) {
+				throw new RuntimeException(e);
+			}
+		}
+	}
+
+	public void broadCastMessage(Message message) {
+		for (Entity member : members) {
+			if (member.getPort() == this.port) {
 				try {
-					this.messageQueue.put(message);
+					messageQueue.put(message);
 				} catch (InterruptedException e) {
 					throw new RuntimeException(e);
 				}
+				continue;
 			}
+			perfectLink.sendMessage(message, member.getPort());
 		}
 	}
 
-	private void broadCastMessage(Message message) {
-		synchronized (this) {
-			dcLogger.log("BroadCasting " + message.getType() + " message...");
-			for (Entity member : members) {
-				if (member.getPort() == this.port) {
-					try {
-						messageQueue.put(message);
-						continue;
-					} catch (InterruptedException e) {
-						throw new RuntimeException(e);
-					}
-				}
-				dcLogger.log("Broadcasting [" + message.getType() + " MESSAGE]: " + member.getEntityName());
-				perfectLink.sendMessage(message, member.getPort());
-			}
+	public void broadCastToClients(Message message) {
+		dcLogger.log("BroadCasting to clients " + message.getType() + " message...");
+		for (Entity client : clients) {
+			dcLogger.log("[" + message.getType() + " MESSAGE]: " + client.getEntityName());
+			perfectLink.sendMessage(message, client.getPort());
 		}
 	}
 
-	private void broadCastToClients(Message message) {
-		synchronized (this) {
-			dcLogger.log("BroadCasting to clients " + message.getType() + " message...");
-			for (Entity client : clients) {
-				dcLogger.log("[" + message.getType() + " MESSAGE]: " + client.getEntityName());
-				perfectLink.sendMessage(message, client.getPort());
-			}
-		}
-	}
-
-	private boolean isInitializer(int port) {
+	public boolean isInitializer(int port) {
 		return port > this.port;
 	}
 
-	private void startSessionsWithOtherMembers() {
+	public void startSessionsWithOtherMembers() {
 		for (Entity otherMember : this.members) {
 			if (isInitializer(otherMember.getPort())) {
 				dcLogger.log("Starting session with " + otherMember.getEntityName());
@@ -328,10 +384,8 @@ public class Member {
 		}
 	}
 
-	private boolean isLeader() {
-		System.out.println("Leader: " + this.leader);
+	public boolean isLeader() {
 		if (this.leader == null) {
-			System.out.println("No leader found");
 			return false;
 		}
 		return this.leader.getEntityName().equalsIgnoreCase(myName);

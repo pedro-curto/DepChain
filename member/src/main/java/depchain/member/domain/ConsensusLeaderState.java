@@ -8,7 +8,7 @@ import java.util.List;
 
 public class ConsensusLeaderState extends ConsensusState {
 	// Store member states for collected message
-	private List<StateMessage> memberStates = new ArrayList<>();
+	private final List<StateMessage> memberStates = new ArrayList<>();
 
 	public ConsensusLeaderState(String leaderName, int consensusInstance) {
 		super(leaderName, consensusInstance);
@@ -31,13 +31,7 @@ public class ConsensusLeaderState extends ConsensusState {
 					System.out.println("Interrupted while waiting for quorum");
 				}
 			}
-			return memberStates;
-		}
-	}
-
-	public List<StateMessage> getMemberStates() {
-		synchronized (lock) {
-			return memberStates;
+			return new ArrayList<>(memberStates);
 		}
 	}
 

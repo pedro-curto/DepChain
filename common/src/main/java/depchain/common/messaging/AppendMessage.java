@@ -31,9 +31,6 @@ public class AppendMessage extends Message {
 
 	@Override
 	public String toString() {
-		return "AppendMessage{" +
-				"value='" + value + '\'' +
-				"sequenceNumber='" + getSequenceNumber() + '\'' +
-				'}';
+		return "APPEND(" + value + ")";
 	}
 }

@@ -25,9 +25,6 @@ public class ValueTimestampPair {
 
 	@Override
 	public String toString() {
-		return "ValueTimestampPair{" +
-				"timestamp=" + timestamp +
-				", value='" + value + '\'' +
-				'}';
+		return "<" + timestamp + "," + value + ">";
 	}
 }
