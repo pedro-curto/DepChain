@@ -294,7 +294,7 @@ public class Member {
 			if (member.getPort() == this.port) {
                 try {
                     messageQueue.put(message);
-					return;
+					continue;
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
