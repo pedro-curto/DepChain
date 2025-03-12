@@ -1,13 +1,11 @@
 package depchain.common.domain;
 
 import depchain.common.messaging.AcceptMessage;
+import depchain.common.messaging.Message;
 import depchain.common.messaging.StateMessage;
 import depchain.common.messaging.WriteMessage;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class ConsensusState {
 
@@ -18,6 +16,8 @@ public class ConsensusState {
     public final Object lock;
     private Map<Integer, WriteMessage> writeMessages;
     private Map<Integer, AcceptMessage> acceptMessages;
+    private Map<String, Integer> writeCounters = new HashMap<>();
+    private Map<String, Integer> acceptCounters = new HashMap<>();
     private int epoch = 0;
 
     public ConsensusState(String memberName, int currentConsensusInstance) {
@@ -42,42 +42,34 @@ public class ConsensusState {
     public String getMemberName() {
         return memberName;
     }
-
     public ValueTimestampPair getCurrent() {
         return current;
     }
-
     public List<ValueTimestampPair> getWriteset() {
         return writeset;
     }
-
     public int getCurrentConsensusInstance() {
         return currentConsensusInstance;
     }
-
     public void setCurrent(ValueTimestampPair current) {
         this.current = current;
     }
-
-    public void addWritesetEntry(ValueTimestampPair entry) {
-        this.writeset.add(entry);
+    public int getEpoch() {
+        return epoch;
     }
-
-    public boolean isInitialState() {
-        return this.current == null;
-    }
-
-    public String getDataToSignState() {
-        return this.current.toString() + this.writeset.toString();
+    public void setEpoch(int epoch) {
+        this.epoch = epoch;
     }
 
     public void addWriteMessage(WriteMessage writeMessage) {
         synchronized (lock) {
-            // TODO: Handle what happens if messages have higher epoch
             if(writeMessage.getValts().getTimestamp() == epoch &&
                     !writeMessages.containsKey(writeMessage.getPort())) {
                 // Write message not received yet
                 writeMessages.put(writeMessage.getPort(), writeMessage);
+
+                String value = writeMessage.getValts().getValue();
+                writeCounters.put(value, writeCounters.getOrDefault(value, 0) + 1);
             }
             lock.notifyAll();
         }
@@ -88,16 +80,12 @@ public class ConsensusState {
             if(!acceptMessages.containsKey(acceptMessage.getPort())) {
                 // Accept message not received yet
                 acceptMessages.put(acceptMessage.getPort(), acceptMessage);
+
+                String value = acceptMessage.getValue();
+                acceptCounters.put(value, acceptCounters.getOrDefault(value, 0) + 1);
             }
             lock.notifyAll();
         }
-    }
-
-    public int getEpoch() {
-        return epoch;
-    }
-    public void setEpoch(int epoch) {
-        this.epoch = epoch;
     }
 
     public void nextInstance() {
@@ -106,11 +94,16 @@ public class ConsensusState {
         this.currentConsensusInstance = this.currentConsensusInstance +1;
         this.writeMessages = new HashMap<>();
         this.acceptMessages = new HashMap<>();
+        this.writeCounters = new HashMap<>();
+        this.acceptCounters = new HashMap<>();
+        this.epoch = 0;
     }
 
     public void nextEpoch() {
         this.writeMessages = new HashMap<>();
         this.acceptMessages = new HashMap<>();
+        this.writeCounters = new HashMap<>();
+        this.acceptCounters = new HashMap<>();
         this.epoch++;
     }
 
@@ -123,43 +116,47 @@ public class ConsensusState {
                 '}';
     }
 
-    private ValueTimestampPair decideWriteValue() {
-        HashMap<ValueTimestampPair, Integer> pairMap = new HashMap<>();
-        ValueTimestampPair maxValts = null;
-        int maxCount = 0;
-
-        for (WriteMessage writeMessage : writeMessages.values()) {
-            ValueTimestampPair valts = writeMessage.getValts();
-            pairMap.put(valts, pairMap.getOrDefault(valts, 0) + 1);
-            if (pairMap.get(valts) > maxCount) {
-                maxCount = pairMap.get(valts);
-                maxValts = valts;
+    private boolean reachedQuorum(float quorum, Collection<Integer> counters) {
+        for (Integer counter : counters) {
+            if (counter > quorum) {
+                System.out.println("Reached quorum! with " + counter + "messages");
+                return true;
             }
         }
-        return maxValts;
+        return false;
     }
 
-    private String decideAcceptValue() {
-        HashMap<String, Integer> pairMap = new HashMap<>();
-        String maxValue = "";
-        int maxCount = 0;
 
-        for (AcceptMessage acceptMessage : acceptMessages.values()) {
-            String value = acceptMessage.getValue();
-            pairMap.put(value, pairMap.getOrDefault(value, 0) + 1);
-            if (pairMap.get(value) > maxCount) {
-                maxCount = pairMap.get(value);
+    private void printValues(Map<String, Integer> values) {
+        System.out.print("[ConsensusState] Values: ");
+        for (String value : values.keySet()) {
+            System.out.print(values.get(value) + "x <" + value + ">, ");
+        }
+        System.out.println();
+    }
+
+    private String decideValue(Map<String, Integer> values) {
+        int maxCounter = 0;
+        String maxValue = null;
+        for (String value : values.keySet()) {
+            if (values.get(value) > maxCounter) {
+                maxCounter = values.get(value);
                 maxValue = value;
             }
+        }
+        if (maxValue == null) {
+            // Should never happen
+            System.out.println("[ERROR] Decided value is null");
         }
         return maxValue;
     }
 
-    public ValueTimestampPair waitForWriteQuorum(float byzantineQuorum) {
+
+    public String waitForWriteQuorum(float byzantineQuorum) {
         synchronized (lock) {
-            while (writeMessages.size() < byzantineQuorum) {
+            while (!reachedQuorum(byzantineQuorum, writeCounters.values())) {
                 try {
-                    System.out.println("Quorum of writes not reached yet. Current size: " + writeset.size());
+                    System.out.println("[ConsensusState] Received Write messages: " + writeMessages.size());
                     lock.wait();
                 } catch (InterruptedException e) {
                     System.out.println("Interrupted while waiting for quorum");
@@ -167,21 +164,22 @@ public class ConsensusState {
             }
         }
         // Quorum received
-        return decideWriteValue();
+        printValues(writeCounters);
+        return decideValue(writeCounters);
     }
 
     public String waitForAcceptQuorum(float byzantineQuorum) {
         synchronized (lock) {
-            while (acceptMessages.size() <= byzantineQuorum) {
+            while (!reachedQuorum(byzantineQuorum, acceptCounters.values())) {
                 try {
-                    System.out.println("Quorum of accepts not reached yet. Current size: " + writeset.size());
+                    System.out.println("[ConsensusState] Received Accept Messages: " + acceptMessages.size());
                     lock.wait();
                 } catch (InterruptedException e) {
                     System.out.println("Interrupted while waiting for quorum");
                 }
             }
         }
-        // Quorum received
-        return decideAcceptValue();
+        printValues(acceptCounters);
+        return decideValue(acceptCounters);
     }
 }

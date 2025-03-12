@@ -62,6 +62,6 @@ public class Message {
 
 	@Override
 	public String toString() {
-		return sequenceNumber + "||" + type;
+		return sequenceNumber + " || " + type;
 	}
 }

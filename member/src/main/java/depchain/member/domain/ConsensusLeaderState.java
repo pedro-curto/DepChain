@@ -41,5 +41,15 @@ public class ConsensusLeaderState extends ConsensusState {
 		}
 	}
 
+	@Override
+	public void nextEpoch() {
+		super.nextEpoch();
+		memberStates.clear();
+	}
 
+	@Override
+	public void nextInstance() {
+		super.nextInstance();
+		memberStates.clear();
+	}
 }

@@ -28,12 +28,9 @@ public class Member {
 	private final BlockchainState blockchainState;
 	private final int faultyProcesses;
 	private final int byzantineQuorum;
-	private List<ConsensusState> memberStates;
+	private BlockingQueue<Message> messageQueue;
 	private final String address;
 	private final boolean debug;
-
-	//TODO -> temporary
-	private BlockingQueue<Message> messageQueue;
 
 	public Member(String memberName, List<Entity> members, List<Entity> clients, int port, String address, boolean debug) {
 		this.myName = memberName;
@@ -121,20 +118,10 @@ public class Member {
 		dcLogger.log("Received read message: " + readMessage);
 		String dataToSign = consensusState.getCurrent().toString() + consensusState.getWriteset();
 		String mySignature = Security.makeDS(dataToSign, Security.getMyPrivateKey(myName));
-		// TODO -> other fix, dont send my instance of consensus state to message (dybizantino)
+		// don't  instance of consensus state to message, send a copy or stack overflow error (dybizantino)
 		ConsensusState myState = new ConsensusState(myName, consensusState.getCurrent(), consensusState.getWriteset());
 		StateMessage stateMessage = new StateMessage(myState, mySignature);
-		dcLogger.log("Sending state message: " + stateMessage);
-		if (this.port != leader.getPort())
-			perfectLink.sendMessage(stateMessage, leader.getPort());
-		else {
-			//TODO -> same thing, need to fix this later (dybizantino)
-            try {
-                this.messageQueue.put(stateMessage);
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
-        }
+		sendToLeader(stateMessage);
 	}
 
 	private void handleAccept(AcceptMessage acceptMessage) {
@@ -145,12 +132,7 @@ public class Member {
 	private void handleWrite(WriteMessage writeMessage) {
 		dcLogger.log("Received write message: " + writeMessage);
 		// TODO: verify signature (byzantine can forge other members writes)
-		// vtp is initialized to null, sanity check it first
-		ValueTimestampPair vtp = consensusState.getCurrent();
-		// TODO: why the second condition?
-		if (vtp != null && writeMessage.getValts().getValue().equals(consensusState.getCurrent().getValue())) {
-			consensusState.addWriteMessage(writeMessage);
-		}
+		consensusState.addWriteMessage(writeMessage);
 	}
 
 	private void handleState(StateMessage stateMessage) {
@@ -196,7 +178,7 @@ public class Member {
 		// sends a READ message to all members to collect their states
 		broadCastMessage(new ReadMessage());
 
-		dcLogger.log("Waiting for quorum of size (including myself)" + byzantineQuorum +1);
+		dcLogger.log("(Start Consensus) Waiting for quorum of size" + (byzantineQuorum));
 		List<StateMessage> states = leaderState.waitForQuorum(this.byzantineQuorum + 1);
 		if (states == null) {
 			//abort
@@ -212,19 +194,20 @@ public class Member {
 	}
 
 	private void writePhase(ValueTimestampPair decidedPair) {
-		dcLogger.log("Waiting for quorum of size (consensus) (including myself): " + byzantineQuorum +1);
-		ValueTimestampPair writeValue = this.consensusState.waitForWriteQuorum(this.byzantineQuorum + 1);
+		dcLogger.log("Waiting for quorum of size (consensus) (including myself): " + byzantineQuorum);
+		String writeValue = this.consensusState.waitForWriteQuorum(this.byzantineQuorum + 1);
 		if (writeValue == null) {
 			// Abort
 			this.consensusState.nextEpoch();
 			return;
 		}
 		dcLogger.log("Quorum of WRITE reached");
-		this.consensusState.setCurrent(decidedPair);
+		ValueTimestampPair writeValts = new ValueTimestampPair(this.consensusState.getEpoch(), writeValue);
+		this.consensusState.setCurrent(writeValts);
 
 		// Broadcast ACCEPT and wait for quorum to DECIDE value
-		broadCastMessage(new AcceptMessage(this.consensusState.getCurrent().getValue()));
-		dcLogger.log("Waiting for quorum of size (consensus) (including myself): " + byzantineQuorum +1);
+		broadCastMessage(new AcceptMessage(this.consensusState.getCurrent().getValue(), this.port));
+		dcLogger.log("Waiting for quorum of size (consensus) (including myself): " + byzantineQuorum);
 		String accept = this.consensusState.waitForAcceptQuorum(this.byzantineQuorum + 1);
 		if (accept == null) {
 			// Abort
@@ -236,7 +219,7 @@ public class Member {
 		// DECIDE value
 		this.blockchainState.appendString(consensusState.getCurrent().getValue());
 		if (isLeader()) {
-			ClientReplyMessage clientReplyMessage = new ClientReplyMessage(decidedPair.getValue(),true, consensusState.getCurrentConsensusInstance());
+			ClientReplyMessage clientReplyMessage = new ClientReplyMessage(accept,true, consensusState.getCurrentConsensusInstance());
 			broadCastToClients(clientReplyMessage);
 		}
 		this.consensusState.nextInstance();
@@ -289,28 +272,46 @@ public class Member {
         return count >= this.faultyProcesses + 1 ? highest.getValue() : leaderValts.getValue();
 	}
 
+	private void sendToLeader(Message message) {
+		synchronized (this) {
+			dcLogger.log("Sending to leader " + message.getType() + " message...");
+			if (this.port != leader.getPort())
+				perfectLink.sendMessage(message, leader.getPort());
+			else {
+				try {
+					this.messageQueue.put(message);
+				} catch (InterruptedException e) {
+					throw new RuntimeException(e);
+				}
+			}
+		}
+	}
+
 	private void broadCastMessage(Message message) {
-		dcLogger.log("BroadCasting " + message.getType() + " message...");
-		for (Entity member : members) {
-			//TODO -> fita cola eu sei... eu depois resolvo (dybizantino)
-			if (member.getPort() == this.port) {
-                try {
-                    messageQueue.put(message);
-					continue;
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-			dcLogger.log("[" + message.getType() + " MESSAGE]: " + member.getEntityName());
-			perfectLink.sendMessage(message, member.getPort());
+		synchronized (this) {
+			dcLogger.log("BroadCasting " + message.getType() + " message...");
+			for (Entity member : members) {
+				if (member.getPort() == this.port) {
+					try {
+						messageQueue.put(message);
+						continue;
+					} catch (InterruptedException e) {
+						throw new RuntimeException(e);
+					}
+				}
+				dcLogger.log("Broadcasting [" + message.getType() + " MESSAGE]: " + member.getEntityName());
+				perfectLink.sendMessage(message, member.getPort());
+			}
 		}
 	}
 
 	private void broadCastToClients(Message message) {
-		dcLogger.log("BroadCasting to clients " + message.getType() + " message...");
-		for (Entity client : clients) {
-			dcLogger.log("[" + message.getType() + " MESSAGE]: " + client.getEntityName());
-			perfectLink.sendMessage(message, client.getPort());
+		synchronized (this) {
+			dcLogger.log("BroadCasting to clients " + message.getType() + " message...");
+			for (Entity client : clients) {
+				dcLogger.log("[" + message.getType() + " MESSAGE]: " + client.getEntityName());
+				perfectLink.sendMessage(message, client.getPort());
+			}
 		}
 	}
 
