@@ -121,7 +121,9 @@ public class Member {
 		dcLogger.log("Received read message: " + readMessage);
 		String dataToSign = consensusState.getCurrent().toString() + consensusState.getWriteset();
 		String mySignature = Security.makeDS(dataToSign, Security.getMyPrivateKey(myName));
-		StateMessage stateMessage = new StateMessage(consensusState, mySignature);
+		// TODO -> other fix, dont send my instance of consensus state to message (dybizantino)
+		ConsensusState myState = new ConsensusState(myName, consensusState.getCurrent(), consensusState.getWriteset());
+		StateMessage stateMessage = new StateMessage(myState, mySignature);
 		dcLogger.log("Sending state message: " + stateMessage);
 		if (this.port != leader.getPort())
 			perfectLink.sendMessage(stateMessage, leader.getPort());
