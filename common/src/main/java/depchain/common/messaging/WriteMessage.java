@@ -6,8 +6,8 @@ public class WriteMessage extends Message {
 
 	private ValueTimestampPair valts;
 
-	public WriteMessage(ValueTimestampPair valts) {
-		super(MessageType.WRITE);
+	public WriteMessage(ValueTimestampPair valts, int port) {
+		super(MessageType.WRITE, port);
 		this.valts = valts;
 	}
 

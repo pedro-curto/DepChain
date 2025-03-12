@@ -15,6 +15,10 @@ public class ValueTimestampPair {
 		return timestamp;
 	}
 
+	public void setTimestamp(int timestamp) {
+		this.timestamp = timestamp;
+	}
+
 	public String getValue() {
 		return value;
 	}

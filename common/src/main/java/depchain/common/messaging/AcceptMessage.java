@@ -8,4 +8,8 @@ public class AcceptMessage extends Message {
 		super(MessageType.ACCEPT);
 		this.value = value;
 	}
+
+	public String getValue() {
+		return value;
+	}
 }
