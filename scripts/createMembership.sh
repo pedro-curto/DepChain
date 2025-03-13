@@ -1,6 +1,6 @@
 #!/bin/bash
 # blockchain members
-users=("pedroribeiro" "pedrocurto" "rodrigogreedy" "dybizantino" "a" "b" "c")
+users=("pedroribeiro" "pedrocurto" "rodrigogreedy" "dybizantino")
 client=("paulo")
 MEMBERS_DIR="../member/membership"
 CLIENTS_DIR="../client/membership"

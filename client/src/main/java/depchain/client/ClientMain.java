@@ -10,7 +10,8 @@ import depchain.common.*;
 import depchain.common.domain.Entity;
 
 public class ClientMain {
-    private static final String MEMBERSHIP_FILE = "membership/membership.txt";
+    private static final String baseDir = System.getProperty("user.dir");
+    private static final String MEMBERSHIP_FILE = baseDir + "/membership/membership.txt";
 
     public static void main(String[] args) throws Exception {
         if (args.length != 2) {

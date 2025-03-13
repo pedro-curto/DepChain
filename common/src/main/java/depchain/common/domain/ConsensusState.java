@@ -1,5 +1,6 @@
 package depchain.common.domain;
 
+import depchain.common.DCLogger;
 import depchain.common.messaging.*;
 
 import java.util.*;
@@ -20,6 +21,7 @@ public class ConsensusState {
     private Map<String, Integer> acceptCounters = new HashMap<>();
     private CollectedMessage collectedMessage = null;
     private int epoch = 0;
+    private DCLogger logger;
 
     public ConsensusState(String memberName, int currentConsensusInstance) {
         // Initial State
@@ -30,6 +32,7 @@ public class ConsensusState {
         this.writeMessages = new HashMap<>();
         this.acceptMessages = new HashMap<>();
         this.lock = new Object();
+        this.logger = new DCLogger(ConsensusState.class, false, System.getProperty("user.dir") + "/logs/test/member-" + memberName + ".log");
     }
 
     public ConsensusState(String memberName, ValueTimestampPair current, List<ValueTimestampPair> writeset) {
@@ -96,13 +99,14 @@ public class ConsensusState {
         }
     }
 
-    private boolean reachedQuorum(float quorum, Collection<Integer> counters) {
-        System.out.print("REACHED QUORUM??: ");
-        printValues(writeCounters);
-        printValues(acceptCounters);
+    private boolean reachedQuorum(int quorum, Collection<Integer> counters) {
+        System.out.print("Quorum I want is " + quorum + " and I have " + counters + " ");
+        System.out.println("Write counters: " + writeCounters);
+        //printValues(writeCounters);
+        //printValues(acceptCounters);
         System.out.println();
         for (Integer counter : counters) {
-            if (counter > quorum) {
+            if (counter >= quorum) {
                 return true;
             }
         }
@@ -150,22 +154,22 @@ public class ConsensusState {
         return copy;
     }
 
-    public String waitForWriteQuorum(float byzantineQuorum) {
-        System.out.println("Reached waiting for write quorum");
-        System.out.println("Timeout: " + TIMEOUT);
+    public String waitForWriteQuorum(int byzantineQuorum) {
+        logger.log("Reached waiting for write quorum");
+        logger.log("Timeout: " + TIMEOUT);
         if(waitForQuorum(byzantineQuorum, writeCounters, TIMEOUT)) {
             // Quorum reached
-            System.out.print("[ConsensusState] Write values: ");
+            logger.log("[ConsensusState] Write values: ");
             printValues(writeCounters);
             System.out.println();
             return decideValue(writeCounters);
         }
         // Timeout
-        System.out.println("[ConsensusState] waiting for write timed out ");
+        logger.log("[ConsensusState] waiting for write timed out ");
         return null;
     }
 
-    public String waitForAcceptQuorum(float byzantineQuorum) {
+    public String waitForAcceptQuorum(int byzantineQuorum) {
         if(waitForQuorum(byzantineQuorum, acceptCounters, TIMEOUT)) {
             // Quorum reached
             System.out.print("[ConsensusState] Accepted values: ");
@@ -177,7 +181,7 @@ public class ConsensusState {
         return null;
     }
 
-    public boolean waitForQuorum(float byzantineQuorum, Map<String, Integer> counter, long timeoutMillis) {
+    public boolean waitForQuorum(int byzantineQuorum, Map<String, Integer> counter, long timeoutMillis) {
         synchronized (lock) {
 
             System.out.println("reached waiting for quorum");

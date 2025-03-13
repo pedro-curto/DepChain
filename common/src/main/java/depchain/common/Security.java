@@ -56,17 +56,17 @@ public final class Security {
 		return false;
 	}
 
-	public static KeyPair getMemberKeyPair(String member) {
+	public static KeyPair getMemberKeyPair(String baseDir, String member) {
 		// reads both PEM keys
-		String publicKeyPath = "membership/" + member + "/" + member + ".pubkey";
-		String privateKeyPath = "membership/" + member + "/" + member + ".privkey";
-
+		String publicKeyPath = baseDir + "/membership/" + member + "/" + member + ".pubkey";
+		String privateKeyPath = baseDir + "/membership/" + member + "/" + member + ".privkey";
+		//System.out.println("(getMemberKeyPair) Trying to load keys from " + publicKeyPath + " and " + privateKeyPath);
 		try {
 			PublicKey pub = readPublicKey(publicKeyPath);
 			PrivateKey priv = readPrivateKey(privateKeyPath);
 			return new KeyPair(pub, priv);
 		} catch(Exception e) {
-			System.err.println("Error reading key pair at " + "membership/" + member + "/" + member + ".pubkey");
+			System.err.println("Error reading key pair : " + e);
 		}
 		return null;
 	}

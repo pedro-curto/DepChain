@@ -17,25 +17,31 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 public class Client {
+    private String baseDir = System.getProperty("user.dir");
+    private String clientName;
     private final int port;
 	private final int leaderPort;
     private final List<Entity> members;
-    private final KeyPair clientKeys;
+    private KeyPair clientKeys;
     private PerfectLink perfectLink;
     private BlockingQueue<Message> messageQueue;
     private final DCLogger dcLogger;
     private final boolean debug;
 
     public Client(String clientName, int port, List<Entity> members, boolean debug) {
+        this.clientName = clientName;
         this.debug = debug;
 		this.port = port;
         this.members = members;
         this.leaderPort = members.get(0).getPort();
-        this.dcLogger = new DCLogger(Client.class, debug);
-        this.clientKeys = Security.getMemberKeyPair(clientName);
+        this.dcLogger = new DCLogger(Client.class, debug, baseDir+"/logs/client.log");
     }
 
     public void start() throws Exception {
+        this.clientKeys = Security.getMemberKeyPair(baseDir, clientName);
+        if (clientKeys == null) {
+            dcLogger.log("Keys not loaded successfully.");
+        }
         // init socket, messageQueue and the perfectLink abstraction
         DatagramSocket socket = new DatagramSocket(port);;
         messageQueue = new LinkedBlockingQueue<>();
@@ -60,12 +66,21 @@ public class Client {
                 input.close();
                 System.exit(0);
             }
-            AppendMessage msg = new AppendMessage(content, this.port);
-            String signature = Security.makeDS(msg.getDataToSign(), clientKeys.getPrivate());
-            msg.setSignature(signature);
-            perfectLink.sendMessage(msg, leaderPort);
-            dcLogger.log("Sent message: " + msg);
+            sendAppend(content);
+            //AppendMessage msg = new AppendMessage(content, this.port);
+            //String signature = Security.makeDS(msg.getDataToSign(), clientKeys.getPrivate());
+            //msg.setSignature(signature);
+            //perfectLink.sendMessage(msg, leaderPort);
+            //dcLogger.log("Sent message: " + msg);
         }
+    }
+
+    public void sendAppend(String content) {
+        AppendMessage msg = new AppendMessage(content, this.port);
+        String signature = Security.makeDS(msg.getDataToSign(), clientKeys.getPrivate());
+        msg.setSignature(signature);
+        perfectLink.sendMessage(msg, leaderPort);
+        dcLogger.log("Sent message: " + msg);
     }
 
     private static void deliverMessage(BlockingQueue<Message> messageQueue) {
@@ -93,5 +108,9 @@ public class Client {
                 System.out.println("[SERVER GOT]: " + message);
             }
         }
+    }
+
+    public PerfectLink getPerfectLink() {
+        return perfectLink;
     }
 }

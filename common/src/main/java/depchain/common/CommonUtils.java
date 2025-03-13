@@ -62,6 +62,7 @@ public class CommonUtils {
 
 	public static List<Entity> loadMembership(String filename) throws Exception {
 		List<Entity> members = new ArrayList<>();
+		System.out.println("Trying to load from: " + filename);
 		try (BufferedReader br = new BufferedReader(new FileReader(filename))) {
 			String line;
 			while ((line = br.readLine()) != null) {
@@ -84,6 +85,7 @@ public class CommonUtils {
 				members.add(entity);
 			}
 		}
+		System.out.println("Loaded members: " + members);
 		return members;
 	}
 }

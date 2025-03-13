@@ -16,10 +16,11 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 public class Member {
-	private static final String LEADER_FILE = "membership/leader.txt";
+	private String baseDir = System.getProperty("user.dir");
+	private static final String LEADER_FILE = "/membership/leader.txt";
 	private final List<Entity> members;
 	private final List<Entity> clients;
-	private final Entity leader;
+	private Entity leader;
 	private final String myName;
 	private final int port;
 	private PerfectLink perfectLink;
@@ -40,8 +41,8 @@ public class Member {
 		this.port = port;
 		this.address = address;
 		this.debug = debug;
-		this.dcLogger = new DCLogger(Member.class, debug);
-		this.leader = CommonUtils.getLeader(LEADER_FILE);
+		this.baseDir = System.getProperty("user.dir");
+		this.dcLogger = new DCLogger(Member.class, debug, baseDir + "/logs/test/member-" + memberName + ".log");
 		this.faultyProcesses = Math.floorDiv(members.size() - 1, 3);
 		this.byzantineQuorum = members.size() - faultyProcesses;
 		this.blockchainState = new BlockchainState(new ArrayList<>());
@@ -50,6 +51,12 @@ public class Member {
 	}
 
     public void start() throws Exception {
+		this.leader = CommonUtils.getLeader(baseDir + LEADER_FILE);
+		if (this.leader == null) {
+			dcLogger.error("Leader not found");
+			return;
+		}
+		dcLogger.log("Byzantine quorum: " + byzantineQuorum);
 		startConnections();
 		new Thread(this::doConsensus).start();
 		receiveMessages();
@@ -72,7 +79,10 @@ public class Member {
 		List<Entity> entities = new ArrayList<>();
 		entities.addAll(clients);
 		entities.addAll(members);
-		KeyPair myKeyPair = Security.getMemberKeyPair(myName);
+		KeyPair myKeyPair = Security.getMemberKeyPair(baseDir, myName);
+		if (myKeyPair == null) {
+			dcLogger.error("Keys not loaded successfully.");
+		}
 		// perfect link starts listening for messages
 		this.perfectLink = new PerfectLink(serverSocket, messageQueue, myKeyPair, entities, false);
 		perfectLink.start();
@@ -215,7 +225,7 @@ public class Member {
 		dcLogger.log("Broadcasting: " + readMessage);
 		broadCastMessage(readMessage);
 		dcLogger.log("Waiting for state quorum of size: " + byzantineQuorum + "...");
-		List<StateMessage> states = leaderState.waitForQuorum(this.byzantineQuorum + 1);
+		List<StateMessage> states = leaderState.waitForQuorum(this.byzantineQuorum);
 		dcLogger.log("Quorum of STATE reached");
 
 		// Send the collection of states to all the members
@@ -239,6 +249,7 @@ public class Member {
 		}
 		String value = decideOnCollectedValues(collectedStates);
 		ValueTimestampPair decidePair = new ValueTimestampPair(this.consensusState.getEpoch(), value);
+		dcLogger.log("Value I'm going to broadcast for write phase: " + decidePair);
 		WriteMessage writeMessage = new WriteMessage(decidePair, this.port, consensusState.getInstance());
 		dcLogger.log("Broadcasting: " + writeMessage);
 		broadCastMessage(writeMessage);
@@ -251,7 +262,7 @@ public class Member {
 	 */
 	public boolean writePhase() {
 		dcLogger.log("Waiting for write quorum of size: " + byzantineQuorum + "...");
-		String writeValue = this.consensusState.waitForWriteQuorum(this.byzantineQuorum + 1);
+		String writeValue = this.consensusState.waitForWriteQuorum(this.byzantineQuorum);
 		if (writeValue == null) {
 			// Abort
 			dcLogger.log("ABORTED (WRITE)");
@@ -268,7 +279,7 @@ public class Member {
 		broadCastMessage(acceptMessage);
 
 		dcLogger.log("Waiting for accept quorum of size: " + byzantineQuorum + "...");
-		String accept = this.consensusState.waitForAcceptQuorum(this.byzantineQuorum + 1);
+		String accept = this.consensusState.waitForAcceptQuorum(this.byzantineQuorum);
 		if (accept == null) {
 			// Abort
 			dcLogger.log("ABORTED (ACCEPT)");
@@ -389,5 +400,9 @@ public class Member {
 			return false;
 		}
 		return this.leader.getEntityName().equalsIgnoreCase(myName);
+	}
+
+	public BlockchainState getBlockchainState() {
+		return blockchainState;
 	}
 }

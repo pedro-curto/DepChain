@@ -14,4 +14,8 @@ public class BlockchainState {
         blockchain.add(str);
         System.err.println("[BLOCKCHAIN]: " + blockchain);
     }
+
+    public boolean contains(String str) {
+        return blockchain.contains(str);
+    }
 }
