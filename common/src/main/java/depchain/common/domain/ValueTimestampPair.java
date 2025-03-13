@@ -14,7 +14,6 @@ public class ValueTimestampPair {
 	public int getTimestamp() {
 		return timestamp;
 	}
-
 	public void setTimestamp(int timestamp) {
 		this.timestamp = timestamp;
 	}

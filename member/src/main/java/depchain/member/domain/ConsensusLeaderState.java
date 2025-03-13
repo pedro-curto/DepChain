@@ -1,37 +1,39 @@
 package depchain.member.domain;
 
 import depchain.common.domain.ConsensusState;
+import depchain.common.domain.ValueTimestampPair;
 import depchain.common.messaging.StateMessage;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class ConsensusLeaderState extends ConsensusState {
-	// Store member states for collected message
-	private final List<StateMessage> memberStates = new ArrayList<>();
+	private final Map<Integer, StateMessage> memberStates = new HashMap<>();
+	private final Object statesLock = new Object();
+	protected static final long STATE_TIMEOUT = 2000; // 2 seconds
 
 	public ConsensusLeaderState(String leaderName, int consensusInstance) {
 		super(leaderName, consensusInstance);
 	}
 
 	public void addMemberState(StateMessage state) {
-		synchronized (lock) {
-			memberStates.add(state);
-			lock.notifyAll();
+		synchronized (statesLock) {
+			if (memberStates.containsKey(state.getPort())) return;
+			memberStates.put(state.getPort(), state);
 		}
 	}
 
-	public List<StateMessage> waitForQuorum(int quorumSize) {
-		synchronized (lock) {
-			while (memberStates.size() < quorumSize) {
-				try {
-					System.out.println("Quorum of " + quorumSize + " not reached yet. Current size: " + memberStates.size());
-					lock.wait();
-				} catch (InterruptedException e) {
-					System.out.println("Interrupted while waiting for quorum");
-				}
+	// TODO -> implement returning imediatlly after receiving a value that can be decided
+	public List<StateMessage> waitForStateQuorum() {
+		synchronized (statesLock) {
+            try {
+                statesLock.wait(STATE_TIMEOUT);
+            } catch (InterruptedException e) {
+				System.out.println("Interrupted while waiting for quorum");
 			}
-			return new ArrayList<>(memberStates);
+        	return new ArrayList<>(memberStates.values());
 		}
 	}
 

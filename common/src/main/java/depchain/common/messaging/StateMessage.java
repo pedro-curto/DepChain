@@ -8,8 +8,8 @@ public class StateMessage extends Message {
 	private String signature;
 	private final int consensusInstance;
 
-	public StateMessage(ConsensusState state, String signature, int consensusInstance) {
-		super(MessageType.STATE);
+	public StateMessage(ConsensusState state, String signature, int consensusInstance, int port) {
+		super(MessageType.STATE, port);
 		this.state = state;
 		this.signature = signature;
 		this.consensusInstance = consensusInstance;

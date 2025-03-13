@@ -18,9 +18,9 @@ import java.util.concurrent.LinkedBlockingQueue;
 public class Member {
 	private String baseDir = System.getProperty("user.dir");
 	private static final String LEADER_FILE = "/membership/leader.txt";
-	private final List<Entity> members;
+	protected final List<Entity> members;
 	private final List<Entity> clients;
-	protected final Entity leader;
+	protected Entity leader;
 	protected final String myName;
 	protected final int port;
 	protected PerfectLink perfectLink;
@@ -144,7 +144,9 @@ public class Member {
 		String mySignature = Security.makeDS(dataToSign, Security.getMyPrivateKey(myName));
 		// don't send own instance of consensus state to message, send a copy or else stack overflow error
 		ConsensusState myState = new ConsensusState(myName, consensusState.getCurrent(), consensusState.getWriteset());
-		StateMessage stateMessage = new StateMessage(myState, mySignature, consensusState.getInstance());
+		// TODO -> i used the setter here to not change the constructor, use the constructor later
+		myState.setInstance(consensusState.getInstance());
+		StateMessage stateMessage = new StateMessage(myState, mySignature, consensusState.getInstance(), this.port);
 		sendToLeader(stateMessage);
 	}
 
@@ -225,7 +227,7 @@ public class Member {
 		dcLogger.log("Broadcasting: " + readMessage);
 		broadCastMessage(readMessage);
 		dcLogger.log("Waiting for state quorum of size: " + byzantineQuorum + "...");
-		List<StateMessage> states = leaderState.waitForQuorum(this.byzantineQuorum);
+		List<StateMessage> states = leaderState.waitForStateQuorum();
 		dcLogger.log("Quorum of STATE reached");
 
 		// Send the collection of states to all the members
@@ -241,15 +243,21 @@ public class Member {
 	public boolean decideValue() {
 		dcLogger.log("Waiting for states to decide value");
 		List<StateMessage> collectedStates = this.consensusState.waitForCollectedMessage();
-		if (collectedStates == null) {
+		if (collectedStates == null || collectedStates.size() < this.byzantineQuorum) {
 			// abort
 			dcLogger.log("aborted after collecting states");
 			this.consensusState.nextEpoch();
 			return false;
 		}
 		String value = decideOnCollectedValues(collectedStates);
+		if (value == null) {
+			// abort
+			dcLogger.log("aborted after deciding null value");
+			this.consensusState.nextEpoch();
+			return false;
+		}
 		ValueTimestampPair decidePair = new ValueTimestampPair(this.consensusState.getEpoch(), value);
-		dcLogger.log("Value I'm going to broadcast for write phase: " + decidePair);
+		this.consensusState.updateWriteSet(decidePair);
 		WriteMessage writeMessage = new WriteMessage(decidePair, this.port, consensusState.getInstance());
 		dcLogger.log("Broadcasting: " + writeMessage);
 		broadCastMessage(writeMessage);
@@ -299,7 +307,6 @@ public class Member {
 	}
 
 
-
 	/***
 	 * Decide on a value to write based on the collection of
 	 * States received from the other processes
@@ -307,36 +314,53 @@ public class Member {
 	 * @return the value to write during this epoch
 	 */
 	public String decideOnCollectedValues(List<StateMessage> collectedStates) {
-		ValueTimestampPair leaderValts = null;
-		ValueTimestampPair highest = new ValueTimestampPair(-1, "");
+		ValueTimestampPair leaderValue = null;
+		ValueTimestampPair highest = new ValueTimestampPair(-1, null);
 
-		for (StateMessage stateMessage : collectedStates) {
-			// check signature
-			if (!verifyMemberStateAuthenticity(stateMessage)) {
-				dcLogger.error("Signature is invalid for " + stateMessage.getState().getMemberName());
+		for (StateMessage thisState : collectedStates) {
+			if (!verifyMemberStateAuthenticity(thisState)) {
+				dcLogger.error("Signature is invalid for " + thisState.getState().getMemberName());
 				continue;
 			}
-			// 1. collect the value that corresponds to the highest timestamp across all state messages
-			ValueTimestampPair current = stateMessage.getState().getCurrent();
-			String memberName = stateMessage.getState().getMemberName();
-			if (current != null && current.getTimestamp() > highest.getTimestamp()) {
-				highest = current;
+			if (thisState.getConsensusInstance() != this.consensusState.getInstance()) {
+				dcLogger.error("State message of different instance among COLLECTED");
+				continue;
 			}
-			// store the leader's value in case we don't find a value
-			if (memberName.equalsIgnoreCase(leader.getEntityName())) {
-				dcLogger.log("Found leader's value: " + current);
-				leaderValts = current;
+
+			ValueTimestampPair vts = thisState.getState().getCurrent();
+			if (highest.getTimestamp() > vts.getTimestamp() ) {
+				continue;
+			}
+			if (thisState.getState().getMemberName().equalsIgnoreCase(leader.getEntityName())) {
+				leaderValue = vts;
+			}
+
+			// count in how many writesets it appears
+			// must be at least 2f +1
+			int count = 0;
+			for (StateMessage otherState : collectedStates) {
+				for (ValueTimestampPair pair : otherState.getState().getWriteset()) {
+					if (pair.getValue().equals(vts.getValue()) && pair.getTimestamp() >= vts.getTimestamp()) {
+						count ++;
+						break;
+					}
+				}
+				if (count >= this.byzantineQuorum) {
+					highest = vts;
+					break;
+				}
 			}
 		}
-		// 2. the value with highest ts must appear in the writeset of at least f+1 processes
-		int count = 0;
-		for (StateMessage stateMessage : collectedStates) {
-			if (stateMessage.getState().getWriteset().contains(highest)) {
-				count++;
-			}
+
+		if (highest.getValue() != null) {
+			return highest.getValue();
 		}
-		// if we don't find a value, we default to leaders proposal
-        return count >= this.faultyProcesses + 1 ? highest.getValue() : leaderValts.getValue();
+		// default to leader value
+		if (leaderValue == null || leaderValue.getValue() == null ) {
+			dcLogger.error("Did not get leader value in COLLECTED message");
+			return null;
+		}
+		return leaderValue.getValue();
 	}
 
 	public boolean verifyMemberStateAuthenticity(StateMessage stateMessage) {
@@ -360,14 +384,28 @@ public class Member {
 		}
 	}
 
+	public void sendToMe(Message message) {
+		try {
+			messageQueue.put(message);
+		} catch (InterruptedException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	public void sendToMember(Message message, int port) {
+		dcLogger.log("Sending " + message.getType() + " message... to member " + port);
+		if (this.port != port) {
+			perfectLink.sendMessage(message, port);
+		}
+		else {
+			sendToMe(message);
+		}
+	}
+
 	public void broadCastMessage(Message message) {
 		for (Entity member : members) {
 			if (member.getPort() == this.port) {
-				try {
-					messageQueue.put(message);
-				} catch (InterruptedException e) {
-					throw new RuntimeException(e);
-				}
+				sendToMe(message);
 				continue;
 			}
 			perfectLink.sendMessage(message, member.getPort());

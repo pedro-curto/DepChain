@@ -8,8 +8,7 @@ import java.util.concurrent.ArrayBlockingQueue;
 
 public class ConsensusState {
 
-    private static final long TIMEOUT = 5000; // 5 seconds
-
+    protected static final long TIMEOUT = 5000; // 5 seconds
     private final String memberName;
     private ValueTimestampPair current;
     private List<ValueTimestampPair> writeset;
@@ -54,6 +53,9 @@ public class ConsensusState {
     public int getInstance() {
         return currentConsensusInstance;
     }
+    public void setInstance(int instance) {
+        this.currentConsensusInstance = instance;
+    }
     public void setCurrent(ValueTimestampPair current) {
         this.current = current;
     }
@@ -62,6 +64,15 @@ public class ConsensusState {
     }
     public void setEpoch(int epoch) {
         this.epoch = epoch;
+    }
+
+    public void updateWriteSet(ValueTimestampPair decidedPair) {
+        for (ValueTimestampPair pair : this.writeset) {
+            if (pair.getValue().equals(decidedPair.getValue())) {
+                pair.setTimestamp(decidedPair.getTimestamp());
+                return;
+            }
+        }
     }
 
     public void addWriteMessage(WriteMessage writeMessage) {

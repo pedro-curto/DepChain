@@ -34,7 +34,7 @@ public class PerfectLink {
     private final Map<Integer, Session> sessions = new ConcurrentHashMap<>();
     private final Map<Integer, Entity> entities = new HashMap<>();
     private final Gson gson = new Gson();
-    private final DCLogger dcLogger;
+    protected final DCLogger dcLogger;
 
     public PerfectLink(DatagramSocket socket, BlockingQueue<Message> messageQueue, KeyPair personalKeys, List<Entity> entities, boolean debug) {
         this.socket = socket;
@@ -211,7 +211,7 @@ public class PerfectLink {
         dcLogger.log("[PerfectLink-AckListener] Received an unknown ACK: " + sequenceNumber);
     }
 
-    private void handleContentMessage(long sequenceNumber, Message message, Session session) {
+    public void handleContentMessage(long sequenceNumber, Message message, Session session) {
         dcLogger.log("Received content message with sequence number " + sequenceNumber);
         if (!checkIntegrity(session, message)) { return; }
         long counter = session.getReceiveCounter();

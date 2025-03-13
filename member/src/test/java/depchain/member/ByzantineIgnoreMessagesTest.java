@@ -64,7 +64,7 @@ public class ByzantineIgnoreMessagesTest {
                     "Honest2 should have the value");
         });
 
-        // Verify Byzantine node does not have the value (optional, if you want to explicitly check)
+        // verify Byzantine node does not have the value
         Awaitility.await().during(5, TimeUnit.SECONDS).atMost(10, TimeUnit.SECONDS).until(() -> {
             return !byzantine.getBlockchainState().contains("test-value");
         });
