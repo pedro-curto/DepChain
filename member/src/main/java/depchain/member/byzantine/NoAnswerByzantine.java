@@ -45,11 +45,4 @@ public class NoAnswerByzantine extends Member {
         dcLogger.log("Received: " + acceptMessage);
         dcLogger.log("Ignoring...");
     }
-
-//    @Override
-//    public void handleAppend(AppendMessage appendMessage) {
-//        dcLogger.log("Received: " + appendMessage);
-//        dcLogger.log("Ignoring...");
-//    }
-
 }
