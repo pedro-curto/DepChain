@@ -5,6 +5,7 @@ public class ValueTimestampPair {
 	private int timestamp;
 
 	private String value;
+	private String clientSignature;
 
 	public ValueTimestampPair(int timestamp, String value) {
 		this.value = value;
@@ -26,4 +27,10 @@ public class ValueTimestampPair {
 	public String toString() {
 		return "<" + timestamp + "," + value + ">";
 	}
+
+	public void setClientSignature(String signature) {
+		this.clientSignature = signature;
+	}
+
+	public String getClientSignature() { return clientSignature; }
 }

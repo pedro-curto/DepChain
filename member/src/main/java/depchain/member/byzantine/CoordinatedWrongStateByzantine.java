@@ -16,15 +16,31 @@ public class CoordinatedWrongStateByzantine extends Member {
     // Sends different write messages to different members (echos what he received from them)
     // in case 2 correct members have different values, could lead to a wrong quorum
 
+    private boolean firstEpoch = true;
+
     public CoordinatedWrongStateByzantine(String memberName, List<Entity> members, List<Entity> clients, int port, String address, boolean debug) {
         super(memberName, members, clients, port, address, debug);
     }
 
+    private ValueTimestampPair getPreviousClientValueTimestampPair() {
+        for (ValueTimestampPair valts : consensusState.getWriteset()) {
+            return valts;
+        }
+        dcLogger.error("COULDN'T FIND CLIENT VALUETIMESTAMP");
+        return null;
+    }
+
     @Override
     public void handleRead(ReadMessage readMessage) {
+        if (firstEpoch) {
+            firstEpoch = false;
+            super.handleRead(readMessage);
+            return;
+        }
         dcLogger.log("Received: " + readMessage);
 
-        ValueTimestampPair fakeCurrent = new ValueTimestampPair(1000, "Byzantine");
+        ValueTimestampPair fakeCurrent = getPreviousClientValueTimestampPair();
+        fakeCurrent.setTimestamp(1000);
         ArrayList<ValueTimestampPair> fakeWriteset = new ArrayList<>();
         fakeWriteset.add(fakeCurrent);
 
@@ -32,7 +48,6 @@ public class CoordinatedWrongStateByzantine extends Member {
         String dataToSign = fakeCurrent.toString() + fakeWriteset;
         String mySignature = Security.makeDS(dataToSign, Security.getMyPrivateKey(myName));
 
-        // TODO -> i used the setter here to not change the constructor, use the constructor later
         myState.setInstance(consensusState.getInstance());
         StateMessage stateMessage = new StateMessage(myState, mySignature, consensusState.getInstance(), this.port);
         dcLogger.log("Faking state message... -> " + stateMessage);

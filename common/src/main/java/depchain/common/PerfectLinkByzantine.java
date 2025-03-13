@@ -12,7 +12,7 @@ import java.util.concurrent.BlockingQueue;
 
 public class PerfectLinkByzantine extends PerfectLink {
 
-    private static final float FAULT_CHANCES = 0.3f;
+    private static final float LOST_CHANCES = 0.3f;
 
     private Random random = new Random();
 
@@ -21,7 +21,7 @@ public class PerfectLinkByzantine extends PerfectLink {
     }
 
     private boolean isLostMessage() {
-        return random.nextFloat() < FAULT_CHANCES;
+        return random.nextFloat() < LOST_CHANCES;
     }
 
     @Override
@@ -32,5 +32,11 @@ public class PerfectLinkByzantine extends PerfectLink {
         dcLogger.log("MESSAGE WAS LOST... " + message);
     }
 
-
+    @Override
+    public void handleAck(Message ackMessage, Session session) {
+        if (!isLostMessage()) {
+            super.handleAck(ackMessage, session);
+        }
+        dcLogger.log("ACK WAS LOST... " + ackMessage);
+    }
 }

@@ -219,6 +219,7 @@ public class Member {
 		ConsensusLeaderState leaderState = (ConsensusLeaderState) consensusState;
 		if (consensusState.getEpoch() == 0) {
 			ValueTimestampPair newValue = new ValueTimestampPair(0, appendMessage.getValue());
+			newValue.setClientSignature(appendMessage.getSignature());
 			leaderState.setCurrent(newValue);
 		}
 
@@ -311,7 +312,7 @@ public class Member {
 	 * Decide on a value to write based on the collection of
 	 * States received from the other processes
 	 * @param collectedStates collection of all the members states
-	 * @return the value to write during this epoch
+	 * @return the value to write during this epoch, null if did not find any
 	 */
 	public String decideOnCollectedValues(List<StateMessage> collectedStates) {
 		ValueTimestampPair leaderValue = null;
@@ -360,6 +361,10 @@ public class Member {
 			dcLogger.error("Did not get leader value in COLLECTED message");
 			return null;
 		}
+		if (!checkClientSignature(leaderValue)) {
+			dcLogger.error("Leader forged new value");
+			return null;
+		}
 		return leaderValue.getValue();
 	}
 
@@ -369,6 +374,14 @@ public class Member {
 		PublicKey memberPubKey = Security.getMemberPublicKey(memberName);
 		String reconstructSignatureData = consensusSt.getCurrent().toString() + consensusSt.getWriteset().toString();
 		return Security.verifyDS(stateMessage.getSignature(), reconstructSignatureData, memberPubKey);
+	}
+
+	public boolean checkClientSignature(ValueTimestampPair leaderVts) {
+		String clientSignature = leaderVts.getClientSignature();
+		if (clientSignature == null) return false;
+		// TODO -> fix this (kind of hardcoded)
+		PublicKey clientPubKey = Security.getMemberPublicKey(clients.get(0).getEntityName());
+		return Security.verifyDS(clientSignature, leaderVts.getValue(), clientPubKey);
 	}
 
 	public void sendToLeader(Message message) {

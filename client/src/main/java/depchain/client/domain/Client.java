@@ -67,11 +67,6 @@ public class Client {
                 System.exit(0);
             }
             sendAppend(content);
-            //AppendMessage msg = new AppendMessage(content, this.port);
-            //String signature = Security.makeDS(msg.getDataToSign(), clientKeys.getPrivate());
-            //msg.setSignature(signature);
-            //perfectLink.sendMessage(msg, leaderPort);
-            //dcLogger.log("Sent message: " + msg);
         }
     }
 

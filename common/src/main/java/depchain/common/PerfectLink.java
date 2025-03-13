@@ -192,7 +192,7 @@ public class PerfectLink {
         dcLogger.log("Current sessions: " + sessions);
     }
 
-    private void handleAck(Message ackMessage, Session session) {
+    public void handleAck(Message ackMessage, Session session) {
         long sequenceNumber = ackMessage.getSequenceNumber();
         // dcLogger.log("Received ack for message with sequence number " + sequenceNumber);
         if (!checkIntegrity(session, ackMessage)) { return; }

@@ -21,7 +21,7 @@ public class AppendMessage extends Message {
 	* should be able to check the origin of the request
 	* */
 	public String getDataToSign() {
-		return getPort() + value;
+		return value;
 	}
 
 	@Override
