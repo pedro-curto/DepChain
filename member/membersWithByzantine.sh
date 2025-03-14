@@ -1,5 +1,13 @@
 #!/bin/bash
 
+# we must provide exactly one argument
+if [ "$#" -ne 1 ]; then
+  echo "Usage: $0 <byzantine_flag (0,1,2,3,4,5,6)>"
+  exit 1
+fi
+
+BYZANTINE_FLAG="$1"
+
 MEMBERSHIP_FILE="membership/membership.txt"
 pids=()
 mkdir -p logs
@@ -40,7 +48,7 @@ do
   # Set byzantine flag to 1 for the last member
   byzantine_flag=0
   if [ $current_member -eq $total_members ]; then
-    byzantine_flag=1
+    byzantine_flag=$BYZANTINE_FLAG
     echo "Starting BYZANTINE server for member: $memberName on port: $port"
   else
     echo "Starting server for member: $memberName on port: $port"

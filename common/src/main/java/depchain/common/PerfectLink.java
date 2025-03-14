@@ -10,10 +10,7 @@ import depchain.common.session.SessionTaskKey;
 
 import javax.crypto.SecretKey;
 import java.io.IOException;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
+import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.PublicKey;
@@ -25,16 +22,17 @@ import java.util.concurrent.*;
 
 public class PerfectLink {
 
-    private final DatagramSocket socket;
+    protected final DatagramSocket socket;
     private final BlockingQueue<Message> messageQueue;
     private final KeyPair personalKeys;
-    private final ScheduledThreadPoolExecutor scheduler = new ScheduledThreadPoolExecutor(8);
-    private final Map<SessionTaskKey, ScheduledFuture<?>> msgTasks = new ConcurrentHashMap<>();
+    protected final ScheduledThreadPoolExecutor scheduler = new ScheduledThreadPoolExecutor(8);
+    protected final Map<SessionTaskKey, ScheduledFuture<?>> msgTasks = new ConcurrentHashMap<>();
     private final Map<Long, Message> msgsToDeliver = new ConcurrentHashMap<>();
     private final Map<Integer, Session> sessions = new ConcurrentHashMap<>();
     private final Map<Integer, Entity> entities = new HashMap<>();
     private final Gson gson = new Gson();
     protected final DCLogger dcLogger;
+    private volatile boolean running = true;
 
     public PerfectLink(DatagramSocket socket, BlockingQueue<Message> messageQueue, KeyPair personalKeys, List<Entity> entities, boolean debug) {
         this.socket = socket;
@@ -98,7 +96,7 @@ public class PerfectLink {
            // dcLogger.log("Generated hmac: " + hmac);
            message.setHmac(hmac);
        }
-       String json = gson.toJson(message);
+       String json = convertToJson(message);
        SessionTaskKey key = new SessionTaskKey(session.getPort(), sequenceNumber);
        try {
            DatagramPacket packet = new DatagramPacket(
@@ -114,7 +112,7 @@ public class PerfectLink {
        session.incrementSendCounter();
     }
 
-    private void scheduleMessage(DatagramPacket packet, SessionTaskKey key) {
+    public void scheduleMessage(DatagramPacket packet, SessionTaskKey key) {
         ScheduledFuture<?> task = scheduler.scheduleAtFixedRate(() -> {
             try {
                 socket.send(packet);
@@ -128,10 +126,17 @@ public class PerfectLink {
 
     private void startListening() {
         byte[] buffer = new byte[65536];
-        while (true) {
+        while (running) {
             DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+            //if (socket.isClosed()) {
+            //    dcLogger.log("Socket is closed");
+            //    return;
+            //}
             try {
                 socket.receive(packet);
+            } catch (SocketException e) {
+                dcLogger.log("Socket closed");
+                return;
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -242,7 +247,7 @@ public class PerfectLink {
         return true;
     }
 
-    private void sendAck(Session session, long seqNumber) {
+    public void sendAck(Session session, long seqNumber) {
         Message ack = new AckMessage(seqNumber);
         String data = ack.getHmacData();
         String hmac = Security.generateHMAC(data, session.getSecretKey());
@@ -305,5 +310,16 @@ public class PerfectLink {
 
     public String getSessions() {
         return sessions.toString();
+    }
+
+    public void stop() {
+        running = false;
+        scheduler.shutdown();
+        socket.close();
+    }
+
+    // Function for byzantine to override
+    public String convertToJson(Message message) {
+        return gson.toJson(message);
     }
 }

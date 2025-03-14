@@ -16,10 +16,16 @@ public class FakeSignatureByzantine extends Member {
 
     public FakeSignatureByzantine(String memberName, List<Entity> members, List<Entity> clients, int port, String address, boolean debug) {
         super(memberName, members, clients, port, address, debug);
+        System.out.println("FakeSignatureByzantine started at port " + port);
     }
 
     public String getRandomMemberName() {
-        return members.get(random.nextInt(members.size())).getEntityName();
+        String memberName;
+        do {
+            memberName = members.get(random.nextInt(members.size())).getEntityName();
+        } while(memberName.equals(myName));
+
+        return memberName;
     }
 
     public int getMemberPort(String name) {
@@ -42,6 +48,7 @@ public class FakeSignatureByzantine extends Member {
         // Send as a another member name
         ConsensusState myState = new ConsensusState(randomMemberName, consensusState.getCurrent(), consensusState.getWriteset());
         StateMessage stateMessage = new StateMessage(myState, mySignature, consensusState.getInstance(), getMemberPort(randomMemberName));
+        dcLogger.log("Sending fake state message... : " + stateMessage);
         sendToLeader(stateMessage);
     }
 }

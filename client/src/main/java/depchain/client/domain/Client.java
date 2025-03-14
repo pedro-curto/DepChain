@@ -27,14 +27,17 @@ public class Client {
     private BlockingQueue<Message> messageQueue;
     private final DCLogger dcLogger;
     private final boolean debug;
+    private volatile boolean running = true;
+    private final boolean testEnvironment;
 
-    public Client(String clientName, int port, List<Entity> members, boolean debug) {
+    public Client(String clientName, int port, List<Entity> members, boolean debug, boolean testEnvironment) {
         this.clientName = clientName;
-        this.debug = debug;
+        this.debug = false;
 		this.port = port;
         this.members = members;
         this.leaderPort = members.get(0).getPort();
         this.dcLogger = new DCLogger(Client.class, debug, baseDir+"/logs/client.log");
+        this.testEnvironment = testEnvironment;
     }
 
     public void start() throws Exception {
@@ -54,13 +57,20 @@ public class Client {
         Thread messageDeliveringThread = new Thread(() -> deliverMessage(messageQueue));
         messageDeliveringThread.start();
         // start processing user input
-        processUserInput();
+        if (!testEnvironment) {
+            processUserInput();
+        }
+    }
+
+    public void stop() {
+        perfectLink.stop();
+        running = false;
     }
 
     private void processUserInput() throws Exception {
         Scanner input = new Scanner(System.in);
         System.out.print("> ");
-        while (true) {
+        while (running) {
             String content = input.nextLine();
             if (content.equals("QUIT")) {
                 input.close();
@@ -78,8 +88,8 @@ public class Client {
         dcLogger.log("Sent message: " + msg);
     }
 
-    private static void deliverMessage(BlockingQueue<Message> messageQueue) {
-        while (true) {
+    private void deliverMessage(BlockingQueue<Message> messageQueue) {
+        while (running) {
             Message message;
             try {
                 message = messageQueue.take();

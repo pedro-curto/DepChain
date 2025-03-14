@@ -15,6 +15,7 @@ public class SpamByzantine extends Member {
 
     public SpamByzantine(String memberName, List<Entity> members, List<Entity> clients, int port, String address, boolean debug) {
         super(memberName, members, clients, port, address, debug);
+        System.out.println("SpamByzantine started at port " + port);
     }
 
     @Override

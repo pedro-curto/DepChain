@@ -16,6 +16,7 @@ public class WrongWriteAcceptByzantine extends Member {
 
     public WrongWriteAcceptByzantine(String memberName, List<Entity> members, List<Entity> clients, int port, String address, boolean debug) {
         super(memberName, members, clients, port, address, debug);
+        System.out.println("WrongWriteAcceptByzantine started at port " + port);
     }
 
     // Byzantines send the same WriteMessage

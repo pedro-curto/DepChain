@@ -33,6 +33,8 @@ public class Member {
 	private final boolean debug;
 	protected BlockingQueue<Message> messageQueue;
 	protected BlockingQueue<AppendMessage> appendQueue;
+	private volatile boolean running = true;
+	private boolean caughtInvalidSignature = false;
 
 	public Member(String memberName, List<Entity> members, List<Entity> clients, int port, String address, boolean debug) {
 		this.myName = memberName;
@@ -40,7 +42,7 @@ public class Member {
 		this.clients = clients;
 		this.port = port;
 		this.address = address;
-		this.debug = debug;
+		this.debug = false;
 		this.baseDir = System.getProperty("user.dir");
 		this.dcLogger = new DCLogger(Member.class, debug, baseDir + "/logs/test/member-" + memberName + ".log");
 		this.faultyProcesses = Math.floorDiv(members.size() - 1, 3);
@@ -96,7 +98,7 @@ public class Member {
 	 * Handle messages delivered by the perfect link
 	 */
 	public void receiveMessages() {
-		while (true) {
+		while (running) {
 			try {
 				Message message = messageQueue.take();
 				switch (message.getType()) {
@@ -183,7 +185,7 @@ public class Member {
 	 * Waits for new append requests and starts consensus to add them in the blockchain
 	 */
 	public void doConsensus(){
-		while (true) {
+		while (running) {
 			if (leader.getPort() != this.port) {
 				// if not the leader, this thread will only be responsible for
 				// deciding values to write as it receives COLLECT messages
@@ -229,6 +231,10 @@ public class Member {
 		broadCastMessage(readMessage);
 		dcLogger.log("Waiting for state quorum of size: " + byzantineQuorum + "...");
 		List<StateMessage> states = leaderState.waitForStateQuorum();
+		if (leaderState.getCaughtInvalidSignature()) {
+			dcLogger.log("Caught invalid signature in state quorum");
+			this.caughtInvalidSignature = true;
+		}
 		dcLogger.log("Quorum of STATE reached");
 
 		// Send the collection of states to all the members
@@ -321,7 +327,13 @@ public class Member {
 		for (StateMessage thisState : collectedStates) {
 			if (!verifyMemberStateAuthenticity(thisState)) {
 				dcLogger.error("Signature is invalid for " + thisState.getState().getMemberName());
+				//ConsensusLeaderState leaderState = (ConsensusLeaderState) consensusState;
+				//leaderState.setCaughtInvalidSignature(true);
+				// TODO -> hardcoded for the test (fix)
+				this.caughtInvalidSignature = true;
 				continue;
+			} else {
+				dcLogger.log("Signature is valid for " + thisState.getState().getMemberName());
 			}
 			if (thisState.getConsensusInstance() != this.consensusState.getInstance()) {
 				dcLogger.error("State message of different instance among COLLECTED");
@@ -455,5 +467,22 @@ public class Member {
 
 	public BlockchainState getBlockchainState() {
 		return blockchainState;
+	}
+
+	public void stop() {
+		perfectLink.stop();
+		running = false;
+	}
+
+	public ConsensusLeaderState getConsensusLeaderState() {
+		if (!isLeader()) {
+			dcLogger.error("Not the leader");
+			return null;
+		}
+		return (ConsensusLeaderState) consensusState;
+	}
+
+	public boolean caughtInvalidSignature() {
+		return this.caughtInvalidSignature;
 	}
 }

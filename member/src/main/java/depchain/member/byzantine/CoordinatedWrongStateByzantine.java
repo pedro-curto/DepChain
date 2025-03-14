@@ -20,6 +20,7 @@ public class CoordinatedWrongStateByzantine extends Member {
 
     public CoordinatedWrongStateByzantine(String memberName, List<Entity> members, List<Entity> clients, int port, String address, boolean debug) {
         super(memberName, members, clients, port, address, debug);
+        System.out.println("CoordinatedWrongStateByzantine started at port " + port);
     }
 
     private ValueTimestampPair getPreviousClientValueTimestampPair() {
@@ -39,10 +40,15 @@ public class CoordinatedWrongStateByzantine extends Member {
         }
         dcLogger.log("Received: " + readMessage);
 
+        // Retrieves last value used, so it's signed by the client
         ValueTimestampPair fakeCurrent = getPreviousClientValueTimestampPair();
-        fakeCurrent.setTimestamp(1000);
+        fakeCurrent.setTimestamp(consensusState.getEpoch());
+
+        // Create new fake valts pair for writeset
+        ValueTimestampPair fakeOld = new ValueTimestampPair(fakeCurrent.getTimestamp() - 1, fakeCurrent.getValue());
+        fakeOld.setClientSignature(fakeCurrent.getClientSignature());
         ArrayList<ValueTimestampPair> fakeWriteset = new ArrayList<>();
-        fakeWriteset.add(fakeCurrent);
+        fakeWriteset.add(fakeOld);
 
         ConsensusState myState = new ConsensusState(myName, fakeCurrent, fakeWriteset);
         String dataToSign = fakeCurrent.toString() + fakeWriteset;
@@ -85,4 +91,5 @@ public class CoordinatedWrongStateByzantine extends Member {
         // because it's echoing messages when receives from other members
         sendToMe(message);
     }
+
 }
