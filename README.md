@@ -1,5 +1,16 @@
 # DepChain
 
+### Configuration
+
+**First of all, you need to generate the configuration files** (with the membership). To do that, run the following command:
+```bash
+cd scripts
+./createMembership.sh
+```
+
+Without this, `mvn clean install` will fail because it runs tests that require the configuration files.
+However, `mvn clean install -DskipTests` will work.
+
 ## Building the Project
 From the root directory of the project, run the following command:
 ```bash

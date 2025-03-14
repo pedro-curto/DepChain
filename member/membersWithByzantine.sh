@@ -3,6 +3,14 @@
 # we must provide exactly one argument
 if [ "$#" -ne 1 ]; then
   echo "Usage: $0 <byzantine_flag (0,1,2,3,4,5,6)>"
+  echo "0: No Byzantine behavior"
+  echo "1: No Answer"
+  echo "2: Wrong State"
+  echo "3: Fake Signature"
+  echo "4: Replay Signature (don't use!)"
+  echo "5: Byzantine behavior 5"
+  echo "6: Byzantine behavior 6"
+  echo "7: Byzantine behavior 7"
   exit 1
 fi
 
