@@ -142,6 +142,55 @@ public class ByzantineBehaviourTest {
                 "Leader should have caught invalid signature");
     }
 
+    @Test
+    void testConsensusWithWrongState() throws Exception {
+        ExecutorService ex = Executors.newCachedThreadPool();
+        this.executor = ex;
+        //TestUtils testUtils = new TestUtils(ex);
+        // start client
+        Client client = startClient("paulo", CLIENT_PORT, memberInfo);
+        this.client = client;
+
+        // starts members and byzantine process
+        Member leader = startMember("pedroribeiro", BASE_MEMBER_PORT, memberInfo, clientInfo);
+        Member honest1 = startMember("pedrocurto", BASE_MEMBER_PORT + 1, memberInfo, clientInfo);
+        Member honest2 = startMember("rodrigogreedy", BASE_MEMBER_PORT + 2, memberInfo, clientInfo);
+        Member byzantine = startByzantineMember("dybizantino", BASE_MEMBER_PORT + 3, memberInfo, clientInfo, "wrong-state");
+        this.members = new ArrayList<>(Arrays.asList(leader, honest1, honest2, byzantine));
+        // wait a bit for the system to boot, sessions established, etc
+        Thread.sleep(2000);
+        // client sends append request
+        client.sendAppend("test-value");
+
+        // check consensus is reached among honest nodes
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
+            Assertions.assertTrue(leader.getBlockchainState().contains("test-value"),
+                    "Leader should have the value");
+            Assertions.assertTrue(honest1.getBlockchainState().contains("test-value"),
+                    "Honest1 should have the value");
+            Assertions.assertTrue(honest2.getBlockchainState().contains("test-value"),
+                    "Honest2 should have the value");
+        });
+
+        // client sends append request with a new test value
+        client.sendAppend("test-value2");
+
+        // byzantine process CoordinatedWrongStateByzantine will send a fake state message based on the previous
+        // value ("test-value" in this case) and a bigger timestamp, and start echoing writes and accepts.
+        // we want to check if consensus still works in this scenario
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
+            Assertions.assertTrue(leader.getBlockchainState().contains("test-value2"),
+                    "Leader should have the value");
+            Assertions.assertTrue(honest1.getBlockchainState().contains("test-value2"),
+                    "Honest1 should have the value");
+            Assertions.assertTrue(honest2.getBlockchainState().contains("test-value2"),
+                    "Honest2 should have the value");
+        });
+
+    }
+
+
+    // auxiliar methods
     public Member startMember(String name, int port,
                               List<Entity> members, List<Entity> clients) throws Exception {
         Member member = new Member(name, members, clients, port, "localhost", true);

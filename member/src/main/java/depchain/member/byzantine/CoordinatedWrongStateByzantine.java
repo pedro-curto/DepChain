@@ -17,19 +17,13 @@ public class CoordinatedWrongStateByzantine extends Member {
     // in case 2 correct members have different values, could lead to a wrong quorum
 
     private boolean firstEpoch = true;
+    private ValueTimestampPair valts;
 
     public CoordinatedWrongStateByzantine(String memberName, List<Entity> members, List<Entity> clients, int port, String address, boolean debug) {
         super(memberName, members, clients, port, address, debug);
         System.out.println("CoordinatedWrongStateByzantine started at port " + port);
     }
 
-    private ValueTimestampPair getPreviousClientValueTimestampPair() {
-        for (ValueTimestampPair valts : consensusState.getWriteset()) {
-            return valts;
-        }
-        dcLogger.error("COULDN'T FIND CLIENT VALUETIMESTAMP");
-        return null;
-    }
 
     @Override
     public void handleRead(ReadMessage readMessage) {
@@ -40,10 +34,15 @@ public class CoordinatedWrongStateByzantine extends Member {
         }
         dcLogger.log("Received: " + readMessage);
 
-        // Retrieves last value used, so it's signed by the client
-        ValueTimestampPair fakeCurrent = getPreviousClientValueTimestampPair();
-        fakeCurrent.setTimestamp(consensusState.getEpoch());
+        if(valts == null) {
+            dcLogger.error("VALTS CANNOT BE NULL");
+        }
 
+        // Retrieves last value used, so it's signed by the client
+        ValueTimestampPair fakeCurrent = new ValueTimestampPair(consensusState.getEpoch() + 1, valts.getValue());
+        fakeCurrent.setClientSignature(valts.getClientSignature());
+
+        // <"ola", 1> [<"ola", 0>]
         // Create new fake valts pair for writeset
         ValueTimestampPair fakeOld = new ValueTimestampPair(fakeCurrent.getTimestamp() - 1, fakeCurrent.getValue());
         fakeOld.setClientSignature(fakeCurrent.getClientSignature());
@@ -61,6 +60,16 @@ public class CoordinatedWrongStateByzantine extends Member {
     }
 
     @Override
+    public void handleCollected(CollectedMessage collectedMessage) {
+        dcLogger.log("Received: " + collectedMessage);
+        if (collectedMessage.getPort() != leader.getPort()) {
+            return;
+        }
+        valts = collectedMessage.getStates().getFirst().getState().getCurrent();
+        consensusState.addCollectedMessage(collectedMessage);
+    }
+
+    @Override
     public void handleWrite(WriteMessage writeMessage) {
         dcLogger.log("Received: " + writeMessage);
 
@@ -70,6 +79,7 @@ public class CoordinatedWrongStateByzantine extends Member {
         dcLogger.log("Sending fake echo WRITE message to " + writeMessage.getPort() + "... ");
 
         consensusState.addWriteMessage(writeMessage);
+
     }
 
     @Override

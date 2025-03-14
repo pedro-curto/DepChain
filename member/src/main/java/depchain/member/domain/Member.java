@@ -219,7 +219,7 @@ public class Member {
 		// if I am the leader and this is the first epoch I should propose the value
 		// of the message
 		ConsensusLeaderState leaderState = (ConsensusLeaderState) consensusState;
-		if (consensusState.getEpoch() == 0) {
+		if (consensusState.getCurrent().getValue().isEmpty()) {
 			ValueTimestampPair newValue = new ValueTimestampPair(0, appendMessage.getValue());
 			newValue.setClientSignature(appendMessage.getSignature());
 			leaderState.setCurrent(newValue);
