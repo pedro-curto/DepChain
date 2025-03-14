@@ -21,6 +21,7 @@ public class ReplaySignatureByzantine extends Member {
 
     public ReplaySignatureByzantine(String memberName, List<Entity> members, List<Entity> clients, int port, String address, boolean debug) {
         super(memberName, members, clients, port, address, debug);
+        System.out.println("ReplaySignatureByzantine started at port " + port);
     }
 
     @Override
@@ -35,6 +36,7 @@ public class ReplaySignatureByzantine extends Member {
         this.membersStateMessages = new ArrayList<>(collectedMessage.getStates());
     }
 
+    @Override
     public void handleRead(ReadMessage readMessage) {
         if (this.membersStateMessages.isEmpty()) {
             // No states received yet: behave normally
@@ -43,7 +45,8 @@ public class ReplaySignatureByzantine extends Member {
             dcLogger.log("Received: " + readMessage);
             // Use random state message received in previous epoch
             StateMessage stateMessage = this.membersStateMessages.get(random.nextInt(this.membersStateMessages.size()));
-            dcLogger.log("Sending fake state message pretending to be " + stateMessage.getState().getMemberName());
+            stateMessage.setConsensusInstance(readMessage.getConsensusInstance());
+            dcLogger.log("Sending fake state message pretending to be " + stateMessage.getState().getMemberName() + " -> " + stateMessage);
             sendToLeader(stateMessage);
         }
     }

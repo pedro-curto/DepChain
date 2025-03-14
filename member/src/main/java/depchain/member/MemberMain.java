@@ -15,7 +15,7 @@ public class MemberMain {
         if (args.length < 3 || args.length > 4) {
             System.out.println("Usage: mvn compile exec:java -Dexec.args=\"<port> <address> <memberName> [byzantineBehaviour]\"");
             System.out.println("byzantineBehaviour: 0 - no Byzantine behaviour, 1 - ignore messages, 2 - coordinated wrong state, " +
-                    "3 - fake signature, 4 - replay signature, 5 - spam messages, 6 - wrong write accept");
+                    "3 - fake signature, 4 - replay signature, 5 - spam messages, 6 - wrong write accept, 7 - perfect link is now byzantine");
             System.exit(1);
         }
         int port = Integer.parseInt(args[0]);
@@ -59,6 +59,10 @@ public class MemberMain {
                 break;
             case 6:
                 myself = new WrongWriteAcceptByzantine(memberName, membershipInfo, clients, port, address, debug);
+                myself.start();
+                break;
+            case 7:
+                myself = new MemberPerfectLinkByzantine(memberName, membershipInfo, clients, port, address, debug);
                 myself.start();
                 break;
             default:

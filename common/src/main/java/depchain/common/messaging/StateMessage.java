@@ -6,7 +6,7 @@ public class StateMessage extends Message {
 
 	private ConsensusState state;
 	private String signature;
-	private final int consensusInstance;
+	private int consensusInstance;
 
 	public StateMessage(ConsensusState state, String signature, int consensusInstance, int port) {
 		super(MessageType.STATE, port);
@@ -21,6 +21,10 @@ public class StateMessage extends Message {
 
 	public String getSignature() {
 		return signature;
+	}
+
+	public void setConsensusInstance(int consensusInstance) {
+		this.consensusInstance = consensusInstance;
 	}
 
 	public int getConsensusInstance() {

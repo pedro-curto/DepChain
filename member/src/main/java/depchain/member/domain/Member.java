@@ -86,7 +86,7 @@ public class Member {
 			dcLogger.error("Keys not loaded successfully.");
 		}
 		// perfect link starts listening for messages
-		this.perfectLink = new PerfectLink(serverSocket, messageQueue, myKeyPair, entities, false);
+		createPerfectLink(serverSocket, myKeyPair, entities, false);
 		perfectLink.start();
 		// begins encrypted sessions with all member processes running on higher ports
 		// others should do the same for this process
@@ -142,7 +142,9 @@ public class Member {
 
 	public void handleRead(ReadMessage readMessage) {
 		dcLogger.log("Received: " + readMessage);
-		String dataToSign = consensusState.getCurrent().toString() + consensusState.getWriteset();
+		// sign: current||writeset||instance||epoch
+		String dataToSign = consensusState.getCurrent().toString() + consensusState.getWriteset() + consensusState.getInstance() + consensusState.getEpoch();
+		dcLogger.log("Signing data: " + dataToSign);
 		String mySignature = Security.makeDS(dataToSign, Security.getMyPrivateKey(myName));
 		// don't send own instance of consensus state to message, send a copy or else stack overflow error
 		ConsensusState myState = new ConsensusState(myName, consensusState.getCurrent(), consensusState.getWriteset());
@@ -384,7 +386,8 @@ public class Member {
 		ConsensusState consensusSt = stateMessage.getState();
 		String memberName = consensusSt.getMemberName();
 		PublicKey memberPubKey = Security.getMemberPublicKey(memberName);
-		String reconstructSignatureData = consensusSt.getCurrent().toString() + consensusSt.getWriteset().toString();
+		String reconstructSignatureData = consensusSt.getCurrent().toString() + consensusSt.getWriteset().toString() + consensusSt.getInstance() + consensusSt.getEpoch();
+		//dcLogger.log("Reconstructing: " + reconstructSignatureData);
 		return Security.verifyDS(stateMessage.getSignature(), reconstructSignatureData, memberPubKey);
 	}
 
@@ -484,5 +487,13 @@ public class Member {
 
 	public boolean caughtInvalidSignature() {
 		return this.caughtInvalidSignature;
+	}
+
+	public void createPerfectLink(DatagramSocket serverSocket, KeyPair myKeyPair, List<Entity> entities, boolean debug) {
+		this.perfectLink = new PerfectLink(serverSocket, messageQueue, myKeyPair, entities, debug);
+	}
+
+	public String getName() {
+		return myName;
 	}
 }

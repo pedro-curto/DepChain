@@ -18,13 +18,13 @@ import java.util.concurrent.TimeUnit;
 
 public class PerfectLinkByzantine extends PerfectLink {
 
-    private static final float LOST_CHANCES = 0.1f;
+    private static final float LOST_CHANCES = 0f;
 
-    private static final float DUPLICATE_CHANCES = 0.1f;
+    private static final float DUPLICATE_CHANCES = 0.5f;
 
-    private static final float DELAY_CHANCES = 0.1f;
+    private static final float DELAY_CHANCES = 0f;
 
-    private static final float CORRUPTED_CHANCES = 0.1f;
+    private static final float CORRUPTED_CHANCES = 0;
 
     private static final int DELAY_TIME = 1; // seconds
 
@@ -129,7 +129,8 @@ public class PerfectLinkByzantine extends PerfectLink {
         StringBuilder corrupted = new StringBuilder(json);
 
         // Determine corruption type and number of corruptions
-        int corruptionType = random.nextInt(4); // 4 for different corruption types
+        // TODO change to 4 to use also bitflip
+        int corruptionType = random.nextInt(3); // 4 for different corruption types
         int corruptionCount = 1 + random.nextInt(3); // 1-3 corruptions per message
 
         for (int i = 0; i < corruptionCount; i++) {

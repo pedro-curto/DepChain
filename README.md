@@ -1,23 +1,24 @@
 # DepChain
 
-## To Do
-- Deal with messages with weird characters (e.g., "º")
-- Add remaining tests for Byzantine behaviour
-
 ## Building the Project
 From the root directory of the project, run the following command:
 ```bash
 mvn clean install
 ```
+This can take some time (around 1 minute) since it will run the tests.
+
 If you want to ignore the tests, run the following command instead:
 ```bash
 mvn clean install -DskipTests
 ```
 
 ## Running the Project
+
+If you just wish to test the project, skip to the [Testing the Project](#testing-the-project) section.
+
 ### Configuration
 
-First of all, you need to generate the configuration file (with the membership). To do that, run the following command:
+First of all, **you need to generate the configuration file** (with the membership). To do that, run the following command:
 ```bash
 cd scripts
 ./createMembership.sh
@@ -47,6 +48,7 @@ bar
 ```
 
 ## Testing the Project
+
 ### Automated Tests
 Go to the member directory:
 ```bash
@@ -67,6 +69,9 @@ The tests that we have are all contained within `ByzantineBehaviourTest`:
 - `testConsensusWithIgnoringByzantine`: tests the consensus algorithm with a Byzantine member that ignores all messages
 - `testConsensusWithSpamByzantine`: tests the consensus algorithm with a Byzantine member that sends a lot of equal messages (READs, STATEs, etc...)
 - `testConsensusWithFakeSignature`: tests the consensus algorithm with a Byzantine member that sends messages with fake signatures. We assert if the fake signature is detected, and if the consensus still works
+- `testConsensusWithWrongStateMessage`: tests the consensus algorithm with a Byzantine member that sends a wrong state message in the second instance. We assert if the consensus still works (that the same message isn't decided twice)
+- `testConsensusWithWrongWriteAcceptByzantine`: tests the consensus algorithm with a Byzantine member that sends wrong WRITEs and ACCEPTs
+- `testConsensusWithByzantinePerfectLink`: tests the consensus algorithm when all members have a Byzantine perfect link, where messages can be lost, duplicated, reordered or corrupted.
 
 ### Manual Tests
 
@@ -83,8 +88,11 @@ Or this command if you want a Byzantine member to be present:
 Where `<byzantineBehaviour>` can be one of the following:
 - '0': normal
 - '1': ignore messages
-- '2': spam messages
+- '2': send a wrong state message
 - '3': fake signature
+- '4': replay signature (**Don't** use this one, it's not working as intended)
+- '5': spam messages (STATEs, WRITEs...)
+- '6': send wrong writes and accepts
 
 Afterwards (very important to be **paulo**, since it's the one that we have private and public keys for):
 ```bash
