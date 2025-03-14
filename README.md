@@ -1,6 +1,6 @@
 # DepChain
 
-### Configuration
+## Configuration
 
 **First of all, you need to generate the configuration files** (with the membership). To do that, run the following command:
 ```bash
@@ -17,6 +17,7 @@ From the root directory of the project, run the following command:
 mvn clean install
 ```
 This can take some time (around 1 minute) since it will run the tests.
+We only observed this once, but in the eventuality of a test failing within `mvn clean install`, run the command below to ignore the tests.
 
 If you want to ignore the tests, run the following command instead:
 ```bash
@@ -93,7 +94,7 @@ To manually run tests and test the program, use this command to launch all membe
 
 Or this command if you want a Byzantine member to be present:
 ```bash
-./membersWithByzatine.sh <byzantineBehaviour
+./membersWithByzatine.sh <byzantineBehaviour>
 ```
 
 Where `<byzantineBehaviour>` can be one of the following:

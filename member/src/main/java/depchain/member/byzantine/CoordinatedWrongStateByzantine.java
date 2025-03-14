@@ -65,7 +65,7 @@ public class CoordinatedWrongStateByzantine extends Member {
         if (collectedMessage.getPort() != leader.getPort()) {
             return;
         }
-        valts = collectedMessage.getStates().getFirst().getState().getCurrent();
+        valts = collectedMessage.getStates().get(0).getState().getCurrent();
         consensusState.addCollectedMessage(collectedMessage);
     }
 
