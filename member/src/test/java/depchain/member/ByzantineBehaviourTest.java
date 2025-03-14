@@ -190,6 +190,37 @@ public class ByzantineBehaviourTest {
     }
 
 
+    @Test
+    void testConsensusWithWrongWriteAcceptByzantine() throws Exception {
+        ExecutorService ex = Executors.newCachedThreadPool();
+        this.executor = ex;
+        // start client
+        Client client = startClient("paulo", CLIENT_PORT, memberInfo);
+        this.client = client;
+
+        // starts members and byzantine process
+        Member leader = startMember("pedroribeiro", BASE_MEMBER_PORT, memberInfo, clientInfo);
+        Member honest1 = startMember("pedrocurto", BASE_MEMBER_PORT + 1, memberInfo, clientInfo);
+        Member honest2 = startMember("rodrigogreedy", BASE_MEMBER_PORT + 2, memberInfo, clientInfo);
+        Member byzantine = startByzantineMember("dybizantino", BASE_MEMBER_PORT + 3, memberInfo, clientInfo, "wrong-write-accept");
+        this.members = new ArrayList<>(Arrays.asList(leader, honest1, honest2, byzantine));
+        // wait a bit for the system to boot, sessions established, etc
+        Thread.sleep(2000);
+        // client sends append request
+        client.sendAppend("test-value");
+
+        // check consensus is reached among honest nodes
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
+            Assertions.assertTrue(leader.getBlockchainState().contains("test-value"),
+                    "Leader should have the value");
+            Assertions.assertTrue(honest1.getBlockchainState().contains("test-value"),
+                    "Honest1 should have the value");
+            Assertions.assertTrue(honest2.getBlockchainState().contains("test-value"),
+                    "Honest2 should have the value");
+        });
+
+    }
+
     // auxiliar methods
     public Member startMember(String name, int port,
                               List<Entity> members, List<Entity> clients) throws Exception {
