@@ -1,0 +1,36 @@
+package depchain.common.domain;
+
+public class ValueTimestampPair {
+
+	private int timestamp;
+
+	private String value;
+	private String clientSignature;
+
+	public ValueTimestampPair(int timestamp, String value) {
+		this.value = value;
+		this.timestamp = timestamp;
+	}
+
+	public int getTimestamp() {
+		return timestamp;
+	}
+	public void setTimestamp(int timestamp) {
+		this.timestamp = timestamp;
+	}
+
+	public String getValue() {
+		return value;
+	}
+
+	@Override
+	public String toString() {
+		return "<" + timestamp + "," + value + ">";
+	}
+
+	public void setClientSignature(String signature) {
+		this.clientSignature = signature;
+	}
+
+	public String getClientSignature() { return clientSignature; }
+}

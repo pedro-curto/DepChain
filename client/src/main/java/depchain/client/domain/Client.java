@@ -4,6 +4,7 @@ import depchain.common.DCLogger;
 import depchain.common.PerfectLink;
 import depchain.common.domain.Entity;
 import depchain.common.messaging.AppendMessage;
+import depchain.common.messaging.ClientReplyMessage;
 import depchain.common.messaging.Message;
 import depchain.common.Security;
 
@@ -16,62 +17,105 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 public class Client {
+    private String baseDir = System.getProperty("user.dir");
+    private String clientName;
     private final int port;
-    private final String myName;
-    private final int leaderPort;
+	private final int leaderPort;
     private final List<Entity> members;
+    private KeyPair clientKeys;
     private PerfectLink perfectLink;
     private BlockingQueue<Message> messageQueue;
-    private DCLogger dcLogger;
+    private final DCLogger dcLogger;
+    private final boolean debug;
+    private volatile boolean running = true;
+    private final boolean testEnvironment;
 
-    public Client(String clientName, int port, List<Entity> members) {
-        this.myName = clientName;
-        this.port = port;
+    public Client(String clientName, int port, List<Entity> members, boolean debug, boolean testEnvironment) {
+        this.clientName = clientName;
+        this.debug = false;
+		this.port = port;
         this.members = members;
         this.leaderPort = members.get(0).getPort();
-        this.dcLogger = new DCLogger(Client.class);
+        this.dcLogger = new DCLogger(Client.class, debug, baseDir+"/logs/client.log");
+        this.testEnvironment = testEnvironment;
     }
 
     public void start() throws Exception {
+        this.clientKeys = Security.getMemberKeyPair(baseDir, clientName);
+        if (clientKeys == null) {
+            dcLogger.log("Keys not loaded successfully.");
+        }
         // init socket, messageQueue and the perfectLink abstraction
         DatagramSocket socket = new DatagramSocket(port);;
         messageQueue = new LinkedBlockingQueue<>();
         // start sessions
         List<Entity> entities = new ArrayList<>(members);
-        KeyPair myKeyPair = Security.getMemberKeyPair(myName);
-        this.perfectLink = new PerfectLink(socket, messageQueue, myKeyPair, entities);
+        this.perfectLink = new PerfectLink(socket, messageQueue, this.clientKeys, entities, this.debug);
         perfectLink.start();
         perfectLink.startSession(this.leaderPort);
         // start a thread to deliver incoming messages
         Thread messageDeliveringThread = new Thread(() -> deliverMessage(messageQueue));
         messageDeliveringThread.start();
         // start processing user input
-        processUserInput();
+        if (!testEnvironment) {
+            processUserInput();
+        }
+    }
+
+    public void stop() {
+        perfectLink.stop();
+        running = false;
     }
 
     private void processUserInput() throws Exception {
         Scanner input = new Scanner(System.in);
-        while (true) {
+        System.out.print("> ");
+        while (running) {
             String content = input.nextLine();
             if (content.equals("QUIT")) {
                 input.close();
                 System.exit(0);
             }
-            AppendMessage msg = new AppendMessage(content);
-            perfectLink.sendMessage(msg, leaderPort);
-            dcLogger.log("Sent message: " + msg);
+            sendAppend(content);
         }
     }
 
-    private static void deliverMessage(BlockingQueue<Message> messageQueue) {
-        while (true) {
+    public void sendAppend(String content) {
+        AppendMessage msg = new AppendMessage(content, this.port);
+        String signature = Security.makeDS(msg.getDataToSign(), clientKeys.getPrivate());
+        msg.setSignature(signature);
+        perfectLink.sendMessage(msg, leaderPort);
+        dcLogger.log("Sent message: " + msg);
+    }
+
+    private void deliverMessage(BlockingQueue<Message> messageQueue) {
+        while (running) {
             Message message;
             try {
                 message = messageQueue.take();
             } catch (InterruptedException e) {
                 continue;
             }
-            System.out.println("[SERVER GOT]: " + message);
+            if (message instanceof ClientReplyMessage) {
+                ClientReplyMessage appendMessage = (ClientReplyMessage) message;
+                boolean success = appendMessage.getSuccess();
+                String outcome;
+                int consensusInstance = appendMessage.getInstanceOfDecision();
+                if (success) {
+                    outcome = "successfully appended";
+                } else {
+                    outcome = "not appended";
+                }
+                System.out.println("String " + appendMessage.getValue() +
+                        " was " + outcome + " to the blockchain at timestamp " + consensusInstance);
+                System.out.print("> ");
+            } else {
+                System.out.println("[SERVER GOT]: " + message);
+            }
         }
+    }
+
+    public PerfectLink getPerfectLink() {
+        return perfectLink;
     }
 }

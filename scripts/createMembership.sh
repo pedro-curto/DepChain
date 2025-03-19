@@ -92,8 +92,9 @@ if [ $? -ne 0 ]; then
 fi
 echo "Generated public key for ${user}"
 
-# copy pubkey to members dir
+# copy client keys to members dir
 cp "$CLIENTS_DIR/$user/${user}.pubkey" "$MEMBERS_DIR/$user/${user}.pubkey"
+cp "$CLIENTS_DIR/$user/${user}.privkey" "$MEMBERS_DIR/$user/${user}.privkey"
 
 # create a client.txt at the membership directory similar to the membership
 echo "${user},${ADDRESS},${CLIENT_PORT},$MEMBERS_DIR/${user}/${user}.pubkey" >> "$CLIENT_FILE"

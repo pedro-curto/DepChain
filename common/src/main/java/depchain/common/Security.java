@@ -18,40 +18,55 @@ public final class Security {
 	private static final String ASYM_ALGO = "RSA";
 
 	/** Calculates digital signature from text. */
-	public static String makeDS(String data, PrivateKey privateKey) throws Exception {
+	public static String makeDS(String data, PrivateKey privateKey) {
 		// get a signature object and sign the plain text with the private key
-		Signature sig = Signature.getInstance(SIGNATURE_ALGO);
-		sig.initSign(privateKey);
-		sig.update(data.getBytes());
-		byte[] signature = sig.sign();
-		return Base64.getEncoder().encodeToString(signature);
-	}
-
-	public static boolean verifyDS(String receivedSignature, String data, PublicKey publicKey) throws Exception {
-		// verify the signature with the public key
-		Signature sig = Signature.getInstance(SIGNATURE_ALGO);
-		sig.initVerify(publicKey);
-		sig.update(data.getBytes());
-		byte[] signatureBytes = Base64.getDecoder().decode(receivedSignature);
 		try {
-			return sig.verify(signatureBytes);
-		} catch (SignatureException se) {
-			System.err.println("Caught exception while verifying " + se);
-			return false;
+			Signature sig = Signature.getInstance(SIGNATURE_ALGO);
+			sig.initSign(privateKey);
+			sig.update(data.getBytes());
+			byte[] signature = sig.sign();
+			return Base64.getEncoder().encodeToString(signature);
+		} catch (NoSuchAlgorithmException e) {
+			System.err.println("No Such Algorithm exception: " + e);
+		} catch (InvalidKeyException e) {
+			System.err.println("InvalidKeyException: " + e);
+		} catch (SignatureException e) {
+			System.err.println("SignatureException: " + e);
 		}
+		return null;
 	}
 
-	public static KeyPair getMemberKeyPair(String member) {
-		// reads both PEM keys
-		String publicKeyPath = "membership/" + member + "/" + member + ".pubkey";
-		String privateKeyPath = "membership/" + member + "/" + member + ".privkey";
+	public static boolean verifyDS(String receivedSignature, String data, PublicKey publicKey) {
+		// verify the signature with the public key
+		Signature sig = null;
+		byte[] signatureBytes = null;
+		try {
+			sig = Signature.getInstance(SIGNATURE_ALGO);
+			sig.initVerify(publicKey);
+			sig.update(data.getBytes());
+			signatureBytes = Base64.getDecoder().decode(receivedSignature);
+			return sig.verify(signatureBytes);
+		} catch (NoSuchAlgorithmException e) {
+			System.err.println("Caught exception while verifying " + e);
+		} catch (InvalidKeyException e) {
+			System.err.println("Caught exception while verifying " + e);
+		} catch (SignatureException e) {
+			System.err.println("Caught exception while verifying " + e);
+		}
+		return false;
+	}
 
+	public static KeyPair getMemberKeyPair(String baseDir, String member) {
+		// reads both PEM keys
+		String publicKeyPath = baseDir + "/membership/" + member + "/" + member + ".pubkey";
+		String privateKeyPath = baseDir + "/membership/" + member + "/" + member + ".privkey";
+		//System.out.println("(getMemberKeyPair) Trying to load keys from " + publicKeyPath + " and " + privateKeyPath);
 		try {
 			PublicKey pub = readPublicKey(publicKeyPath);
 			PrivateKey priv = readPrivateKey(privateKeyPath);
 			return new KeyPair(pub, priv);
 		} catch(Exception e) {
-			System.err.println("Error reading key pair at " + "membership/" + member + "/" + member + ".pubkey");
+			System.err.println("Error reading key pair : " + e);
 		}
 		return null;
 	}
@@ -133,4 +148,13 @@ public final class Security {
 		return false;
 	}
 
+	public static PrivateKey getMyPrivateKey(String myName) {
+		String keyPath = "membership/" + myName + "/" + myName + ".privkey";
+		try {
+			return readPrivateKey(keyPath);
+		} catch (Exception e) {
+			System.err.println("Error reading private key at " + keyPath);
+		}
+		return null;
+	}
 }

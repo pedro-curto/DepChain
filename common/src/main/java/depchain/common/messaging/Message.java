@@ -5,10 +5,13 @@ public class Message {
 	private long sequenceNumber;
 	private final MessageType type;
 	private String hmac = null;
+	private int port = -1; // used as id since all processes are running in localhost
+	//TODO -> use (address + port) or an id to identify processes as it is more correct
 
 	public enum MessageType {
 		APPEND,
 		ACK,
+		CLIENT_REPLY,
 		KEY_EXCHANGE,
 		READ,
 		WRITE,
@@ -20,6 +23,11 @@ public class Message {
 	public Message(long sequenceNumber, MessageType messageType) {
 		this.sequenceNumber = sequenceNumber;
 		this.type = messageType;
+	}
+
+	public Message(MessageType messageType, int port) {
+		this.type = messageType;
+		this.port = port;
 	}
 
 	public Message(MessageType type) {
@@ -41,12 +49,19 @@ public class Message {
 		return type;
 	}
 
+	public void setPort(int port) {
+		this.port = port;
+	}
+	public int getPort() {
+		return port;
+	}
+
 	public String getHmacData() {
 		return "" + sequenceNumber + type;
 	}
 
 	@Override
 	public String toString() {
-		return sequenceNumber + "||" + type;
+		return sequenceNumber + " || " + type;
 	}
 }

@@ -25,7 +25,7 @@ do
   echo "Starting server for member: $memberName on port: $port"
 
   # launch servers
-  mvn compile exec:java -Dexec.args="$port $address $memberName" > "logs/server_${port}_${memberName}.log" 2>&1 &
+  mvn compile exec:java -Dexec.args="$port $address $memberName 0" > "logs/server_${port}_${memberName}.log" 2>&1 &
   pids+=($!)
 done < "$MEMBERSHIP_FILE"
 

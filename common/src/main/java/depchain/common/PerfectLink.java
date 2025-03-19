@@ -1,21 +1,16 @@
 package depchain.common;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonSyntaxException;
 import depchain.common.domain.Entity;
-import depchain.common.messaging.AckMessage;
-import depchain.common.messaging.AppendMessage;
-import depchain.common.messaging.KeyExchangeMessage;
-import depchain.common.messaging.Message;
+import depchain.common.messaging.*;
 import depchain.common.messaging.Message.MessageType;
 import depchain.common.session.Session;
 import depchain.common.session.SessionTaskKey;
 
 import javax.crypto.SecretKey;
 import java.io.IOException;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
+import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.PublicKey;
@@ -27,29 +22,23 @@ import java.util.concurrent.*;
 
 public class PerfectLink {
 
-    private final DatagramSocket socket;
+    protected final DatagramSocket socket;
     private final BlockingQueue<Message> messageQueue;
     private final KeyPair personalKeys;
-    private final ScheduledThreadPoolExecutor scheduler = new ScheduledThreadPoolExecutor(8);
-    private final Map<SessionTaskKey, ScheduledFuture<?>> msgTasks = new ConcurrentHashMap<>();
+    protected final ScheduledThreadPoolExecutor scheduler = new ScheduledThreadPoolExecutor(8);
+    protected final Map<SessionTaskKey, ScheduledFuture<?>> msgTasks = new ConcurrentHashMap<>();
     private final Map<Long, Message> msgsToDeliver = new ConcurrentHashMap<>();
     private final Map<Integer, Session> sessions = new ConcurrentHashMap<>();
     private final Map<Integer, Entity> entities = new HashMap<>();
     private final Gson gson = new Gson();
-    private final DCLogger dcLogger;
+    protected final DCLogger dcLogger;
+    private volatile boolean running = true;
 
-    public PerfectLink(DatagramSocket socket, BlockingQueue<Message> messageQueue, KeyPair personalKeys) {
+    public PerfectLink(DatagramSocket socket, BlockingQueue<Message> messageQueue, KeyPair personalKeys, List<Entity> entities, boolean debug) {
         this.socket = socket;
         this.messageQueue = messageQueue;
-        this.dcLogger = new DCLogger(PerfectLink.class);
-        this.personalKeys = personalKeys;
-        this.scheduler.setRemoveOnCancelPolicy(true);
-    }
-
-    public PerfectLink(DatagramSocket socket, BlockingQueue<Message> messageQueue, KeyPair personalKeys, List<Entity> entities) {
-        this.socket = socket;
-        this.messageQueue = messageQueue;
-        this.dcLogger = new DCLogger(PerfectLink.class);
+        String baseDir = System.getProperty("user.dir");
+        this.dcLogger = new DCLogger(PerfectLink.class, debug, baseDir + "/logs/test/perfectlink.log");
         this.personalKeys = personalKeys;
         this.scheduler.setRemoveOnCancelPolicy(true);
         // creates a mapping {port: entity} for all entities
@@ -93,6 +82,9 @@ public class PerfectLink {
     }
 
     public void sendMessage(Message message, int port) {
+       dcLogger.log("Sessions: " + sessions);
+       dcLogger.log("Sending message: " + gson.toJson(message));
+       dcLogger.log("Port: " + port);
        Session session = sessions.get(port);
        long sequenceNumber = session.getSendCounter();
        dcLogger.log("Sending message with sequence number: " + sequenceNumber);
@@ -101,17 +93,17 @@ public class PerfectLink {
        if (message.getType() != MessageType.KEY_EXCHANGE) {
            String data = message.getHmacData();
            String hmac = Security.generateHMAC(data, session.getSecretKey());
-           dcLogger.log("Generated hmac: " + hmac);
+           // dcLogger.log("Generated hmac: " + hmac);
            message.setHmac(hmac);
        }
-       String json = gson.toJson(message);
+       String json = convertToJson(message);
        SessionTaskKey key = new SessionTaskKey(session.getPort(), sequenceNumber);
        try {
            DatagramPacket packet = new DatagramPacket(
-                    json.getBytes(StandardCharsets.UTF_8),
-                    json.length(),
-                    InetAddress.getByName(session.getAddress()),
-                    session.getPort());
+                   json.getBytes(StandardCharsets.UTF_8),
+                   json.length(),
+                   InetAddress.getByName(session.getAddress()),
+                   session.getPort());
            scheduleMessage(packet, key);
        } catch (UnknownHostException e) {
            throw new RuntimeException(e);
@@ -120,7 +112,7 @@ public class PerfectLink {
        session.incrementSendCounter();
     }
 
-    private void scheduleMessage(DatagramPacket packet, SessionTaskKey key) {
+    public void scheduleMessage(DatagramPacket packet, SessionTaskKey key) {
         ScheduledFuture<?> task = scheduler.scheduleAtFixedRate(() -> {
             try {
                 socket.send(packet);
@@ -129,25 +121,40 @@ public class PerfectLink {
             }
         }, 0, 2, TimeUnit.SECONDS);
         msgTasks.put(key, task);
-        dcLogger.log("Scheduled message with sequenceNumber: " + key);
+        // dcLogger.log("Scheduled message with sequenceNumber: " + key);
     }
 
     private void startListening() {
-        byte[] buffer = new byte[8096];
-        while (true) {
-            dcLogger.log("Waiting for message...");
+        byte[] buffer = new byte[65536];
+        while (running) {
             DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+            //if (socket.isClosed()) {
+            //    dcLogger.log("Socket is closed");
+            //    return;
+            //}
             try {
                 socket.receive(packet);
+            } catch (SocketException e) {
+                dcLogger.log("Socket closed");
+                return;
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
             dcLogger.log("Received message from " + packet.getAddress() + ":" + packet.getPort() + ". Message: " + new String(packet.getData(), 0, packet.getLength()));
             String received = new String(packet.getData(), 0, packet.getLength(), StandardCharsets.UTF_8);
-            Message message = messageFromJson(received);
+            Message message;
+            try {
+                message = messageFromJson(received);
+            } catch (JsonSyntaxException e) {
+                int clientPort = packet.getPort();
+                dcLogger.error("(" + clientPort + ") parsing " + received + " : " + e);
+                // reply with error
+                sendMessage(new ClientReplyMessage("", false, -1), clientPort);
+                continue;
+            }
             MessageType type = message.getType();
             long sequenceNumber = message.getSequenceNumber();
-            dcLogger.log("Received Message with type " + type + " and sequence number " + sequenceNumber);
+            // dcLogger.log("Received Message with type " + type + " and sequence number " + sequenceNumber);
 
             if (type == MessageType.KEY_EXCHANGE) {
                 KeyExchangeMessage keyExchangeMessage = gson.fromJson(received, KeyExchangeMessage.class);
@@ -163,6 +170,7 @@ public class PerfectLink {
             handleContentMessage(sequenceNumber, message, session);
         }
     }
+
 
     private void handleSessionRequest(String address, int port, KeyExchangeMessage message) {
         dcLogger.log("Received session request: " + message + " from " + address + ":" + port);
@@ -189,9 +197,9 @@ public class PerfectLink {
         dcLogger.log("Current sessions: " + sessions);
     }
 
-    private void handleAck(Message ackMessage, Session session) {
+    public void handleAck(Message ackMessage, Session session) {
         long sequenceNumber = ackMessage.getSequenceNumber();
-        dcLogger.log("Received ack for message with sequence number " + sequenceNumber);
+        // dcLogger.log("Received ack for message with sequence number " + sequenceNumber);
         if (!checkIntegrity(session, ackMessage)) { return; }
         if (sequenceNumber < session.getSendCounter()) {
             SessionTaskKey key = new SessionTaskKey(session.getPort(), sequenceNumber);
@@ -199,25 +207,21 @@ public class PerfectLink {
             if (task != null) {
                 task.cancel(true);
                 dcLogger.log("[PerfectLink-AckListener] ACK received, cancelled retransmission for message " + key);
-
-                Message message = msgsToDeliver.remove(sequenceNumber);
-                if (message != null && sequenceNumber != 0) {
-                    // sequenceNumber 0 is to establish the session, no need to deliver it
-                    deliverMessage(message);
-                }
+                msgsToDeliver.remove(sequenceNumber);
                 return;
             }
             dcLogger.log("[PerfectLink-AckListener] Received a duplicate ACK: " + sequenceNumber);
+            return;
         }
         dcLogger.log("[PerfectLink-AckListener] Received an unknown ACK: " + sequenceNumber);
     }
 
-    private void handleContentMessage(long sequenceNumber, Message message, Session session) {
+    public void handleContentMessage(long sequenceNumber, Message message, Session session) {
         dcLogger.log("Received content message with sequence number " + sequenceNumber);
         if (!checkIntegrity(session, message)) { return; }
         long counter = session.getReceiveCounter();
         if (sequenceNumber == counter) {
-            dcLogger.log("Received new content message");
+            // dcLogger.log("Received new content message");
             deliverMessage(message);
             counter++;
             session.setReceiveCounter(counter);
@@ -243,16 +247,16 @@ public class PerfectLink {
         return true;
     }
 
-    private void sendAck(Session session, long seqNumber) {
+    public void sendAck(Session session, long seqNumber) {
         Message ack = new AckMessage(seqNumber);
         String data = ack.getHmacData();
         String hmac = Security.generateHMAC(data, session.getSecretKey());
-        dcLogger.log("Generated hmac: " + hmac);
+        // dcLogger.log("Generated hmac: " + hmac);
         ack.setHmac(hmac);
         byte[] ackData = gson.toJson(ack).getBytes();
         try {
             DatagramPacket ackPacket = new DatagramPacket(ackData, ackData.length, InetAddress.getByName(session.getAddress()), session.getPort());
-            dcLogger.log("Sending ack: " + ack + " to " + session.getAddress() + ":" + session.getPort());
+            // dcLogger.log("Sending ack: " + ack + " to " + session.getAddress() + ":" + session.getPort());
             socket.send(ackPacket);
         } catch (UnknownHostException uhe) {
             throw new RuntimeException(uhe);
@@ -262,9 +266,8 @@ public class PerfectLink {
     }
 
     private void deliverMessage(Message message) {
-        dcLogger.log("Delivering message: " + message);
         if (messageQueue.offer(message)) {
-            dcLogger.log("Message delivered: " + message);
+            dcLogger.log("Delivered -> " + message);
         }
         else {
             dcLogger.log("Message queue is full, unable to deliver message: " + message);
@@ -287,12 +290,36 @@ public class PerfectLink {
                 return gson.fromJson(received, AppendMessage.class);
             case ACK:
                 return gson.fromJson(received, AckMessage.class);
+            case READ:
+                return gson.fromJson(received, ReadMessage.class);
+            case STATE:
+                return gson.fromJson(received, StateMessage.class);
+            case COLLECTED:
+                return gson.fromJson(received, CollectedMessage.class);
+            case WRITE:
+                return gson.fromJson(received, WriteMessage.class);
+            case ACCEPT:
+                return gson.fromJson(received, AcceptMessage.class);
+            case CLIENT_REPLY:
+                return gson.fromJson(received, ClientReplyMessage.class);
             default:
+                dcLogger.log("(messageFromJson) Unknown message type");
                 return message;
         }
     }
 
     public String getSessions() {
         return sessions.toString();
+    }
+
+    public void stop() {
+        running = false;
+        scheduler.shutdown();
+        socket.close();
+    }
+
+    // Function for byzantine to override
+    public String convertToJson(Message message) {
+        return gson.toJson(message);
     }
 }
