@@ -8,8 +8,6 @@ import depchain.member.byzantine.*;
 import depchain.member.domain.Member;
 
 public class MemberMain {
-    private static final String MEMBERSHIP_FILE = "membership/membership.txt";
-    private static final String CLIENT_FILE = "membership/client.txt";
 
     public static void main (String[] args) throws Exception {
         if (args.length < 3 || args.length > 4) {
@@ -22,52 +20,15 @@ public class MemberMain {
         String address = args[1];
         String memberName = args[2];
         int byzantineBehaviour = args.length == 4 ? Integer.parseInt(args[3]) : 0;
-        System.out.println("Member " + memberName + " started at port " + port + " with byzantine behaviour " + byzantineBehaviour);
 
-        // load membership from file
-        List<Entity> membershipInfo = CommonUtils.loadMembership(MEMBERSHIP_FILE);
-        List<Entity> clients = CommonUtils.loadMembership(CLIENT_FILE);
-        System.out.println("Membership: " + membershipInfo);
-
-        // create my member object and run start (creates other relevant structures and listener)
-        boolean debug = true;
-        Member myself;
-        switch (byzantineBehaviour) {
-            case 0:
-                myself = new Member(memberName, membershipInfo, clients, port, address, debug);
-                myself.start();
-                break;
-            case 1:
-                myself = new NoAnswerByzantine(memberName, membershipInfo, clients, port, address, debug);
-                myself.start();
-                break;
-            case 2:
-                myself = new CoordinatedWrongStateByzantine(memberName, membershipInfo, clients, port, address, debug);
-                myself.start();
-                break;
-            case 3:
-                myself = new FakeSignatureByzantine(memberName, membershipInfo, clients, port, address, debug);
-                myself.start();
-                break;
-            case 4:
-                myself = new ReplaySignatureByzantine(memberName, membershipInfo, clients, port, address, debug);
-                myself.start();
-                break;
-            case 5:
-                myself = new SpamByzantine(memberName, membershipInfo, clients, port, address, debug);
-                myself.start();
-                break;
-            case 6:
-                myself = new WrongWriteAcceptByzantine(memberName, membershipInfo, clients, port, address, debug);
-                myself.start();
-                break;
-            case 7:
-                myself = new MemberPerfectLinkByzantine(memberName, membershipInfo, clients, port, address, debug);
-                myself.start();
-                break;
-            default:
-                System.out.println("Invalid byzantine behaviour");
-                System.exit(1);
+        try {
+            Member member = MemberBuilder.build(memberName, address, port, byzantineBehaviour);
+            member.start();
+            System.out.printf("Member %s started at port %d with byzantine behaviour: %b%n",
+                    memberName, port, byzantineBehaviour);
+        } catch (Exception e) {
+            System.err.println("Error creating member: " + e.getMessage());
+            System.out.println("Member could not be started due to an error during creation.");
         }
     }
 

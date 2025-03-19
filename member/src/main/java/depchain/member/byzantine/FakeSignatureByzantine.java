@@ -1,35 +1,42 @@
 package depchain.member.byzantine;
 
+import depchain.common.DCLogger;
+import depchain.common.PerfectLink;
 import depchain.common.Security;
 import depchain.common.domain.ConsensusState;
 import depchain.common.domain.Entity;
+import depchain.common.messaging.AppendMessage;
+import depchain.common.messaging.Message;
 import depchain.common.messaging.ReadMessage;
 import depchain.common.messaging.StateMessage;
+import depchain.member.domain.Config;
 import depchain.member.domain.Member;
+import depchain.member.state.BlockchainState;
 
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.BlockingQueue;
 
 public class FakeSignatureByzantine extends Member {
 
     private static final Random random = new Random();
 
-    public FakeSignatureByzantine(String memberName, List<Entity> members, List<Entity> clients, int port, String address, boolean debug) {
-        super(memberName, members, clients, port, address, debug);
-        System.out.println("FakeSignatureByzantine started at port " + port);
+    public FakeSignatureByzantine(Config config, DCLogger dcLogger, PerfectLink pf, ConsensusState cState, BlockchainState bcState, BlockingQueue<Message> messageQueue, BlockingQueue<AppendMessage> appendQueue) {
+        super(config, dcLogger, pf, cState, bcState, messageQueue, appendQueue);
     }
+
 
     public String getRandomMemberName() {
         String memberName;
         do {
-            memberName = members.get(random.nextInt(members.size())).getEntityName();
-        } while(memberName.equals(myName));
+            memberName = config.getMembers().get(random.nextInt(config.getMembers().size())).getEntityName();
+        } while(memberName.equals(config.getMyName()));
 
         return memberName;
     }
 
     public int getMemberPort(String name) {
-        for (Entity entity : members) {
+        for (Entity entity : config.getMembers()) {
             if (entity.getEntityName().equals(name)) {
                 return entity.getPort();
             }
@@ -42,7 +49,7 @@ public class FakeSignatureByzantine extends Member {
     public void handleRead(ReadMessage readMessage) {
         dcLogger.log("Received: " + readMessage);
         String dataToSign = consensusState.getCurrent().toString() + consensusState.getWriteset();
-        String mySignature = Security.makeDS(dataToSign, Security.getMyPrivateKey(myName));
+        String mySignature = Security.makeDS(dataToSign, Security.getMyPrivateKey(config.getMyName()));
 
         String randomMemberName = getRandomMemberName();
         // Send as a another member name

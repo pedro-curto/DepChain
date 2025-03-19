@@ -60,7 +60,7 @@ public class CommonUtils {
 		}
 	}
 
-	public static List<Entity> loadMembership(String filename) throws Exception {
+	public static List<Entity> loadMembership(String filename) {
 		List<Entity> members = new ArrayList<>();
 		System.out.println("Trying to load from: " + filename);
 		try (BufferedReader br = new BufferedReader(new FileReader(filename))) {
@@ -84,6 +84,8 @@ public class CommonUtils {
 				Entity entity = new Entity(memberName, pubKey, address, port);
 				members.add(entity);
 			}
+		} catch (Exception e) {
+			throw new RuntimeException(e);
 		}
 		System.out.println("Loaded members: " + members);
 		return members;

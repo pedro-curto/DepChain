@@ -1,14 +1,19 @@
 package depchain.member.byzantine;
 
+import depchain.common.DCLogger;
+import depchain.common.PerfectLink;
 import depchain.common.Security;
 import depchain.common.domain.ConsensusState;
 import depchain.common.domain.Entity;
 import depchain.common.domain.ValueTimestampPair;
 import depchain.common.messaging.*;
+import depchain.member.domain.Config;
 import depchain.member.domain.Member;
+import depchain.member.state.BlockchainState;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.BlockingQueue;
 
 public class CoordinatedWrongStateByzantine extends Member {
 
@@ -16,14 +21,13 @@ public class CoordinatedWrongStateByzantine extends Member {
     // Sends different write messages to different members (echos what he received from them)
     // in case 2 correct members have different values, could lead to a wrong quorum
 
-    private boolean firstEpoch = true;
+    private boolean firstEpoch;
     private ValueTimestampPair valts;
 
-    public CoordinatedWrongStateByzantine(String memberName, List<Entity> members, List<Entity> clients, int port, String address, boolean debug) {
-        super(memberName, members, clients, port, address, debug);
-        System.out.println("CoordinatedWrongStateByzantine started at port " + port);
+    public CoordinatedWrongStateByzantine(Config config, DCLogger dcLogger, PerfectLink pf, ConsensusState cState, BlockchainState bcState, BlockingQueue<Message> messageQueue, BlockingQueue<AppendMessage> appendQueue) {
+        super(config, dcLogger, pf, cState, bcState, messageQueue, appendQueue);
+        this.firstEpoch = true;
     }
-
 
     @Override
     public void handleRead(ReadMessage readMessage) {
@@ -49,12 +53,12 @@ public class CoordinatedWrongStateByzantine extends Member {
         ArrayList<ValueTimestampPair> fakeWriteset = new ArrayList<>();
         fakeWriteset.add(fakeOld);
 
-        ConsensusState myState = new ConsensusState(myName, fakeCurrent, fakeWriteset);
+        ConsensusState myState = new ConsensusState(config.getMyName(), fakeCurrent, fakeWriteset);
         String dataToSign = fakeCurrent.toString() + fakeWriteset;
-        String mySignature = Security.makeDS(dataToSign, Security.getMyPrivateKey(myName));
+        String mySignature = Security.makeDS(dataToSign, Security.getMyPrivateKey(config.getMyName()));
 
         myState.setInstance(consensusState.getInstance());
-        StateMessage stateMessage = new StateMessage(myState, mySignature, consensusState.getInstance(), this.port);
+        StateMessage stateMessage = new StateMessage(myState, mySignature, consensusState.getInstance(), config.getPort());
         dcLogger.log("Faking state message... -> " + stateMessage);
         sendToLeader(stateMessage);
     }
@@ -62,7 +66,7 @@ public class CoordinatedWrongStateByzantine extends Member {
     @Override
     public void handleCollected(CollectedMessage collectedMessage) {
         dcLogger.log("Received: " + collectedMessage);
-        if (collectedMessage.getPort() != leader.getPort()) {
+        if (collectedMessage.getPort() != config.getLeader().getPort()) {
             return;
         }
         valts = collectedMessage.getStates().get(0).getState().getCurrent();
@@ -74,7 +78,7 @@ public class CoordinatedWrongStateByzantine extends Member {
         dcLogger.log("Received: " + writeMessage);
 
         // Resending echo message to member
-        WriteMessage echo = new WriteMessage(writeMessage.getValts(), this.port, writeMessage.getConsensusInstance());
+        WriteMessage echo = new WriteMessage(writeMessage.getValts(), config.getPort(), writeMessage.getConsensusInstance());
         sendToMember(echo, writeMessage.getPort());
         dcLogger.log("Sending fake echo WRITE message to " + writeMessage.getPort() + "... ");
 
@@ -87,7 +91,7 @@ public class CoordinatedWrongStateByzantine extends Member {
         dcLogger.log("Received: " + acceptMessage);
 
         // Resending echo message to member
-        AcceptMessage echo = new AcceptMessage(acceptMessage.getValue(), this.port, acceptMessage.getConsensusInstance());
+        AcceptMessage echo = new AcceptMessage(acceptMessage.getValue(), config.getPort(), acceptMessage.getConsensusInstance());
         sendToMember(echo, acceptMessage.getPort());
         dcLogger.log("Sending fake echo ACCEPT message to " + acceptMessage.getPort() + "... ");
 
