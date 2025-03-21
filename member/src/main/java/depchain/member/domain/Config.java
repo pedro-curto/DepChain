@@ -13,8 +13,8 @@ public class Config {
     private static final String MEMBERSHIP_FILE = "membership/membership.txt";
     private static final String CLIENT_FILE = "membership/client.txt";
     protected Entity leader;
-    protected final List<Entity> members;
-    private final List<Entity> clients;
+    protected List<Entity> members;
+    private List<Entity> clients;
     protected final String myName;
     private final String address;
     protected final int port;
@@ -66,5 +66,11 @@ public class Config {
     }
     public KeyPair getMyKeyPair() {
         return myKeyPair;
+    }
+    public void setMembers(List<Entity> members) {
+        this.members = members;
+    }
+    public void setClients(List<Entity> clients) {
+        this.clients = clients;
     }
 }

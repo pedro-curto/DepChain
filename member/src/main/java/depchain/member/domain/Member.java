@@ -6,8 +6,6 @@ import depchain.common.domain.Entity;
 import depchain.common.domain.ValueTimestampPair;
 import depchain.common.messaging.*;
 import depchain.member.state.BlockchainState;
-import java.net.DatagramSocket;
-import java.security.KeyPair;
 import java.security.PublicKey;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
@@ -298,8 +296,6 @@ public class Member {
         for (StateMessage thisState : collectedStates) {
             if (!verifyMemberStateAuthenticity(thisState)) {
                 dcLogger.error("Signature is invalid for " + thisState.getState().getMemberName());
-                //ConsensusLeaderState leaderState = (ConsensusLeaderState) consensusState;
-                //leaderState.setCaughtInvalidSignature(true);
                 // TODO -> hardcoded for the test (fix)
                 this.caughtInvalidSignature = true;
                 continue;

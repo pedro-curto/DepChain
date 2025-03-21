@@ -62,9 +62,6 @@ public class ConsensusState {
     public int getEpoch() {
         return epoch;
     }
-    public void setEpoch(int epoch) {
-        this.epoch = epoch;
-    }
 
     public void updateWriteSet(ValueTimestampPair decidedPair) {
         for (ValueTimestampPair pair : this.writeset) {

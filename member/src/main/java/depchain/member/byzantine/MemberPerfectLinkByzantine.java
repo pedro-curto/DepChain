@@ -16,14 +16,7 @@ import java.util.List;
 import java.util.concurrent.BlockingQueue;
 
 public class MemberPerfectLinkByzantine extends Member {
-
 	public MemberPerfectLinkByzantine(Config config, DCLogger dcLogger, PerfectLink pf, ConsensusState cState, BlockchainState bcState, BlockingQueue<Message> messageQueue, BlockingQueue<AppendMessage> appendQueue) {
 		super(config, dcLogger, pf, cState, bcState, messageQueue, appendQueue);
-	}
-
-	// TODO -> this has to set the perfect link of the object and not override anything
-	//@Override
-	public void createPerfectLink(DatagramSocket serverSocket, KeyPair myKeyPair, List<Entity> entities, boolean debug) {
-		this.perfectLink = new PerfectLinkByzantine(serverSocket, messageQueue, myKeyPair, entities, debug);
 	}
 }
