@@ -35,6 +35,7 @@ public class Client {
         this.debug = false;
 		this.port = port;
         this.members = members;
+        // TODO hardcoded leader
         this.leaderPort = members.get(0).getPort();
         this.dcLogger = new DCLogger(Client.class, debug, baseDir+"/logs/client.log");
         this.testEnvironment = testEnvironment;

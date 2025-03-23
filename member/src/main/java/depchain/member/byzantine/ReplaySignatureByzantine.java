@@ -1,16 +1,19 @@
 package depchain.member.byzantine;
 
+import depchain.common.DCLogger;
+import depchain.common.PerfectLink;
 import depchain.common.Security;
 import depchain.common.domain.ConsensusState;
 import depchain.common.domain.Entity;
-import depchain.common.messaging.CollectedMessage;
-import depchain.common.messaging.ReadMessage;
-import depchain.common.messaging.StateMessage;
+import depchain.common.messaging.*;
+import depchain.member.domain.Config;
 import depchain.member.domain.Member;
+import depchain.member.state.BlockchainState;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.BlockingQueue;
 
 public class ReplaySignatureByzantine extends Member {
 
@@ -19,15 +22,15 @@ public class ReplaySignatureByzantine extends Member {
     // Stores State messages from other members and replays them
     private List<StateMessage> membersStateMessages = new ArrayList<>();
 
-    public ReplaySignatureByzantine(String memberName, List<Entity> members, List<Entity> clients, int port, String address, boolean debug) {
-        super(memberName, members, clients, port, address, debug);
-        System.out.println("ReplaySignatureByzantine started at port " + port);
+    public ReplaySignatureByzantine(Config config, DCLogger dcLogger, PerfectLink pf, ConsensusState cState, BlockchainState bcState, BlockingQueue<Message> messageQueue, BlockingQueue<AppendMessage> appendQueue) {
+        super(config, dcLogger, pf, cState, bcState, messageQueue, appendQueue);
     }
+
 
     @Override
     public void handleCollected(CollectedMessage collectedMessage) {
         dcLogger.log("Received: " + collectedMessage);
-        if (collectedMessage.getPort() != leader.getPort()) {
+        if (collectedMessage.getPort() != config.getLeader().getPort()) {
             return;
         }
         consensusState.addCollectedMessage(collectedMessage);
