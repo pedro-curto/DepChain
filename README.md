@@ -11,6 +11,23 @@ cd scripts
 Without this, `mvn clean install` will fail because it runs tests that require the configuration files.
 However, `mvn clean install -DskipTests` will work.
 
+**Installing Contracts**
+
+Start by installing the Solidity compiler via Node.js (npm):
+```bash
+npm install solc
+```
+
+Go to the `contracts` directory:
+```bash
+cd member/src/main/java/depchain/member/contract
+
+Then, compile the contracts (you need ERC20.sol, I cloned the entire contracts repository from Open Zeppelin):
+```bash
+solc --bin --abi ISTCoin.sol -o build/ --overwrite
+```
+
+
 ## Building the Project
 From the root directory of the project, run the following command:
 ```bash
