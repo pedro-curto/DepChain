@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
+import "./contracts/token/ERC20/ERC20.sol";
+
 contract Blacklist {
 
     mapping (address => bool) private _blacklist;

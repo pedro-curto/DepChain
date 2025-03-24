@@ -1,5 +1,12 @@
 # DepChain
 
+## TODO
+- Finish Part 1 fixes
+- Think about blacklist: each client should have its own blacklist?
+- Genesis block
+- Step 4
+- Step 5
+
 ## Configuration
 
 **First of all, you need to generate the configuration files** (with the membership). To do that, run the following command:
@@ -15,16 +22,24 @@ However, `mvn clean install -DskipTests` will work.
 
 Start by installing the Solidity compiler via Node.js (npm):
 ```bash
-npm install solc
+npm install solc --global
 ```
 
 Go to the `contracts` directory:
 ```bash
-cd member/src/main/java/depchain/member/contract
+cd contract
 
 Then, compile the contracts (you need ERC20.sol, I cloned the entire contracts repository from Open Zeppelin):
 ```bash
 solc --bin --abi ISTCoin.sol -o build/ --overwrite
+```
+
+```bash
+ javac -d out -cp ".:jars/*" ISTCoin/src/main/java/ISTCoinMain.java
+```
+
+```bash
+java -cp "out:./jars/*" ISTCoinMain
 ```
 
 

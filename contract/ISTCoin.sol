@@ -41,6 +41,7 @@ contract ISTCoin is ERC20 {
         return 2;
     }
 
+    // TODO -> exatamente igual ao ERC20.sol
     function transfer(address _to, uint256 _value) public override returns (bool success) {
         // acl check for message sender
         address owner = _msgSender();
@@ -50,6 +51,7 @@ contract ISTCoin is ERC20 {
         return true;
     }
 
+    // TODO -> exatamente igual ao ERC20.sol (?)
     function transferFrom(address _from, address _to, uint256 _value) public override returns (bool success) {
         // acl check for _from
         require (!_blacklist.isBlacklisted(_from), "ISTCoin: spender is blacklisted and cannot transfer");

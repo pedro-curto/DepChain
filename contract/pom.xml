@@ -1,0 +1,41 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <parent>
+        <groupId>depchain</groupId>
+        <artifactId>DepChain</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+
+    <modelVersion>4.0.0</modelVersion>
+    <artifactId>contract</artifactId>
+    <name>contract</name>
+    <packaging>jar</packaging>
+
+    <dependencies>
+
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+        </dependency>
+
+        <!-- https://mvnrepository.com/artifact/io.tmio/tuweni-bytes -->
+        <dependency>
+            <groupId>io.tmio</groupId>
+            <artifactId>tuweni-bytes</artifactId>
+            <version>2.4.2</version>
+            <type>pom</type>
+        </dependency>
+
+        <!-- https://mvnrepository.com/artifact/io.tmio/tuweni-units -->
+        <dependency>
+            <groupId>io.tmio</groupId>
+            <artifactId>tuweni-units</artifactId>
+            <version>2.4.2</version>
+            <type>pom</type>
+        </dependency>
+    </dependencies>
+
+</project>
