@@ -1,6 +1,6 @@
 package depchain.member.state;
 
-import depchain.member.domain.Account;
+import depchain.common.domain.Account;
 
 import java.util.ArrayList;
 import java.util.List;

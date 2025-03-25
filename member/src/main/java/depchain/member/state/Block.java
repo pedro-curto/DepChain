@@ -1,7 +1,7 @@
 package depchain.member.state;
 
 import com.google.gson.JsonObject;
-import depchain.member.domain.Transaction;
+import depchain.common.domain.Transaction;
 import java.util.List;
 
 public class Block {

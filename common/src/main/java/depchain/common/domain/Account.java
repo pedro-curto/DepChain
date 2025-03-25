@@ -1,4 +1,4 @@
-package depchain.member.domain;
+package depchain.common.domain;
 
 public class Account{
     String address;
