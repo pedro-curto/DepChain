@@ -1,9 +1,14 @@
 # DepChain
 
 ## TODO
-- Finish Part 1 fixes
+- Finish Part 1 fixes:
+  - Aguardar f+1 respostas iguais ou 2f+1 respostas (sem ser iguais)
+  - Permitir receber mensagens de épocas e instâncias no futuro
+  - Proteger clientes de replay attack (nonce na mensagem do cliente)
+- Implement test (Lab2) for ISTCoin.sol functions
 - Think about blacklist: each client should have its own blacklist?
 - Genesis block
+- Rest of step 3 (transactions, ...)
 - Step 4
 - Step 5
 
