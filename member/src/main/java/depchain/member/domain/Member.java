@@ -274,10 +274,10 @@ public class Member {
 
         // DECIDE value
         this.blockchainState.appendString(consensusState.getCurrent().getValue());
-        if (isLeader()) {
-            ClientReplyMessage clientReplyMessage = new ClientReplyMessage(accept, true, consensusState.getInstance());
-            broadCastToClients(clientReplyMessage);
-        }
+        // everyone answers to the client
+        ClientReplyMessage clientReplyMessage = new ClientReplyMessage(accept, true, consensusState.getInstance());
+        broadCastToClients(clientReplyMessage);
+
         this.consensusState.nextInstance();
         return true;
     }

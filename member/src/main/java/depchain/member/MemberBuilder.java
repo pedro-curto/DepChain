@@ -34,7 +34,7 @@ class MemberBuilder {
         entities.addAll(config.getClients());
         entities.addAll(config.getMembers());
         KeyPair myKeyPair = config.getMyKeyPair();
-        PerfectLink pf = new PerfectLink(serverSocket, messageQueue, myKeyPair, entities, true);
+        PerfectLink pf = new PerfectLink(serverSocket, messageQueue, myKeyPair, entities, false);
 
         // states
         BlockchainState blockchainState = new BlockchainState(new ArrayList<>());
@@ -91,7 +91,7 @@ class MemberBuilder {
         KeyPair myKeyPair = config.getMyKeyPair();
         PerfectLink pf = byzantineType.equals("byz-perfect-link") ?
                 new PerfectLinkByzantine(serverSocket, messageQueue, myKeyPair, entities, true) :
-                new PerfectLink(serverSocket, messageQueue, myKeyPair, entities, true);
+                new PerfectLink(serverSocket, messageQueue, myKeyPair, entities, false);
 
         // states
         BlockchainState blockchainState = new BlockchainState(new ArrayList<>());
