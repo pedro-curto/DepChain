@@ -5,7 +5,7 @@ import depchain.common.domain.ConsensusState;
 import depchain.common.domain.Entity;
 import depchain.common.domain.ValueTimestampPair;
 import depchain.common.messaging.*;
-import depchain.member.state.BlockchainState;
+import depchain.member.state.StringChain;
 import java.security.PublicKey;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
@@ -15,7 +15,7 @@ public class Member {
     protected final DCLogger dcLogger;
     protected PerfectLink perfectLink;
     protected ConsensusState consensusState;
-    protected final BlockchainState blockchainState;
+    protected final StringChain stringChain;
     protected BlockingQueue<Message> messageQueue;
     protected BlockingQueue<AppendMessage> appendQueue;
     private volatile boolean running;
@@ -25,14 +25,14 @@ public class Member {
                   DCLogger dcLogger,
                   PerfectLink pf,
                   ConsensusState cState,
-                  BlockchainState bcState,
+                  StringChain bcState,
                   BlockingQueue<Message> messageQueue,
                   BlockingQueue<AppendMessage> appendQueue) {
        this.config = config;
        this.dcLogger = dcLogger;
        this.perfectLink = pf;
        this.consensusState = cState;
-       this.blockchainState = bcState;
+       this.stringChain = bcState;
        this.messageQueue = messageQueue;
        this.appendQueue = appendQueue;
     }
@@ -273,11 +273,9 @@ public class Member {
         dcLogger.log("Quorum of accept reached");
 
         // DECIDE value
-        this.blockchainState.appendString(consensusState.getCurrent().getValue());
-        // everyone answers to the client
+        this.stringChain.appendString(consensusState.getCurrent().getValue());
         ClientReplyMessage clientReplyMessage = new ClientReplyMessage(accept, true, consensusState.getInstance());
         broadCastToClients(clientReplyMessage);
-
         this.consensusState.nextInstance();
         return true;
     }
@@ -431,8 +429,8 @@ public class Member {
         return config.getLeader().getEntityName().equalsIgnoreCase(config.getMyName());
     }
 
-    public BlockchainState getBlockchainState() {
-        return blockchainState;
+    public StringChain getBlockchainState() {
+        return stringChain;
     }
 
     public void stop() {

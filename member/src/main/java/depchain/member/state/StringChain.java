@@ -1,18 +1,13 @@
 package depchain.member.state;
 
-import depchain.common.domain.Account;
-
 import java.util.ArrayList;
-import java.util.List;
 
-public class BlockchainState {
+public class StringChain {
 
     // TODO -> this will not be here
     private ArrayList<String> blockchain;
 
-    private List<Account> accounts;
-
-    public BlockchainState(ArrayList<String> blockchain) {
+    public StringChain(ArrayList<String> blockchain) {
         this.blockchain = blockchain;
     }
 

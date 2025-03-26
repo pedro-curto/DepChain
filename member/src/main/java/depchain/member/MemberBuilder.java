@@ -11,7 +11,7 @@ import depchain.member.byzantine.*;
 import depchain.member.domain.Config;
 import depchain.member.domain.ConsensusLeaderState;
 import depchain.member.domain.Member;
-import depchain.member.state.BlockchainState;
+import depchain.member.state.StringChain;
 
 import java.net.DatagramSocket;
 import java.security.KeyPair;
@@ -37,7 +37,7 @@ class MemberBuilder {
         PerfectLink pf = new PerfectLink(serverSocket, messageQueue, myKeyPair, entities, false);
 
         // states
-        BlockchainState blockchainState = new BlockchainState(new ArrayList<>());
+        StringChain stringChain = new StringChain(new ArrayList<>());
         ConsensusState consensusState =
                 config.getLeader().getEntityName().equalsIgnoreCase(config.getMyName()) ?
                         new ConsensusLeaderState(config.getMyName(), 0) :
@@ -45,21 +45,21 @@ class MemberBuilder {
 
         return switch (behaviour) {
             case 1 ->
-                    new NoAnswerByzantine(config, logger, pf, consensusState, blockchainState, messageQueue, appendQueue);
+                    new NoAnswerByzantine(config, logger, pf, consensusState, stringChain, messageQueue, appendQueue);
             case 2 ->
-                    new CoordinatedWrongStateByzantine(config, logger, pf, consensusState, blockchainState, messageQueue, appendQueue);
+                    new CoordinatedWrongStateByzantine(config, logger, pf, consensusState, stringChain, messageQueue, appendQueue);
             case 3 ->
-                    new FakeSignatureByzantine(config, logger, pf, consensusState, blockchainState, messageQueue, appendQueue);
+                    new FakeSignatureByzantine(config, logger, pf, consensusState, stringChain, messageQueue, appendQueue);
             case 4 ->
-                    new ReplaySignatureByzantine(config, logger, pf, consensusState, blockchainState, messageQueue, appendQueue);
+                    new ReplaySignatureByzantine(config, logger, pf, consensusState, stringChain, messageQueue, appendQueue);
             case 5 ->
-                    new SpamByzantine(config, logger, pf, consensusState, blockchainState, messageQueue, appendQueue);
+                    new SpamByzantine(config, logger, pf, consensusState, stringChain, messageQueue, appendQueue);
             case 6 ->
-                    new WrongWriteAcceptByzantine(config, logger, pf, consensusState, blockchainState, messageQueue, appendQueue);
+                    new WrongWriteAcceptByzantine(config, logger, pf, consensusState, stringChain, messageQueue, appendQueue);
             case 7 ->
-                    new MemberPerfectLinkByzantine(config, logger, pf, consensusState, blockchainState, messageQueue, appendQueue);
+                    new MemberPerfectLinkByzantine(config, logger, pf, consensusState, stringChain, messageQueue, appendQueue);
             default ->
-                    new Member(config, logger, pf, consensusState, blockchainState, messageQueue, appendQueue);
+                    new Member(config, logger, pf, consensusState, stringChain, messageQueue, appendQueue);
         };
     }
 
@@ -94,7 +94,7 @@ class MemberBuilder {
                 new PerfectLink(serverSocket, messageQueue, myKeyPair, entities, false);
 
         // states
-        BlockchainState blockchainState = new BlockchainState(new ArrayList<>());
+        StringChain stringChain = new StringChain(new ArrayList<>());
         ConsensusState consensusState =
                 config.getLeader().getEntityName().equalsIgnoreCase(config.getMyName()) ?
                         new ConsensusLeaderState(config.getMyName(), 0) :
@@ -102,21 +102,21 @@ class MemberBuilder {
 
         return switch (byzantineType) {
             case "no-answer" ->
-                    new NoAnswerByzantine(config, logger, pf, consensusState, blockchainState, messageQueue, appendQueue);
+                    new NoAnswerByzantine(config, logger, pf, consensusState, stringChain, messageQueue, appendQueue);
             case "fake-signature"->
-                    new FakeSignatureByzantine(config, logger, pf, consensusState, blockchainState, messageQueue, appendQueue);
+                    new FakeSignatureByzantine(config, logger, pf, consensusState, stringChain, messageQueue, appendQueue);
             case "spam"->
-                    new SpamByzantine(config, logger, pf, consensusState, blockchainState, messageQueue, appendQueue);
+                    new SpamByzantine(config, logger, pf, consensusState, stringChain, messageQueue, appendQueue);
             case "wrong-state"->
-                    new CoordinatedWrongStateByzantine(config, logger, pf, consensusState, blockchainState, messageQueue, appendQueue);
+                    new CoordinatedWrongStateByzantine(config, logger, pf, consensusState, stringChain, messageQueue, appendQueue);
             case "replay-signature"->
-                    new ReplaySignatureByzantine(config, logger, pf, consensusState, blockchainState, messageQueue, appendQueue);
+                    new ReplaySignatureByzantine(config, logger, pf, consensusState, stringChain, messageQueue, appendQueue);
             case "wrong-write-accept"->
-                    new WrongWriteAcceptByzantine(config, logger, pf, consensusState, blockchainState, messageQueue, appendQueue);
+                    new WrongWriteAcceptByzantine(config, logger, pf, consensusState, stringChain, messageQueue, appendQueue);
             case "byz-perfect-link"->
-                    new MemberPerfectLinkByzantine(config, logger, pf, consensusState, blockchainState, messageQueue, appendQueue);
+                    new MemberPerfectLinkByzantine(config, logger, pf, consensusState, stringChain, messageQueue, appendQueue);
             default ->
-                    new Member(config, logger, pf, consensusState, blockchainState, messageQueue, appendQueue);
+                    new Member(config, logger, pf, consensusState, stringChain, messageQueue, appendQueue);
         };
     }
 

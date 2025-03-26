@@ -11,9 +11,8 @@ import depchain.common.messaging.ReadMessage;
 import depchain.common.messaging.StateMessage;
 import depchain.member.domain.Config;
 import depchain.member.domain.Member;
-import depchain.member.state.BlockchainState;
+import depchain.member.state.StringChain;
 
-import java.util.List;
 import java.util.Random;
 import java.util.concurrent.BlockingQueue;
 
@@ -21,7 +20,7 @@ public class FakeSignatureByzantine extends Member {
 
     private static final Random random = new Random();
 
-    public FakeSignatureByzantine(Config config, DCLogger dcLogger, PerfectLink pf, ConsensusState cState, BlockchainState bcState, BlockingQueue<Message> messageQueue, BlockingQueue<AppendMessage> appendQueue) {
+    public FakeSignatureByzantine(Config config, DCLogger dcLogger, PerfectLink pf, ConsensusState cState, StringChain bcState, BlockingQueue<Message> messageQueue, BlockingQueue<AppendMessage> appendQueue) {
         super(config, dcLogger, pf, cState, bcState, messageQueue, appendQueue);
     }
 

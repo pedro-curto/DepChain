@@ -1,8 +1,8 @@
-package depchain.member.state;
+package depchain.common.domain;
 
 import java.util.List;
 
 public class BlockChain{
     private List<Block> blockchain;
-    private List<BlockchainState> state;
+    private List<BlockChainState> state;
 }
