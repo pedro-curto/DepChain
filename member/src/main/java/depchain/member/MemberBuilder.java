@@ -24,7 +24,7 @@ class MemberBuilder {
 
     public static Member build(String name, String address, int port, int behaviour) throws Exception {
         Config config = new Config(name, address, port);
-        DCLogger logger = new DCLogger(Member.class, true, config.getBaseDir() + "/logs/member-" + config.getMyName() + ".log");
+        DCLogger logger = new DCLogger(Member.class, true);
         BlockingQueue<Message> messageQueue = new LinkedBlockingQueue<>();
         BlockingQueue<AppendMessage> appendQueue = new LinkedBlockingQueue<>();
 
@@ -79,7 +79,7 @@ class MemberBuilder {
         Config config = new Config(name, address, port);
         config.setMembers(members);
         config.setClients(clients);
-        DCLogger logger = new DCLogger(Member.class, true, config.getBaseDir() + "/logs/test/member-" + config.getMyName() + ".log");
+        DCLogger logger = new DCLogger(Member.class, true);
         BlockingQueue<Message> messageQueue = new LinkedBlockingQueue<>();
         BlockingQueue<AppendMessage> appendQueue = new LinkedBlockingQueue<>();
 

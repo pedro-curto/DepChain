@@ -2,9 +2,9 @@
 
 ## TODO
 - Finish Part 1 fixes:
-  - Aguardar f+1 respostas iguais ou 2f+1 respostas (sem ser iguais)
+  - Aguardar f+1 respostas iguais ou 2f+1 respostas (sem ser iguais) (done)
   - Permitir receber mensagens de épocas e instâncias no futuro
-  - Proteger clientes de replay attack (nonce na mensagem do cliente)
+  - Proteger clientes de replay attack (nonce na mensagem do cliente) (checkem please)
 - Implement test (Lab2) for ISTCoin.sol functions
 - Think about blacklist: each client should have its own blacklist?
 - Genesis block

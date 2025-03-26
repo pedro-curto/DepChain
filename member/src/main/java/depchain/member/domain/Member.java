@@ -8,7 +8,9 @@ import depchain.common.messaging.*;
 import depchain.member.state.StringChain;
 import java.security.PublicKey;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class Member {
     protected Config config;
@@ -18,6 +20,7 @@ public class Member {
     protected final StringChain stringChain;
     protected BlockingQueue<Message> messageQueue;
     protected BlockingQueue<AppendMessage> appendQueue;
+    private Map<Integer, Long> clientNonces = new ConcurrentHashMap<>();
     private volatile boolean running;
     private boolean caughtInvalidSignature = false;
 
@@ -182,6 +185,12 @@ public class Member {
      * @param appendMessage - message with value to be proposed if epoch 0
      */
     public void startConsensus(AppendMessage appendMessage) {
+        // checks for replays
+        long lastClientNonce = clientNonces.getOrDefault(appendMessage.getPort(), -1L);
+        if (appendMessage.getNonce() <= lastClientNonce) {
+            dcLogger.alert("Received replayed message");
+            return;
+        }
         dcLogger.log("Received: " + appendMessage);
         dcLogger.log("-- STARTING CONSENSUS FOR '" + appendMessage.getValue() + "' --");
 
@@ -189,7 +198,7 @@ public class Member {
         // of the message
         ConsensusLeaderState leaderState = (ConsensusLeaderState) consensusState;
         if (consensusState.getCurrent().getValue().isEmpty()) {
-            ValueTimestampPair newValue = new ValueTimestampPair(0, appendMessage.getValue());
+            ValueTimestampPair newValue = new ValueTimestampPair(0, appendMessage.getValue(), this.getName(), appendMessage.getNonce());
             newValue.setClientSignature(appendMessage.getSignature());
             leaderState.setCurrent(newValue);
         }
@@ -289,7 +298,7 @@ public class Member {
      */
     public String decideOnCollectedValues(List<StateMessage> collectedStates) {
         ValueTimestampPair leaderValue = null;
-        ValueTimestampPair highest = new ValueTimestampPair(-1, null);
+        ValueTimestampPair highest = new ValueTimestampPair(-1, null, null, -1);
 
         for (StateMessage thisState : collectedStates) {
             if (!verifyMemberStateAuthenticity(thisState)) {
@@ -306,6 +315,8 @@ public class Member {
             }
 
             ValueTimestampPair vts = thisState.getState().getCurrent();
+            // sets vts clientName to name that comes in the consensus state inside state message
+            vts.setClientName(thisState.getState().getMemberName());
             if (highest.getTimestamp() > vts.getTimestamp()) {
                 continue;
             }
@@ -357,8 +368,10 @@ public class Member {
         String clientSignature = leaderVts.getClientSignature();
         if (clientSignature == null) return false;
         // TODO -> fix this hardcoded for 1 client
+        dcLogger.log("Leader Vts: " + leaderVts);
+        String reconstructSignatureData = leaderVts.getValue() + leaderVts.getNonce();
         PublicKey clientPubKey = Security.getMemberPublicKey(config.getClients().getFirst().getEntityName());
-        return Security.verifyDS(clientSignature, leaderVts.getValue(), clientPubKey);
+        return Security.verifyDS(clientSignature, reconstructSignatureData, clientPubKey);
     }
 
     public void sendToLeader(Message message) {

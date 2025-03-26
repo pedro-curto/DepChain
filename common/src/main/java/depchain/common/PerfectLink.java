@@ -38,7 +38,7 @@ public class PerfectLink {
         this.socket = socket;
         this.messageQueue = messageQueue;
         String baseDir = System.getProperty("user.dir");
-        this.dcLogger = new DCLogger(PerfectLink.class, debug, baseDir + "/logs/test/perfectlink.log");
+        this.dcLogger = new DCLogger(PerfectLink.class, debug);
         this.personalKeys = personalKeys;
         this.scheduler.setRemoveOnCancelPolicy(true);
         // creates a mapping {port: entity} for all entities

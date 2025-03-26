@@ -31,7 +31,7 @@ public class ConsensusState {
         this.writeMessages = new HashMap<>();
         this.acceptMessages = new HashMap<>();
         this.lock = new Object();
-        this.logger = new DCLogger(ConsensusState.class, false, System.getProperty("user.dir") + "/logs/test/member-" + memberName + ".log");
+        this.logger = new DCLogger(ConsensusState.class, false);
     }
 
     public ConsensusState(String memberName, ValueTimestampPair current, List<ValueTimestampPair> writeset) {

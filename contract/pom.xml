@@ -36,6 +36,49 @@
             <version>2.4.2</version>
             <type>pom</type>
         </dependency>
+
+        <!-- https://mvnrepository.com/artifact/org.hyperledger.besu/besu-datatypes -->
+        <dependency>
+            <groupId>org.hyperledger.besu</groupId>
+            <artifactId>besu-datatypes</artifactId>
+            <version>25.2.1</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- https://mvnrepository.com/artifact/org.hyperledger.besu/evm -->
+        <dependency>
+            <groupId>org.hyperledger.besu</groupId>
+            <artifactId>evm</artifactId>
+            <version>25.2.1</version>
+            <scope>runtime</scope>
+        </dependency>
     </dependencies>
+
+    <repositories>
+        <repository>
+            <id>hyperledger-besu</id>
+            <url>https://hyperledger.jfrog.io/artifactory/besu-maven</url>
+        </repository>
+    </repositories>
+
+    <!--build>
+        <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.0.0</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>java</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <mainClass>depchain.contract.ISTCoinMain</mainClass>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build-->
 
 </project>

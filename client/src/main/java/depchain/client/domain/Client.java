@@ -15,6 +15,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 public class Client {
+    private long nonce = 0;
     private String baseDir = System.getProperty("user.dir");
     private String clientName;
     private final int port;
@@ -44,7 +45,7 @@ public class Client {
         this.memberResponses = new HashMap<>();
         // TODO hardcoded leader
         this.leaderPort = members.get(0).getPort();
-        this.dcLogger = new DCLogger(Client.class, debug, baseDir+"/logs/client.log");
+        this.dcLogger = new DCLogger(Client.class, debug);
         this.testEnvironment = testEnvironment;
     }
 
@@ -93,11 +94,13 @@ public class Client {
     }
 
     public void sendAppend(String content) {
-        AppendMessage msg = new AppendMessage(content, this.port);
+        AppendMessage msg = new AppendMessage(content, this.port, nonce);
         String signature = Security.makeDS(msg.getDataToSign(), clientKeys.getPrivate());
         msg.setSignature(signature);
         perfectLink.sendMessage(msg, leaderPort);
         dcLogger.log("Sent message: " + msg);
+        // increment nonce after sending
+        nonce++;
     }
 
     private void deliverMessage(BlockingQueue<Message> messageQueue) {

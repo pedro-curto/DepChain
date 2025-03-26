@@ -4,10 +4,20 @@ public class AppendMessage extends Message {
 
 	private final String value;
 	private String signature;
+	private long nonce;
 
-	public AppendMessage(String value, int port) {
+	public AppendMessage(String value, int port, long nonce) {
 		super(MessageType.APPEND, port);
 		this.value = value;
+		this.nonce = nonce;
+	}
+
+	public long getNonce() {
+		return nonce;
+	}
+
+	public void setNonce(long nonce) {
+		this.nonce = nonce;
 	}
 
 	public String getValue() {
@@ -21,7 +31,8 @@ public class AppendMessage extends Message {
 	* should be able to check the origin of the request
 	* */
 	public String getDataToSign() {
-		return value;
+		return value + nonce;
+		//return value;
 	}
 
 	@Override
