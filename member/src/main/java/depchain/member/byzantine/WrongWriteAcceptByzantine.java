@@ -3,12 +3,11 @@ package depchain.member.byzantine;
 import depchain.common.DCLogger;
 import depchain.common.PerfectLink;
 import depchain.common.domain.ConsensusState;
-import depchain.common.domain.Entity;
 import depchain.common.domain.ValueTimestampPair;
 import depchain.common.messaging.*;
 import depchain.member.domain.Config;
 import depchain.member.domain.Member;
-import depchain.member.state.BlockchainState;
+import depchain.member.state.StringChain;
 
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
@@ -16,7 +15,7 @@ import java.util.concurrent.BlockingQueue;
 public class WrongWriteAcceptByzantine extends Member {
 
     // Sends Write and Accept messages with the same byzantine value every time
-    public WrongWriteAcceptByzantine(Config config, DCLogger dcLogger, PerfectLink pf, ConsensusState cState, BlockchainState bcState, BlockingQueue<Message> messageQueue, BlockingQueue<AppendMessage> appendQueue) {
+    public WrongWriteAcceptByzantine(Config config, DCLogger dcLogger, PerfectLink pf, ConsensusState cState, StringChain bcState, BlockingQueue<Message> messageQueue, BlockingQueue<AppendMessage> appendQueue) {
         super(config, dcLogger, pf, cState, bcState, messageQueue, appendQueue);
     }
 
@@ -78,7 +77,7 @@ public class WrongWriteAcceptByzantine extends Member {
         dcLogger.log("Quorum of accept reached");
 
         // DECIDE value
-        this.blockchainState.appendString(consensusState.getCurrent().getValue());
+        this.stringChain.appendString(consensusState.getCurrent().getValue());
         if (isLeader()) {
             ClientReplyMessage clientReplyMessage = new ClientReplyMessage(accept,true, consensusState.getInstance());
             broadCastToClients(clientReplyMessage);

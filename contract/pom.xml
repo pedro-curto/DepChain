@@ -10,8 +10,8 @@
     </parent>
 
     <modelVersion>4.0.0</modelVersion>
-    <artifactId>common</artifactId>
-    <name>common</name>
+    <artifactId>contract</artifactId>
+    <name>contract</name>
     <packaging>jar</packaging>
 
     <dependencies>
@@ -20,11 +20,21 @@
             <groupId>com.google.code.gson</groupId>
             <artifactId>gson</artifactId>
         </dependency>
+
+        <!-- https://mvnrepository.com/artifact/io.tmio/tuweni-bytes -->
         <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-api</artifactId>
-            <version>5.11.4</version>
-            <scope>test</scope>
+            <groupId>io.tmio</groupId>
+            <artifactId>tuweni-bytes</artifactId>
+            <version>2.4.2</version>
+            <type>pom</type>
+        </dependency>
+
+        <!-- https://mvnrepository.com/artifact/io.tmio/tuweni-units -->
+        <dependency>
+            <groupId>io.tmio</groupId>
+            <artifactId>tuweni-units</artifactId>
+            <version>2.4.2</version>
+            <type>pom</type>
         </dependency>
     </dependencies>
 

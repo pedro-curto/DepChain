@@ -2,11 +2,12 @@ package depchain.member.state;
 
 import java.util.ArrayList;
 
-public class BlockchainState {
+public class StringChain {
 
+    // TODO -> this will not be here
     private ArrayList<String> blockchain;
 
-    public BlockchainState(ArrayList<String> blockchain) {
+    public StringChain(ArrayList<String> blockchain) {
         this.blockchain = blockchain;
     }
 

@@ -613,3 +613,5 @@ security/inputs/seqnumber.txt
 keys/
 # ignores files from membership and client
 *.txt
+
+contracts

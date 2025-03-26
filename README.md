@@ -1,5 +1,17 @@
 # DepChain
 
+## TODO
+- Finish Part 1 fixes:
+  - Aguardar f+1 respostas iguais ou 2f+1 respostas (sem ser iguais)
+  - Permitir receber mensagens de épocas e instâncias no futuro
+  - Proteger clientes de replay attack (nonce na mensagem do cliente)
+- Implement test (Lab2) for ISTCoin.sol functions
+- Think about blacklist: each client should have its own blacklist?
+- Genesis block
+- Rest of step 3 (transactions, ...)
+- Step 4
+- Step 5
+
 ## Configuration
 
 **First of all, you need to generate the configuration files** (with the membership). To do that, run the following command:
@@ -10,6 +22,31 @@ cd scripts
 
 Without this, `mvn clean install` will fail because it runs tests that require the configuration files.
 However, `mvn clean install -DskipTests` will work.
+
+**Installing Contracts**
+
+Start by installing the Solidity compiler via Node.js (npm):
+```bash
+npm install solc --global
+```
+
+Go to the `contracts` directory:
+```bash
+cd contract
+
+Then, compile the contracts (you need ERC20.sol, I cloned the entire contracts repository from Open Zeppelin):
+```bash
+solc --bin --abi ISTCoin.sol -o build/ --overwrite
+```
+
+```bash
+ javac -d out -cp ".:jars/*" ISTCoin/src/main/java/ISTCoinMain.java
+```
+
+```bash
+java -cp "out:./jars/*" ISTCoinMain
+```
+
 
 ## Building the Project
 From the root directory of the project, run the following command:

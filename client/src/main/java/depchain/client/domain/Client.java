@@ -10,9 +10,7 @@ import depchain.common.Security;
 
 import java.net.DatagramSocket;
 import java.security.KeyPair;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Scanner;
+import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -22,6 +20,12 @@ public class Client {
     private final int port;
 	private final int leaderPort;
     private final List<Entity> members;
+    // to deal with responses to APPEND requests
+    private final int faultyProcesses;
+    protected final int byzantineQuorum;
+    // {string: state with answers and if it was decided}
+    private final Map<String, AppendState> memberResponses;
+
     private KeyPair clientKeys;
     private PerfectLink perfectLink;
     private BlockingQueue<Message> messageQueue;
@@ -35,6 +39,9 @@ public class Client {
         this.debug = false;
 		this.port = port;
         this.members = members;
+        this.faultyProcesses = Math.floorDiv(members.size() - 1, 3);
+        this.byzantineQuorum = members.size() - faultyProcesses;
+        this.memberResponses = new HashMap<>();
         // TODO hardcoded leader
         this.leaderPort = members.get(0).getPort();
         this.dcLogger = new DCLogger(Client.class, debug, baseDir+"/logs/client.log");
@@ -51,9 +58,13 @@ public class Client {
         messageQueue = new LinkedBlockingQueue<>();
         // start sessions
         List<Entity> entities = new ArrayList<>(members);
-        this.perfectLink = new PerfectLink(socket, messageQueue, this.clientKeys, entities, this.debug);
+        this.perfectLink = new PerfectLink(socket, messageQueue, this.clientKeys, entities, false);
         perfectLink.start();
-        perfectLink.startSession(this.leaderPort);
+        // starts session with every member
+        for (Entity member : members) {
+            perfectLink.startSession(member.getPort());
+        }
+        //perfectLink.startSession(this.leaderPort);
         // start a thread to deliver incoming messages
         Thread messageDeliveringThread = new Thread(() -> deliverMessage(messageQueue));
         messageDeliveringThread.start();
@@ -99,19 +110,42 @@ public class Client {
             }
             if (message instanceof ClientReplyMessage) {
                 ClientReplyMessage appendMessage = (ClientReplyMessage) message;
-                boolean success = appendMessage.getSuccess();
-                String outcome;
-                int consensusInstance = appendMessage.getInstanceOfDecision();
-                if (success) {
-                    outcome = "successfully appended";
-                } else {
-                    outcome = "not appended";
+                String value = appendMessage.getValue();
+                // if we didn't get an answer for the string we received yet create it in the map
+                if (!memberResponses.containsKey(value)) {
+                    memberResponses.put(value, new AppendState(this.faultyProcesses, this.byzantineQuorum));
                 }
-                System.out.println("String " + appendMessage.getValue() +
-                        " was " + outcome + " to the blockchain at timestamp " + consensusInstance);
-                System.out.print("> ");
-            } else {
-                System.out.println("[SERVER GOT]: " + message);
+                AppendState appendState = memberResponses.get(value);
+                // if we already decided we're happy, move on
+                if (appendState.getAppended()) {
+                    continue;
+                }
+                // increment counters and check
+                int totalAnswersCounter = appendState.getTotalAnswersCounter();
+                totalAnswersCounter++;
+                System.out.println("Received " + totalAnswersCounter + " answers for value " + value);
+
+                Map<String, Integer> equalAnswersCounter = appendState.getEqualAnswersCounter();
+                int equalCount = equalAnswersCounter.getOrDefault(value, 0);
+                if (appendMessage.getSuccess()) {
+                    // increases the counter of equal answers
+                    equalCount++;
+                    equalAnswersCounter.put(value, equalCount);
+                    System.out.println("Answers map: " + equalAnswersCounter);
+                }
+                // if the number of equal answers is greater than the quorum, print the outcome
+                if (equalCount >= this.faultyProcesses+1 || totalAnswersCounter >= this.byzantineQuorum) {
+                    int consensusInstance = appendMessage.getInstanceOfDecision();
+                    boolean success = appendMessage.getSuccess();
+                    String outcome = success ? "successfully appended" : "not appended";
+
+                    System.out.println("String " + appendMessage.getValue() +
+                            " was " + outcome + " to the blockchain at timestamp " + consensusInstance);
+                    System.out.print("> ");
+                    appendState.setAppended(true);
+                } else {
+                    System.out.println("Not reached quorum yet.");
+                }
             }
         }
     }
