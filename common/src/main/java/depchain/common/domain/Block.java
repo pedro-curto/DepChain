@@ -9,7 +9,7 @@ public class Block {
     List<Transaction> transactions = new ArrayList<>();
     BlockChainState state; // has to store the state it had when appended
 
-    Block(String hash, String previousHash, List<Transaction> transactions,BlockChainState state) {
+    public Block(String hash, String previousHash, List<Transaction> transactions,BlockChainState state) {
         this.hash = hash;
         this.previousHash = previousHash;
         this.transactions = transactions;

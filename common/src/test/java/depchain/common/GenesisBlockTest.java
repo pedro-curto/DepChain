@@ -5,7 +5,6 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import depchain.common.domain.Block;
 import depchain.common.domain.BlockChainState;
-import depchain.common.domain.JsonAdapter;
 import depchain.common.domain.Account;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
@@ -16,6 +15,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 import java.util.List;
+import java.util.Map;
 
 class GenesisBlockTest {
 
@@ -44,9 +44,11 @@ class GenesisBlockTest {
         assertNotNull(blockChainState, "BlockChainState should not be null");
 
         // Check account details
-        List<Account> accounts = blockChainState.getAccounts();
-        Account account = accounts.getFirst();
-        assertEquals("MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmE/6r6V8TX1zDIhTxUtz\nzT1vWvfLpbB1czCajImA4vU0xcCEVLDZoi5IWcIsi60aj5YCMqV2APuHyHL8Cwgb\nNwIz0G7sRb1pqFtvbeEdeds5Khz97QMWfPJJxYzV56YRnypJDCjwxowX3yeBmlGI\nHeXG3jSDP03z9PuiMVTRd77Q59yVuqJneyKjYZRgM1UWZ9FaNv69gVaOsa+5rdEx\n1sXFQ/yHAMrWqiBlv+337s4ZA1dGgd9UQ60oxcMi4gBdn5stXX/671zmafkYsuzn\nunSW1vOIrIxO2B71ahKymYTKtS+ylxoL+HI7xGAjlRMzJsIiUMmSdJNDCacGk3fK\nlwIDAQAB\n",
+        Map<String, Account> accounts = blockChainState.getAccounts();
+        assertEquals(1, accounts.size(), "Account count should be 1");
+
+        Account account = accounts.get("/v3RjXsWl0fHDrn8u9qRI0ahxjRqv6Rzftu3kj5rHGU=");
+        assertEquals("/v3RjXsWl0fHDrn8u9qRI0ahxjRqv6Rzftu3kj5rHGU=",
                 account.getAddress(), "Account address should match");
         assertEquals(100, account.getBalance(), "Account balance should match");
 

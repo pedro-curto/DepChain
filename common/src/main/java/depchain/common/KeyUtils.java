@@ -4,6 +4,7 @@ import java.io.File;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.security.KeyFactory;
+import java.security.MessageDigest;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.spec.PKCS8EncodedKeySpec;
@@ -42,5 +43,13 @@ public class KeyUtils {
 		byte[] encoded = java.util.Base64.getDecoder().decode(publicKeyString);
 		KeyFactory keyFactory = KeyFactory.getInstance("RSA");
 		return keyFactory.generatePublic(new X509EncodedKeySpec(encoded));
+	}
+
+	public static String hashPublicKey(PublicKey publicKey) throws Exception {
+		byte[] encoded = publicKey.getEncoded();
+		MessageDigest digest = MessageDigest.getInstance("SHA-256");
+		digest.update(encoded);
+		byte[] hash = digest.digest();
+		return java.util.Base64.getEncoder().encodeToString(hash);
 	}
 }
