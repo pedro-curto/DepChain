@@ -1,8 +1,13 @@
-package depchain.common.domain;
+package depchain.common;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import depchain.common.domain.Account;
+import depchain.common.domain.Block;
+import depchain.common.domain.BlockChainState;
+import depchain.common.domain.Transaction;
+
 import java.util.List;
 import java.util.stream.Collectors;
 

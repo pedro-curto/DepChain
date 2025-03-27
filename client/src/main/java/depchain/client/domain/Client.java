@@ -1,14 +1,21 @@
 package depchain.client.domain;
 
-import depchain.common.DCLogger;
-import depchain.common.PerfectLink;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import depchain.common.*;
+import depchain.common.domain.Account;
+import depchain.common.domain.Block;
 import depchain.common.domain.Entity;
 import depchain.common.messaging.AppendMessage;
 import depchain.common.messaging.ClientReplyMessage;
 import depchain.common.messaging.Message;
-import depchain.common.Security;
 
+import java.io.IOException;
 import java.net.DatagramSocket;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.KeyPair;
 import java.util.*;
 import java.util.concurrent.BlockingQueue;
@@ -34,8 +41,14 @@ public class Client {
     private final boolean debug;
     private volatile boolean running = true;
     private final boolean testEnvironment;
+    private Account account;
 
-    public Client(String clientName, int port, List<Entity> members, boolean debug, boolean testEnvironment) {
+    public Client(String clientName,
+                  int port,
+                  List<Entity> members,
+                  boolean debug,
+                  boolean testEnvironment
+    ) {
         this.clientName = clientName;
         this.debug = false;
 		this.port = port;
@@ -69,10 +82,37 @@ public class Client {
         // start a thread to deliver incoming messages
         Thread messageDeliveringThread = new Thread(() -> deliverMessage(messageQueue));
         messageDeliveringThread.start();
+        this.assignAccount();
         // start processing user input
         if (!testEnvironment) {
             processUserInput();
         }
+    }
+
+    public void assignAccount() {
+        // load the genesis file
+        Path currentDir = Paths.get(System.getProperty("user.dir"));
+        Path rootDir = currentDir.getParent();
+        Path genesisPath = rootDir.resolve("genesis-file.json");
+        String jsonString = null;
+        try {
+            jsonString = Files.readString(genesisPath);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        JsonElement jsonElement = JsonParser.parseString(jsonString);
+        JsonObject jsonObject = jsonElement.getAsJsonObject();
+        Block genesis_block = JsonAdapter.parseBlock(jsonObject);
+
+        // load account
+        String address = null;
+        try {
+            address = KeyUtils.hashPublicKey(clientKeys.getPublic());
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        this.account = genesis_block.getState().getAccount(address);
+        dcLogger.log("Account assigned: " + this.account);
     }
 
     public void stop() {
