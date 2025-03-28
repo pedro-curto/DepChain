@@ -1,13 +1,7 @@
 package depchain.common;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import depchain.common.domain.Account;
-import depchain.common.domain.Block;
-import depchain.common.domain.BlockChainState;
-import depchain.common.domain.Transaction;
-
+import com.google.gson.*;
+import depchain.common.domain.*;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -44,6 +38,61 @@ public class JsonAdapter {
     public static Transaction parseTransaction(JsonElement json) {
         // TODO
         return new Transaction();
+    }
+
+    public static JsonObject serializeBlockChain(BlockChain blockChain) {
+        JsonObject json = new JsonObject();
+
+        JsonArray blocks = new JsonArray();
+        blockChain.getBlocks()
+                .stream()
+                .map(JsonAdapter::serializeBlock)
+                .forEach(blocks::add);
+        json.add("blocks", blocks);
+
+        return json;
+    }
+
+    public static JsonObject serializeBlock(Block block) {
+        JsonObject json = new JsonObject();
+        json.addProperty("hash", block.getHash());
+        json.addProperty("previous_hash", block.getPreviousHash());
+
+        JsonArray transactions = new JsonArray();
+        block.getTransactions()
+                .stream()
+                .map(JsonAdapter::serializeTransaction)
+                .forEach(transactions::add);
+        json.add("transactions", transactions);
+
+        json.add("state", JsonAdapter.serializeBlockChainState(block.getState()));
+        return json;
+    }
+
+    public static JsonObject serializeBlockChainState(BlockChainState blockChainState) {
+        JsonObject json = new JsonObject();
+
+        JsonArray accounts = new JsonArray();
+        blockChainState.getAccounts().values()
+                .stream()
+                .map(JsonAdapter::serializeAccount)
+                .forEach(accounts::add);
+        json.add("accounts", accounts);
+
+        return json;
+    }
+
+    public static JsonObject serializeAccount(Account account) {
+        JsonObject json = new JsonObject();
+        json.addProperty("address", account.getAddress());
+        json.addProperty("balance", account.getBalance());
+        return json;
+    }
+
+    public static JsonObject serializeTransaction(Transaction transaction) {
+        // TODO
+        JsonObject json = new JsonObject();
+        return json;
     }
 
 }
