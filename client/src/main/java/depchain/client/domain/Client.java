@@ -77,7 +77,6 @@ public class Client {
         for (Entity member : members) {
             perfectLink.startSession(member.getPort());
         }
-        //perfectLink.startSession(this.leaderPort);
         // start a thread to deliver incoming messages
         Thread messageDeliveringThread = new Thread(() -> deliverMessage(messageQueue));
         messageDeliveringThread.start();

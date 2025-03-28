@@ -1,8 +1,7 @@
 package depchain.common.domain;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
 
 public class BlockChainState {
     private Map<String, Account> accounts = new HashMap<>();
@@ -17,5 +16,12 @@ public class BlockChainState {
 
     public Account getAccount(String address) {
         return new Account(accounts.get(address));
+    }
+
+    public BlockChainState copy() {
+        List<Account> copiedAccounts = accounts.values().stream()
+                .map(Account::new)
+                .collect(Collectors.toList());
+        return new BlockChainState(copiedAccounts);
     }
 }
