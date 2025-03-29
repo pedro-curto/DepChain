@@ -69,39 +69,7 @@ for i in "${!users[@]}"; do
     fi
 done
 
-# --- CLIENT KEYS ---
-# generate private/public key for client
-#user=${client[0]}
-#echo "Generating keys for user: ${user}"
-#mkdir -p "$CLIENTS_DIR/$user"
-#mkdir -p "$MEMBERS_DIR/$user"
-#
-## generate privkey
-#openssl genpkey -algorithm RSA -out "$CLIENTS_DIR/$user/${user}.privkey" -pkeyopt rsa_keygen_bits:2048
-#if [ $? -ne 0 ]; then
-#    echo "Error: Failed to generate private key for ${user}"
-#    exit 1
-#fi
-#echo "Generated private key for ${user}"
-#
-## generate pubkey from privkey
-#openssl rsa -pubout -in "$CLIENTS_DIR/$user/${user}.privkey" -out "$CLIENTS_DIR/$user/${user}.pubkey"
-#if [ $? -ne 0 ]; then
-#    echo "Error: Failed to generate public key for ${user}"
-#    exit 1
-#fi
-#echo "Generated public key for ${user}"
-#
-## copy client keys to members dir
-#cp "$CLIENTS_DIR/$user/${user}.pubkey" "$MEMBERS_DIR/$user/${user}.pubkey"
-#cp "$CLIENTS_DIR/$user/${user}.privkey" "$MEMBERS_DIR/$user/${user}.privkey"
-#
-## create a client.txt at the membership directory similar to the membership
-#echo "${user},${ADDRESS},${CLIENT_PORT},$MEMBERS_DIR/${user}/${user}.pubkey" >> "$CLIENT_FILE"
-#
-#echo "All keys generated successfully."
-
-# -- generate the genesis file based on clients that we generated above --
+# --- GENESIS FILE GENERATION (ALONG WITH CLIENT KEYS) ---
 
 GENESIS_FILE="../genesis-file.json"
 
@@ -155,7 +123,7 @@ for i in "${!client[@]}"; do
     # create a client.txt at the membership directory similar to the membership
     echo "${user},${ADDRESS},$((BASE_CLIENT_PORT + i)),$MEMBERS_DIR/${user}/${user}.pubkey" >> "$CLIENT_FILE"
 
-    # Generate hash of public key for genesis file
+    # generates hash of pubkey for genesis file
     pk_hash=$(python3 ../generate-pk-hash.py "$CLIENTS_DIR/$user/${user}.pubkey" | grep "SHA-256 Hash of Public Key:" | cut -d' ' -f6)
     echo "Generated hash for ${user}'s public key: ${pk_hash}"
 
