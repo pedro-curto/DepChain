@@ -8,9 +8,11 @@ def generate_hash(pk_file):
         public_key_data = f.read()
     key_data_clean = re.sub(r"-----.*?-----", "", public_key_data).strip()
     key_bytes = base64.b64decode(key_data_clean)
-    hash_object = hashlib.sha256(key_bytes).digest()
-    hash_base64 = base64.b64encode(hash_object).decode()
-    return hash_base64
+    # truncates to 20 bytes
+    hash_object = hashlib.sha256(key_bytes).digest()[:20]
+    hash_hex = "0x" + hash_object.hex()
+    #hash_base64 = base64.b64encode(hash_object).decode()
+    return hash_hex
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:

@@ -15,7 +15,10 @@
 
 ## Configuration
 
-**First of all, you need to generate the configuration files** (with the membership). To do that, run the following command:
+**First of all, you need to generate the configuration files** (with the membership). 
+For this, we assume you have the `jq` command available (we use it for JSON manipulation).
+
+To generate the configuration files:
 ```bash
 cd scripts
 ./createMembership.sh
@@ -23,30 +26,7 @@ cd scripts
 
 Without this, `mvn clean install` will fail because it runs tests that require the configuration files.
 However, `mvn clean install -DskipTests` will work.
-
-**Installing Contracts**
-
-Start by installing the Solidity compiler via Node.js (npm):
-```bash
-npm install solc --global
-```
-
-Go to the `contracts` directory:
-```bash
-cd contract
-
-Then, compile the contracts (you need ERC20.sol, I cloned the entire contracts repository from Open Zeppelin):
-```bash
-solc --bin --abi ISTCoin.sol -o build/ --overwrite
-```
-
-```bash
- javac -d out -cp ".:jars/*" ISTCoin/src/main/java/ISTCoinMain.java
-```
-
-```bash
-java -cp "out:./jars/*" ISTCoinMain
-```
+This also generates the `genesis-file.json` that will be necessary to generate the genesis block.
 
 
 ## Building the Project
@@ -100,6 +80,7 @@ bar
 ## Testing the Project
 
 ### Automated Tests
+**Member Tests**
 Go to the member directory:
 ```bash
 cd member
@@ -123,6 +104,22 @@ The tests that we have are all contained within `ByzantineBehaviourTest`:
 - `testConsensusWithWrongWriteAcceptByzantine`: tests the consensus algorithm with a Byzantine member that sends wrong WRITEs and ACCEPTs
 - `testConsensusWithByzantinePerfectLink`: tests the consensus algorithm when all members have a Byzantine perfect link, where messages can be lost, duplicated, reordered or corrupted.
 
+**Contract Tests**
+From root:
+```bash
+cd contract
+```
+
+To run all tests:
+```bash
+mvn test
+```
+
+The tests that we have check if:
+- The contract outputs normal info (name, symbol, decimals)
+- The blacklist functionality works
+- The `transfer` and `transferFrom` primitives work as expected
+
 ### Manual Tests
 
 To manually run tests and test the program, use this command to launch all members (no Byzantine):
@@ -144,7 +141,7 @@ Where `<byzantineBehaviour>` can be one of the following:
 - '5': spam messages (STATEs, WRITEs...)
 - '6': send wrong writes and accepts
 
-Afterwards (very important to be **paulo**, since it's the one that we have private and public keys for):
+Afterwards (very important to be **paulo** or some client that you generated the keys for), run the client:
 ```bash
 cd client
 mvn compile exec:java -Dexec.args="2000 paulo"

@@ -9,6 +9,7 @@ import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
+import java.util.Arrays;
 
 public class KeyUtils {
 	public static PrivateKey readPrivateKey(String pathToFile) throws Exception {
@@ -50,6 +51,13 @@ public class KeyUtils {
 		MessageDigest digest = MessageDigest.getInstance("SHA-256");
 		digest.update(encoded);
 		byte[] hash = digest.digest();
-		return java.util.Base64.getEncoder().encodeToString(hash);
+		// truncate to 20 bytes
+		byte[] truncated = Arrays.copyOf(hash, 20);
+		// convert to hex string
+		StringBuilder hexString = new StringBuilder("0x");
+		for (byte b : truncated) {
+			hexString.append(String.format("%02x", b));
+		}
+		return hexString.toString();
 	}
 }

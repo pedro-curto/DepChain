@@ -28,4 +28,9 @@ public class Block {
     public BlockChainState getState() {
         return state;
     }
+
+    @Override
+    public String toString() {
+        return "BLOCK {hash: " + hash + ", previousHash: " + previousHash + ", transactions: " + transactions + ", state: " + state + "}";
+    }
 }

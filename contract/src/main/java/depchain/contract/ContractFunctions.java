@@ -37,71 +37,71 @@ public class ContractFunctions {
 
     // TODO -> main is currently just outputting what happens in the tests
     // maybe remove it?
-    public static void main(String[] args) {
-        // creates a world state (keeps track of state of every account on the blockchain)
-        SimpleWorld simpleWorld = new SimpleWorld();
-
-        // creates sender account
-        Address senderAddress = Address.fromHexString("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
-        simpleWorld.createAccount(senderAddress,0, Wei.fromEth(100));
-        MutableAccount senderAccount = (MutableAccount) simpleWorld.get(senderAddress);
-        //System.out.println("Sender Account");
-        //System.out.println("  Address: "+senderAccount.getAddress());
-        //System.out.println("  Balance: "+senderAccount.getBalance());
-        //System.out.println("  Nonce: "+senderAccount.getNonce());
-        //System.out.println();
-
-        // and contract account
-        Address contractAddress = Address.fromHexString("1234567891234567891234567891234567891234");
-        simpleWorld.createAccount(contractAddress,0, Wei.fromEth(0));
-        MutableAccount contractAccount = (MutableAccount) simpleWorld.get(contractAddress);
-        //System.out.println("Contract Account");
-        //System.out.println("  Address: "+contractAccount.getAddress());
-        //System.out.println("  Balance: "+contractAccount.getBalance());
-        //System.out.println("  Nonce: "+contractAccount.getNonce());
-        //System.out.println("  Storage:");
-        //System.out.println("    Slot 0: "+simpleWorld.get(contractAddress).getStorageValue(UInt256.valueOf(0)));
-        String paddedAddress = ContractUtils.padHexStringTo256Bit(senderAddress.toHexString());
-        String stateVariableIndex = ContractUtils.convertIntegerToHex256Bit(1);
-        String storageSlotMapping = Numeric.toHexStringNoPrefix(Hash.sha3(Numeric.hexStringToByteArray(paddedAddress + stateVariableIndex)));
-        //System.out.println("    Slot SHA3[msg.sender||1] (mapping): "+simpleWorld.get(contractAddress).getStorageValue(UInt256.fromHexString(storageSlotMapping)));
-        //System.out.println();
-
-        Address recipientAddress = Address.fromHexString("1111111111111111111111111111111111111111");
-        Address spenderAddress = Address.fromHexString("2222222222222222222222222222222222222222");
-        // add to world state
-        simpleWorld.createAccount(recipientAddress, 0, Wei.ZERO);
-        simpleWorld.createAccount(spenderAddress, 0, Wei.ZERO);
-
-        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-        PrintStream printStream = new PrintStream(byteArrayOutputStream);
-        StandardJsonTracer tracer = new StandardJsonTracer(printStream, true, true, true, true);
-
-        EVMExecutor executor = EVMExecutor.evm(EvmSpecVersion.CANCUN);
-        executor.tracer(tracer);
-        executor.code(Bytes.fromHexString(DEPLOYMENT_BYTECODE));
-        executor.sender(senderAddress);
-        executor.receiver(contractAddress);
-        executor.worldUpdater(simpleWorld.updater());
-        executor.commitWorldState();
-
-        executor.callData(Bytes.EMPTY);
-        executor.execute();
-
-        executor.code(Bytes.fromHexString(RUNTIME_BYTECODE));
-        executor.commitWorldState();
-
-
-        // ------------------ CALLS ------------------ //
-        // name, symbol, total supply
-        callName(executor, byteArrayOutputStream);
-        callSymbol(executor, byteArrayOutputStream);
-        callTotalSupply(executor, byteArrayOutputStream);
-
-        // -- TRANSFER --
-        transferTokens(executor, byteArrayOutputStream, senderAddress, recipientAddress, 100);
-
-}
+//    public static void main(String[] args) {
+//        // creates a world state (keeps track of state of every account on the blockchain)
+//        SimpleWorld simpleWorld = new SimpleWorld();
+//
+//        // creates sender account
+//        Address senderAddress = Address.fromHexString("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
+//        simpleWorld.createAccount(senderAddress,0, Wei.fromEth(100));
+//        MutableAccount senderAccount = (MutableAccount) simpleWorld.get(senderAddress);
+//        //System.out.println("Sender Account");
+//        //System.out.println("  Address: "+senderAccount.getAddress());
+//        //System.out.println("  Balance: "+senderAccount.getBalance());
+//        //System.out.println("  Nonce: "+senderAccount.getNonce());
+//        //System.out.println();
+//
+//        // and contract account
+//        Address contractAddress = Address.fromHexString("1234567891234567891234567891234567891234");
+//        simpleWorld.createAccount(contractAddress,0, Wei.fromEth(0));
+//        MutableAccount contractAccount = (MutableAccount) simpleWorld.get(contractAddress);
+//        //System.out.println("Contract Account");
+//        //System.out.println("  Address: "+contractAccount.getAddress());
+//        //System.out.println("  Balance: "+contractAccount.getBalance());
+//        //System.out.println("  Nonce: "+contractAccount.getNonce());
+//        //System.out.println("  Storage:");
+//        //System.out.println("    Slot 0: "+simpleWorld.get(contractAddress).getStorageValue(UInt256.valueOf(0)));
+//        String paddedAddress = ContractUtils.padHexStringTo256Bit(senderAddress.toHexString());
+//        String stateVariableIndex = ContractUtils.convertIntegerToHex256Bit(1);
+//        String storageSlotMapping = Numeric.toHexStringNoPrefix(Hash.sha3(Numeric.hexStringToByteArray(paddedAddress + stateVariableIndex)));
+//        //System.out.println("    Slot SHA3[msg.sender||1] (mapping): "+simpleWorld.get(contractAddress).getStorageValue(UInt256.fromHexString(storageSlotMapping)));
+//        //System.out.println();
+//
+//        Address recipientAddress = Address.fromHexString("1111111111111111111111111111111111111111");
+//        Address spenderAddress = Address.fromHexString("2222222222222222222222222222222222222222");
+//        // add to world state
+//        simpleWorld.createAccount(recipientAddress, 0, Wei.ZERO);
+//        simpleWorld.createAccount(spenderAddress, 0, Wei.ZERO);
+//
+//        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+//        PrintStream printStream = new PrintStream(byteArrayOutputStream);
+//        StandardJsonTracer tracer = new StandardJsonTracer(printStream, true, true, true, true);
+//
+//        EVMExecutor executor = EVMExecutor.evm(EvmSpecVersion.CANCUN);
+//        executor.tracer(tracer);
+//        executor.code(Bytes.fromHexString(DEPLOYMENT_BYTECODE));
+//        executor.sender(senderAddress);
+//        executor.receiver(contractAddress);
+//        executor.worldUpdater(simpleWorld.updater());
+//        executor.commitWorldState();
+//
+//        executor.callData(Bytes.EMPTY);
+//        executor.execute();
+//
+//        executor.code(Bytes.fromHexString(RUNTIME_BYTECODE));
+//        executor.commitWorldState();
+//
+//
+//        // ------------------ CALLS ------------------ //
+//        // name, symbol, total supply
+//        callName(executor, byteArrayOutputStream);
+//        callSymbol(executor, byteArrayOutputStream);
+//        callTotalSupply(executor, byteArrayOutputStream);
+//
+//        // -- TRANSFER --
+//        transferTokens(executor, byteArrayOutputStream, senderAddress, recipientAddress, 100);
+//
+//}
 
     public static EVMExecutor deployContract(String senderAddress,
                                              String contractAddress,
@@ -164,11 +164,11 @@ public class ContractFunctions {
 
     // ------------------ TRANSFER ------------------ //
 
-    public static void transferTokens(EVMExecutor executor,
+    public static boolean transferTokens(EVMExecutor executor,
                                        ByteArrayOutputStream bos,
                                        Address senderAddress,
                                        Address recipientAddress,
-                                       int tokens) {
+                                       BigInteger tokens) {
         // check sender and recipient's initial balance
         executor.callData(Bytes.fromHexString(BALANCEOF_ID + ContractUtils.padHexStringTo256Bit(senderAddress.toHexString())));
         executor.execute();
@@ -186,6 +186,7 @@ public class ContractFunctions {
                 + ContractUtils.padHexStringTo256Bit(recipientAddress.toHexString())
                 + ContractUtils.convertIntegerToHex256Bit(tokens)));
         executor.execute();
+        boolean result = ContractUtils.extractBooleanFromReturnData(bos);
 
         // check new balances
         executor.callData(Bytes.fromHexString(BALANCEOF_ID + ContractUtils.padHexStringTo256Bit(senderAddress.toHexString())));
@@ -198,14 +199,14 @@ public class ContractFunctions {
         recipientBalance = ContractUtils.extractBigIntegerFromReturnData(bos);
         System.out.println("Recipient balance after transfer: " + recipientBalance);
 
-
+        return result;
     }
 
 
     // TODO -> check below
 
 
-    public static boolean approve(EVMExecutor executor, ByteArrayOutputStream bos, Address owner, Address spender, int amount) {
+    public static boolean approve(EVMExecutor executor, ByteArrayOutputStream bos, Address owner, Address spender, BigInteger amount) {
         String callData = APPROVE_ID
                 + ContractUtils.padHexStringTo256Bit(spender.toHexString())
                 + ContractUtils.convertIntegerToHex256Bit(amount);
@@ -215,7 +216,7 @@ public class ContractFunctions {
         return ContractUtils.extractBooleanFromReturnData(bos);
     }
 
-    public static boolean transferFrom(EVMExecutor executor, ByteArrayOutputStream bos, Address spender, Address from, Address to, int amount) {
+    public static boolean transferFrom(EVMExecutor executor, ByteArrayOutputStream bos, Address spender, Address from, Address to, BigInteger amount) {
         String callData = TRANSFERFROM_ID
                 + ContractUtils.padHexStringTo256Bit(from.toHexString())
                 + ContractUtils.padHexStringTo256Bit(to.toHexString())

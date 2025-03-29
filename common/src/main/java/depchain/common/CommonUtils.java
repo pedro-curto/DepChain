@@ -1,9 +1,17 @@
 package depchain.common;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import depchain.common.domain.Block;
 import depchain.common.domain.Entity;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.PublicKey;
 import java.util.ArrayList;
 import java.util.List;
@@ -90,4 +98,49 @@ public class CommonUtils {
 		System.out.println("Loaded members: " + members);
 		return members;
 	}
+
+	public static Block loadGenesisBlock() {
+		Path currentDir = Paths.get(System.getProperty("user.dir"));
+		Path rootDir = currentDir.getParent();
+		Path genesisPath = rootDir.resolve("genesis-file.json");
+
+		// load the json file
+		String jsonString = null;
+		try {
+			jsonString = Files.readString(genesisPath);
+		} catch (IOException e) {
+			System.err.println("Error reading genesis file: " + e.getMessage());
+			return null;
+		}
+		JsonElement jsonElement = JsonParser.parseString(jsonString);
+		JsonObject jsonObject = jsonElement.getAsJsonObject();
+		return JsonAdapter.parseBlock(jsonObject);
+	}
+
+	public static JsonObject getGenesisJsonObject() {
+		Path currentDir = Paths.get(System.getProperty("user.dir"));
+		Path rootDir = currentDir.getParent();
+		Path genesisPath = rootDir.resolve("genesis-file.json");
+		try {
+			String jsonString = Files.readString(genesisPath);
+			return JsonParser.parseString(jsonString).getAsJsonObject();
+		} catch (IOException e) {
+			System.err.println("Error reading JSON file: " + e.getMessage());
+			return null;
+		}
+	}
+
+	public static JsonObject jsonGetter(JsonObject json, String key) {
+		if (json == null) {
+			System.err.println("JSON object is null");
+			throw new IllegalArgumentException("JSON object is null");
+		}
+		if (json.has(key)) {
+			return json.getAsJsonObject(key);
+		} else {
+			System.err.println("Key " + key + " not found in JSON object");
+			throw new IllegalArgumentException("Key " + key + " not found in JSON object");
+		}
+	}
+
 }

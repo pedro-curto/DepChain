@@ -10,8 +10,11 @@ import depchain.common.domain.Entity;
 import depchain.common.messaging.AppendMessage;
 import depchain.common.messaging.ClientReplyMessage;
 import depchain.common.messaging.Message;
+import depchain.common.messaging.Message.CoinType;
+import depchain.common.messaging.TransferMessage;
 
 import java.io.IOException;
+import java.math.BigInteger;
 import java.net.DatagramSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -23,8 +26,8 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 public class Client {
     private long nonce = 0;
-    private String baseDir = System.getProperty("user.dir");
-    private String clientName;
+    private final String baseDir = System.getProperty("user.dir");
+    private final String clientName;
     private final int port;
 	private final int leaderPort;
     private final List<Entity> members;
@@ -41,7 +44,9 @@ public class Client {
     private final boolean debug;
     private volatile boolean running = true;
     private final boolean testEnvironment;
-    private Account account;
+    private Account myAccount;
+    // {clientName: account}
+    private Map<String, Account> accounts;
 
     public Client(String clientName,
                   int port,
@@ -58,7 +63,7 @@ public class Client {
         this.memberResponses = new HashMap<>();
         // TODO hardcoded leader
         this.leaderPort = members.get(0).getPort();
-        this.dcLogger = new DCLogger(Client.class, debug);
+        this.dcLogger = new DCLogger(Client.class, true);
         this.testEnvironment = testEnvironment;
     }
 
@@ -102,6 +107,7 @@ public class Client {
         JsonElement jsonElement = JsonParser.parseString(jsonString);
         JsonObject jsonObject = jsonElement.getAsJsonObject();
         Block genesis_block = JsonAdapter.parseBlock(jsonObject);
+        System.out.println("Genesis block: " + genesis_block);
 
         // load account
         String address = null;
@@ -110,8 +116,17 @@ public class Client {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-        this.account = genesis_block.getState().getAccount(address);
-        dcLogger.log("Account assigned: " + this.account);
+        System.out.println("Client address: " + address);
+        this.myAccount = genesis_block.getState().getAccount(address);
+        dcLogger.log("Account assigned: " + this.myAccount);
+        // stores other accounts
+        this.accounts = new HashMap<>();
+        for (Account account : genesis_block.getState().getAccounts().values()) {
+            if (!account.getAddress().equals(this.myAccount.getAddress())) {
+                this.accounts.put(account.getName(), account);
+            }
+        }
+        dcLogger.log("Other accounts: " + this.accounts);
     }
 
     public void stop() {
@@ -121,14 +136,65 @@ public class Client {
 
     private void processUserInput() throws Exception {
         Scanner input = new Scanner(System.in);
-        System.out.print("> ");
         while (running) {
-            String content = input.nextLine();
-            if (content.equals("QUIT")) {
+            System.out.print("> ");
+            String[] content = input.nextLine().split(" ");
+            System.out.print("content: " + Arrays.toString(content) + "\n");
+            if (content[0].equalsIgnoreCase("QUIT") || content[0].equalsIgnoreCase("EXIT")) {
                 input.close();
                 System.exit(0);
+            } else if (content[0].equalsIgnoreCase("ISTCoin")) {
+                handleCoinCommand(Arrays.copyOfRange(content, 1, content.length), CoinType.ISTCOIN);
+            } else if (content[0].equalsIgnoreCase("DepCoin")) {
+                handleCoinCommand(Arrays.copyOfRange(content, 1, content.length), CoinType.DEPCOIN);
+            } else {
+                System.out.print("Invalid Command. Possible commands:\n" +
+                        "- ISTCoin <command> <args>\n" +
+                        "- DepCoin <command> <args>\n" +
+                        "- QUIT | EXIT\n");
             }
-            sendAppend(content);
+            //sendAppend(content);
+        }
+    }
+
+    private void handleCoinCommand(String[] content, CoinType coinType) {
+        switch(content[0].toUpperCase()) {
+            case "BALANCE":
+                if (content.length == 2) {
+                    String address = content[1];
+                    Account account = this.myAccount;
+                    if (address.equals(account.getAddress())) {
+                        System.out.println("Your balance is: " + account.getBalance());
+                    } else {
+                        System.out.println("You are not allowed to check the balance of this address.");
+                    }
+                } else {
+                    System.out.println("Invalid command. Usage: DepCoin BALANCE <address>");
+                }
+                break;
+            case "TRANSFER":
+                if (content.length == 3) {
+                    String nameOfToAddress = content[1];
+                    dcLogger.log("nameOfToAddress: " + nameOfToAddress);
+                    dcLogger.log("accounts: " + accounts);
+                    String toAddress = accounts.get(nameOfToAddress).getAddress();
+                    BigInteger amount = BigInteger.valueOf(Long.parseLong(content[2]));
+                    // TODO check if he has enough balance here and amount (?)
+                    String fromAddress = this.myAccount.getAddress();
+                    String dataToSign = fromAddress + toAddress + amount + this.nonce;
+                    String signature = Security.makeDS(dataToSign, clientKeys.getPrivate());
+                    TransferMessage msg = new TransferMessage(fromAddress, toAddress, amount, coinType, signature, nonce);
+                    // send the message to the leader
+                    perfectLink.sendMessage(msg, leaderPort);
+                    System.out.println("Sent message: " + msg);
+
+
+                } else {
+                    System.out.println("Invalid command. Usage: DepCoin TRANSFER <address> <amount>");
+                }
+                break;
+            default:
+                System.out.println("Invalid command.");
         }
     }
 

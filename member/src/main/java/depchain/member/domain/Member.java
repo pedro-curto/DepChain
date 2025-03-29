@@ -1,16 +1,36 @@
 package depchain.member.domain;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import depchain.common.*;
+import depchain.common.domain.Block;
 import depchain.common.domain.ConsensusState;
 import depchain.common.domain.Entity;
 import depchain.common.domain.ValueTimestampPair;
 import depchain.common.messaging.*;
+import depchain.common.messaging.consensus.*;
+import depchain.contract.ContractFunctions;
+import depchain.contract.ContractUtils;
 import depchain.member.state.StringChain;
+
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.math.BigInteger;
 import java.security.PublicKey;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.LinkedBlockingQueue;
+
+import org.hyperledger.besu.datatypes.Wei;
+import org.hyperledger.besu.evm.EvmSpecVersion;
+import org.hyperledger.besu.evm.fluent.EVMExecutor;
+import org.hyperledger.besu.evm.fluent.SimpleWorld;
+import org.hyperledger.besu.datatypes.Address;
+import org.hyperledger.besu.evm.tracing.StandardJsonTracer;
+import org.hyperledger.besu.evm.worldstate.WorldUpdater;
 
 public class Member {
     protected Config config;
@@ -20,9 +40,14 @@ public class Member {
     protected final StringChain stringChain;
     protected BlockingQueue<Message> messageQueue;
     protected BlockingQueue<AppendMessage> appendQueue;
+    protected BlockingQueue<TransferMessage> transferQueue = new LinkedBlockingQueue<>();
     private Map<Integer, Long> clientNonces = new ConcurrentHashMap<>();
     private volatile boolean running;
     private boolean caughtInvalidSignature = false;
+    // smart contract fields
+    private EVMExecutor evmExecutor;
+    private SimpleWorld world;
+    private ByteArrayOutputStream bos;
 
     public Member(Config config,
                   DCLogger dcLogger,
@@ -45,10 +70,53 @@ public class Member {
             dcLogger.error("Leader not found");
             return;
         }
+        // evm stuff
+        initializeEVM();
         this.running = true;
         startConnections();
         new Thread(this::doConsensus).start();
         receiveMessages();
+        // don't put code after this because this thread passes onto receiveMessages
+    }
+
+    private void initializeEVM() {
+        this.world = new SimpleWorld();
+        this.bos = new ByteArrayOutputStream();
+        PrintStream ps = new PrintStream(bos);
+        StandardJsonTracer tracer = new StandardJsonTracer(ps, true, true, true, true);
+        // load accounts
+        JsonObject json = CommonUtils.getGenesisJsonObject();
+        JsonObject stateObject = CommonUtils.jsonGetter(json, "state");
+        JsonArray accountsArray = stateObject.getAsJsonArray("accounts");
+        boolean first = true;
+        for (JsonElement accountEl : accountsArray) {
+            JsonObject accountObj = accountEl.getAsJsonObject();
+            String accountAddrStr = accountObj.get("address").getAsString();
+            String name = accountObj.get("name").getAsString();
+            long balance = accountObj.get("balance").getAsLong();
+            // create address and balance to give to MutableAccount
+            Address accountAddr = Address.fromHexString(accountAddrStr);
+            Wei balanceWei = Wei.fromEth(balance);
+            dcLogger.log("Loading account with address: " + accountAddr + " and balance: " + balanceWei);
+            // TODO -> get a better condition for the blacklist owner?
+            if (first) {
+                // deploys the contract with himself as sender
+                dcLogger.log("Deploying contract...");
+                JsonObject contractObj = CommonUtils.jsonGetter(stateObject, "contract");
+                String contractAddr = contractObj.get("address").getAsString();
+                dcLogger.log("Contract address: " + contractAddr);
+                this.evmExecutor = ContractFunctions.deployContract(accountAddrStr, contractAddr, this.world, tracer);
+                first = false;
+                continue; // avoids creating the account again
+            }
+            // add account to world
+            //this.world.createAccount(accountAddr, 0, balanceWei);
+        }
+        // make some calls to basic info
+        ContractFunctions.callName(this.evmExecutor, this.bos);
+        ContractFunctions.callSymbol(this.evmExecutor, this.bos);
+        ContractFunctions.callTotalSupply(this.evmExecutor, this.bos);
+        ContractFunctions.callDecimals(this.evmExecutor, this.bos);
     }
 
     /***
@@ -101,6 +169,12 @@ public class Member {
                         if (acceptMessage.getConsensusInstance() == this.consensusState.getInstance())
                             handleAccept(acceptMessage);
                         break;
+                    case TRANSFER:
+                        TransferMessage transferMessage = (TransferMessage) message;
+                        this.transferQueue.put(transferMessage);
+                        // TODO -> remove below
+                        handleTransfer(transferMessage);
+                        break;
                     default:
                         dcLogger.log("Unknown message type");
                 }
@@ -108,6 +182,23 @@ public class Member {
                 dcLogger.error("Error while processing message: " + e.getMessage());
             }
         }
+    }
+
+    private void handleTransfer(TransferMessage transferMessage) {
+        dcLogger.log("Received transfer message: " + transferMessage);
+        Address from = Address.fromHexString(transferMessage.getFrom());
+        Address to = Address.fromHexString(transferMessage.getTo());
+        ContractFunctions.callBalanceOf(evmExecutor, bos, from);
+        ContractFunctions.callBalanceOf(evmExecutor, bos, to);
+        BigInteger value = transferMessage.getValue();
+        boolean result = ContractFunctions.transferTokens(evmExecutor, bos, from, to, value);
+        if (result) {
+            dcLogger.log("Transfer successful");
+        } else {
+            dcLogger.log("Transfer failed");
+        }
+        ContractFunctions.callBalanceOf(evmExecutor, bos, from);
+        ContractFunctions.callBalanceOf(evmExecutor, bos, to);
     }
 
     public void handleRead(ReadMessage readMessage) {

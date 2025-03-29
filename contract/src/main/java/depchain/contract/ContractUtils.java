@@ -24,10 +24,8 @@ public class ContractUtils {
         return Integer.decode("0x"+returnData);
     }
 
-    public static String convertIntegerToHex256Bit(int number) {
-        BigInteger bigInt = BigInteger.valueOf(number);
-
-        return String.format("%064x", bigInt);
+    public static String convertIntegerToHex256Bit(BigInteger number) {
+        return String.format("%064x", number);
     }
 
     public static String padHexStringTo256Bit(String hexString) {

@@ -1,10 +1,12 @@
 package depchain.common.domain;
 
 import depchain.common.DCLogger;
-import depchain.common.messaging.*;
+import depchain.common.messaging.consensus.AcceptMessage;
+import depchain.common.messaging.consensus.CollectedMessage;
+import depchain.common.messaging.consensus.StateMessage;
+import depchain.common.messaging.consensus.WriteMessage;
 
 import java.util.*;
-import java.util.concurrent.ArrayBlockingQueue;
 
 public class ConsensusState {
 

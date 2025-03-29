@@ -15,6 +15,10 @@ public class BlockChainState {
     }
 
     public Account getAccount(String address) {
+        if (!accounts.containsKey(address)) {
+            System.out.println("Existing accounts: " + accounts.keySet());
+            throw new IllegalArgumentException("Account with address " + address + " does not exist.");
+        }
         return new Account(accounts.get(address));
     }
 
@@ -23,5 +27,12 @@ public class BlockChainState {
                 .map(Account::new)
                 .collect(Collectors.toList());
         return new BlockChainState(copiedAccounts);
+    }
+
+    @Override
+    public String toString() {
+        return "BLOCKCHAIN STATE {accounts: " + accounts.values().stream()
+                .map(Account::toString)
+                .collect(Collectors.joining(", ")) + "}";
     }
 }

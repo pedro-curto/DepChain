@@ -1,4 +1,6 @@
-package depchain.common.messaging;
+package depchain.common.messaging.consensus;
+
+import depchain.common.messaging.Message;
 
 public class ReadMessage extends Message {
 

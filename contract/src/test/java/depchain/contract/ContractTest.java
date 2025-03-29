@@ -70,7 +70,7 @@ public class ContractTest {
         SimpleWorld world = this.world;
         EVMExecutor executor = ContractFunctions.deployContract(SENDER_STR, CONTRACT_STR, world, this.tracer);
 
-        ContractFunctions.transferTokens(executor, bos, SENDER, RECIPIENT, 2000);
+        ContractFunctions.transferTokens(executor, bos, SENDER, RECIPIENT, BigInteger.valueOf(2000));
         BigInteger recpBalance = ContractFunctions.callBalanceOf(executor, this.bos, RECIPIENT);
         BigInteger senderBalance = ContractFunctions.callBalanceOf(executor, this.bos, SENDER);
 
@@ -88,7 +88,7 @@ public class ContractTest {
 
         // blacklist and attempt transfer
         ContractFunctions.addToBlacklist(executor, SENDER, SENDER);
-        ContractFunctions.transferTokens(executor, bos, SENDER, RECIPIENT, 100);
+        ContractFunctions.transferTokens(executor, bos, SENDER, RECIPIENT, BigInteger.valueOf(100));
         BigInteger senderBalance = ContractFunctions.callBalanceOf(executor, bos, SENDER);
         Assertions.assertEquals(new BigInteger("10000000000"), senderBalance); // Balance unchanged
         boolean isBlacklisted = ContractFunctions.callIsBlacklisted(executor, bos, SENDER, SENDER);
@@ -96,7 +96,7 @@ public class ContractTest {
 
         // remove from blacklist and retry
         ContractFunctions.removeFromBlacklist(executor, SENDER, SENDER);
-        ContractFunctions.transferTokens(executor, bos, SENDER, RECIPIENT, 100);
+        ContractFunctions.transferTokens(executor, bos, SENDER, RECIPIENT, BigInteger.valueOf(100));
         BigInteger newBalance = ContractFunctions.callBalanceOf(executor, bos, RECIPIENT);
         Assertions.assertEquals(BigInteger.valueOf(100), newBalance);
     }
@@ -110,14 +110,14 @@ public class ContractTest {
         EVMExecutor executor = ContractFunctions.deployContract(SENDER_STR, CONTRACT_STR, world, tracer);
 
         // try to do a transfer from an account with no allowance
-        boolean result = ContractFunctions.transferFrom(executor, bos, SPENDER, SENDER, RECIPIENT, 100);
+        boolean result = ContractFunctions.transferFrom(executor, bos, SPENDER, SENDER, RECIPIENT, BigInteger.valueOf(100));
         Assertions.assertFalse(result);
 
         // approve 1000 tokens and transfer 500
-        ContractFunctions.approve(executor, bos, SENDER, SPENDER, 1000);
+        ContractFunctions.approve(executor, bos, SENDER, SPENDER, BigInteger.valueOf(1000));
         BigInteger allowance = ContractFunctions.callAllowance(executor, bos, SENDER, SPENDER);
         Assertions.assertEquals(BigInteger.valueOf(1000), allowance);
-        ContractFunctions.transferFrom(executor, bos, SPENDER, SENDER, RECIPIENT, 500);
+        ContractFunctions.transferFrom(executor, bos, SPENDER, SENDER, RECIPIENT, BigInteger.valueOf(500));
 
         // check balances/allowance
         BigInteger senderBalance = ContractFunctions.callBalanceOf(executor, bos, SENDER);

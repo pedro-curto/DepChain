@@ -5,6 +5,7 @@ import com.google.gson.JsonSyntaxException;
 import depchain.common.domain.Entity;
 import depchain.common.messaging.*;
 import depchain.common.messaging.Message.MessageType;
+import depchain.common.messaging.consensus.*;
 import depchain.common.session.Session;
 import depchain.common.session.SessionTaskKey;
 
@@ -302,6 +303,8 @@ public class PerfectLink {
                 return gson.fromJson(received, AcceptMessage.class);
             case CLIENT_REPLY:
                 return gson.fromJson(received, ClientReplyMessage.class);
+            case TRANSFER:
+                return gson.fromJson(received, TransferMessage.class);
             default:
                 dcLogger.log("(messageFromJson) Unknown message type");
                 return message;

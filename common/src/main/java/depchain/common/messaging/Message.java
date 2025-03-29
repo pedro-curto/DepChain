@@ -6,6 +6,12 @@ public class Message {
 	private final MessageType type;
 	private String hmac = null;
 	private int port = -1; // used as id since all processes are running in localhost
+	private CoinType coinType;
+
+	public Message(MessageType messageType, CoinType coinType) {
+		this.type = messageType;
+		this.coinType = coinType;
+	}
 	//TODO -> use (address + port) or an id to identify processes as it is more correct
 
 	public enum MessageType {
@@ -18,6 +24,13 @@ public class Message {
 		STATE,
 		COLLECTED,
 		ACCEPT,
+		CLIENT,
+		// blockchain operations
+		BALANCE, TRANSFER, APPROVE, ALLOWANCE, TRANSFER_FROM,
+	}
+
+	public enum CoinType {
+		ISTCOIN, DEPCOIN,
 	}
 
 	public Message(long sequenceNumber, MessageType messageType) {

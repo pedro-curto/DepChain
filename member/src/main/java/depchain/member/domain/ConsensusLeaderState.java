@@ -2,8 +2,7 @@ package depchain.member.domain;
 
 import depchain.common.Security;
 import depchain.common.domain.ConsensusState;
-import depchain.common.domain.ValueTimestampPair;
-import depchain.common.messaging.StateMessage;
+import depchain.common.messaging.consensus.StateMessage;
 
 import java.util.ArrayList;
 import java.util.HashMap;
