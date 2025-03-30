@@ -12,6 +12,12 @@ public class Message {
 		this.type = messageType;
 		this.coinType = coinType;
 	}
+
+	public Message(MessageType messageType, int port, CoinType coinType) {
+		this.type = messageType;
+		this.port = port;
+		this.coinType = coinType;
+	}
 	//TODO -> use (address + port) or an id to identify processes as it is more correct
 
 	public enum MessageType {
@@ -26,7 +32,7 @@ public class Message {
 		ACCEPT,
 		CLIENT,
 		// blockchain operations
-		BALANCE, TRANSFER, APPROVE, ALLOWANCE, TRANSFER_FROM,
+		BALANCE_OF, TRANSFER, APPROVE, ALLOWANCE, TRANSFER_FROM,
 	}
 
 	public enum CoinType {

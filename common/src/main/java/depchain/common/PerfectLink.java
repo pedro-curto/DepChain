@@ -6,6 +6,7 @@ import depchain.common.domain.Entity;
 import depchain.common.messaging.*;
 import depchain.common.messaging.Message.MessageType;
 import depchain.common.messaging.consensus.*;
+import depchain.common.messaging.library.*;
 import depchain.common.session.Session;
 import depchain.common.session.SessionTaskKey;
 
@@ -305,6 +306,12 @@ public class PerfectLink {
                 return gson.fromJson(received, ClientReplyMessage.class);
             case TRANSFER:
                 return gson.fromJson(received, TransferMessage.class);
+            case BALANCE_OF:
+                return gson.fromJson(received, BalanceOfMessage.class);
+            case APPROVE:
+                return gson.fromJson(received, ApproveMessage.class);
+            case ALLOWANCE:
+                return gson.fromJson(received, AllowanceMessage.class);
             default:
                 dcLogger.log("(messageFromJson) Unknown message type");
                 return message;

@@ -1,9 +1,9 @@
 package depchain.common.domain;
 
 public class Account{
-    String address;
-    String name;
-    Double balance;
+    private String address;
+    private String name;
+    private Double balance;
 
     public Account(String address, Double balance) {}
     public Account(Account account) {

@@ -4,13 +4,17 @@
 - Finish Part 1 fixes:
   - Permitir receber mensagens de épocas e instâncias no futuro
   - Proteger clientes de replay attack (nonce na mensagem do cliente) (checkem please)
-- Implement test (Lab2) for ISTCoin.sol functions
 - Test blacklist functions:
-  - Block a member and check if it's not able to make (and receive (?)) transfers
-  - Unblock a member and check if it's able to make (and receive (?)) transfers
-- Genesis block
-- Rest of step 3 (transactions, ...)
-- Step 4
+  - Block a member and check if it's not able to make and receive transfers
+  - Unblock a member and check if it's able to make and receive transfers
+  - Test if any member can block and unblock (only owner should be able)
+- Implement transferFrom
+- Implement allowance
+- Implement balanceOf
+- Implement approve
+  - Beware that: "changing an allowance with this method (approve) brings the risk that someone may use both the old and the new allowance by unfortunate transaction ordering. One possible solution to mitigate this race condition is to first reduce the spender’s allowance to 0 and set the desired value afterwards: https://github.com/ethereum/EIPs/issues/20#issuecomment-263524729"
+- Make leader wait for a given time during which he collects transactions and then starts consensus with a
+block of transactions that he collected. Afterward, all members execute the transactions in the block.
 - Step 5
 
 ## Configuration

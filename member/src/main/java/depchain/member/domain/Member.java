@@ -4,14 +4,13 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import depchain.common.*;
-import depchain.common.domain.Block;
 import depchain.common.domain.ConsensusState;
 import depchain.common.domain.Entity;
 import depchain.common.domain.ValueTimestampPair;
 import depchain.common.messaging.*;
 import depchain.common.messaging.consensus.*;
+import depchain.common.messaging.library.*;
 import depchain.contract.ContractFunctions;
-import depchain.contract.ContractUtils;
 import depchain.member.state.StringChain;
 
 import java.io.ByteArrayOutputStream;
@@ -25,12 +24,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import org.hyperledger.besu.datatypes.Wei;
-import org.hyperledger.besu.evm.EvmSpecVersion;
 import org.hyperledger.besu.evm.fluent.EVMExecutor;
 import org.hyperledger.besu.evm.fluent.SimpleWorld;
 import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.evm.tracing.StandardJsonTracer;
-import org.hyperledger.besu.evm.worldstate.WorldUpdater;
 
 public class Member {
     protected Config config;
@@ -175,6 +172,18 @@ public class Member {
                         // TODO -> remove below
                         handleTransfer(transferMessage);
                         break;
+                    case BALANCE_OF:
+                        BalanceOfMessage balanceOfMessage = (BalanceOfMessage) message;
+                        handleBalanceMessage(balanceOfMessage);
+                        break;
+                    case ALLOWANCE:
+                        AllowanceMessage allowanceMessage = (AllowanceMessage) message;
+                        handleAllowanceMessage(allowanceMessage);
+                        break;
+                    case APPROVE:
+                        ApproveMessage approveMessage = (ApproveMessage) message;
+                        handleApproveMessage(approveMessage);
+                        break;
                     default:
                         dcLogger.log("Unknown message type");
                 }
@@ -182,6 +191,14 @@ public class Member {
                 dcLogger.error("Error while processing message: " + e.getMessage());
             }
         }
+    }
+
+
+    private void handleBalanceMessage(BalanceOfMessage balanceOfMessage) {
+        Address addr = Address.fromHexString(balanceOfMessage.getAddress());
+        BigInteger balance = ContractFunctions.callBalanceOf(this.evmExecutor, this.bos, addr);
+        dcLogger.log("Balance of " + addr + ": " + balance);
+        // TODO -> send balance to client
     }
 
     private void handleTransfer(TransferMessage transferMessage) {
@@ -241,6 +258,16 @@ public class Member {
     public void handleAccept(AcceptMessage acceptMessage) {
         dcLogger.log("Received: " + acceptMessage);
         consensusState.addAcceptMessage(acceptMessage);
+    }
+
+    private void handleApproveMessage(ApproveMessage approveMessage) {
+        dcLogger.verbose("Received: " + approveMessage);
+        dcLogger.verbose("Not implemented yet");
+    }
+
+    private void handleAllowanceMessage(AllowanceMessage allowanceMessage) {
+        dcLogger.verbose("Received: " + allowanceMessage);
+        dcLogger.verbose("Not implemented yet");
     }
 
 

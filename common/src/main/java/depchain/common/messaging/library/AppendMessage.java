@@ -1,4 +1,6 @@
-package depchain.common.messaging;
+package depchain.common.messaging.library;
+
+import depchain.common.messaging.Message;
 
 public class AppendMessage extends Message {
 

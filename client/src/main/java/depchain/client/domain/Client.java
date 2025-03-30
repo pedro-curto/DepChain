@@ -7,11 +7,11 @@ import depchain.common.*;
 import depchain.common.domain.Account;
 import depchain.common.domain.Block;
 import depchain.common.domain.Entity;
-import depchain.common.messaging.AppendMessage;
-import depchain.common.messaging.ClientReplyMessage;
-import depchain.common.messaging.Message;
+import depchain.common.messaging.*;
 import depchain.common.messaging.Message.CoinType;
-import depchain.common.messaging.TransferMessage;
+import depchain.common.messaging.library.AppendMessage;
+import depchain.common.messaging.library.BalanceOfMessage;
+import depchain.common.messaging.library.TransferMessage;
 
 import java.io.IOException;
 import java.math.BigInteger;
@@ -122,11 +122,11 @@ public class Client {
         // stores other accounts
         this.accounts = new HashMap<>();
         for (Account account : genesis_block.getState().getAccounts().values()) {
-            if (!account.getAddress().equals(this.myAccount.getAddress())) {
+            //if (!account.getAddress().equals(this.myAccount.getAddress())) {
                 this.accounts.put(account.getName(), account);
-            }
+            //}
         }
-        dcLogger.log("Other accounts: " + this.accounts);
+        dcLogger.log("All accounts: " + this.accounts);
     }
 
     public void stop() {
@@ -134,7 +134,7 @@ public class Client {
         running = false;
     }
 
-    private void processUserInput() throws Exception {
+    private void processUserInput() {
         Scanner input = new Scanner(System.in);
         while (running) {
             System.out.print("> ");
@@ -143,58 +143,96 @@ public class Client {
             if (content[0].equalsIgnoreCase("QUIT") || content[0].equalsIgnoreCase("EXIT")) {
                 input.close();
                 System.exit(0);
+            } else if (content[0].equalsIgnoreCase("HELP")) {
+                printHelpInfo();
             } else if (content[0].equalsIgnoreCase("ISTCoin")) {
                 handleCoinCommand(Arrays.copyOfRange(content, 1, content.length), CoinType.ISTCOIN);
             } else if (content[0].equalsIgnoreCase("DepCoin")) {
                 handleCoinCommand(Arrays.copyOfRange(content, 1, content.length), CoinType.DEPCOIN);
             } else {
-                System.out.print("Invalid Command. Possible commands:\n" +
-                        "- ISTCoin <command> <args>\n" +
-                        "- DepCoin <command> <args>\n" +
-                        "- QUIT | EXIT\n");
+                System.out.println("Invalid Command.");
+                printHelpInfo();
             }
             //sendAppend(content);
         }
     }
 
+
+
     private void handleCoinCommand(String[] content, CoinType coinType) {
         switch(content[0].toUpperCase()) {
+            // this is just to help debug, not really important
             case "BALANCE":
-                if (content.length == 2) {
-                    String address = content[1];
-                    Account account = this.myAccount;
-                    if (address.equals(account.getAddress())) {
-                        System.out.println("Your balance is: " + account.getBalance());
-                    } else {
-                        System.out.println("You are not allowed to check the balance of this address.");
-                    }
-                } else {
-                    System.out.println("Invalid command. Usage: DepCoin BALANCE <address>");
-                }
+                handleBalanceCommand(content, coinType);
                 break;
             case "TRANSFER":
-                if (content.length == 3) {
-                    String nameOfToAddress = content[1];
-                    dcLogger.log("nameOfToAddress: " + nameOfToAddress);
-                    dcLogger.log("accounts: " + accounts);
-                    String toAddress = accounts.get(nameOfToAddress).getAddress();
-                    BigInteger amount = BigInteger.valueOf(Long.parseLong(content[2]));
-                    // TODO check if he has enough balance here and amount (?)
-                    String fromAddress = this.myAccount.getAddress();
-                    String dataToSign = fromAddress + toAddress + amount + this.nonce;
-                    String signature = Security.makeDS(dataToSign, clientKeys.getPrivate());
-                    TransferMessage msg = new TransferMessage(fromAddress, toAddress, amount, coinType, signature, nonce);
-                    // send the message to the leader
-                    perfectLink.sendMessage(msg, leaderPort);
-                    System.out.println("Sent message: " + msg);
-
-
-                } else {
-                    System.out.println("Invalid command. Usage: DepCoin TRANSFER <address> <amount>");
-                }
+                handleTransferCommand(content, coinType);
+                break;
+            case "APPROVE":
+                handleApproveCommand(content, coinType);
+                break;
+            case "ALLOWANCE":
+                handleAllowanceCommand(content, coinType);
                 break;
             default:
                 System.out.println("Invalid command.");
+        }
+    }
+
+    private void handleAllowanceCommand(String[] content, CoinType coinType) {
+    }
+
+    private void handleApproveCommand(String[] content, CoinType coinType) {
+
+    }
+
+    private void handleTransferCommand(String[] content, CoinType coinType) {
+        if (content.length == 3) {
+            String nameOfToAddress = content[1];
+            dcLogger.verbose("nameOfToAddress: " + nameOfToAddress);
+            dcLogger.verbose("accounts: " + accounts);
+            if (!accounts.containsKey(nameOfToAddress)) {
+                System.out.println("Invalid account address!");
+                return;
+            }
+            String toAddress = accounts.get(nameOfToAddress).getAddress();
+            BigInteger amount = BigInteger.valueOf(Long.parseLong(content[2]));
+            // TODO check if he has enough balance here and amount (?)
+            String fromAddress = this.myAccount.getAddress();
+            String dataToSign = fromAddress + toAddress + amount + this.nonce;
+            String signature = Security.makeDS(dataToSign, clientKeys.getPrivate());
+            TransferMessage msg = new TransferMessage(fromAddress, toAddress, amount, coinType, signature, nonce);
+            // send the message to the leader
+            perfectLink.sendMessage(msg, leaderPort);
+            dcLogger.verbose("Sent message: " + msg);
+        } else {
+            dcLogger.log("Invalid command. Usage: <CoinType> TRANSFER <address> <amount>");
+        }
+    }
+
+    private void handleBalanceCommand(String[] content, CoinType coinType) {
+        if (content.length == 2) {
+            String accName = content[1];
+            // TODO -> só podemos verificar o balance da nossa conta?
+            if (!accounts.containsKey(accName)) {
+                System.out.println("Invalid account address!");
+                return;
+            }
+            String addr = accounts.get(accName).getAddress();
+            // broadcast request to members
+            BalanceOfMessage msg = new BalanceOfMessage(addr, this.port, coinType);
+            broadcastMessage(msg);
+
+
+        } else {
+            System.out.println("Invalid command. Usage: DepCoin BALANCE <address>");
+        }
+    }
+
+    private void broadcastMessage(Message message) {
+        for (Entity member : members) {
+            perfectLink.sendMessage(message, member.getPort());
+            dcLogger.log("Sent message: " + message);
         }
     }
 
@@ -258,7 +296,14 @@ public class Client {
         }
     }
 
-    public PerfectLink getPerfectLink() {
-        return perfectLink;
+    private void printHelpInfo() {
+        System.out.println("-- Available commands: --");
+        System.out.println("1. ISTCoin <command> <args>");
+        System.out.println("2. DepCoin <command> <args>");
+        System.out.println("3. QUIT | EXIT");
+        System.out.println("4. HELP");
+        System.out.println("-- Commands for ISTCoin and DepCoin (prefix with coin name): --");
+        System.out.println("- BALANCE <address>");
+        System.out.println("- TRANSFER <address> <amount>");
     }
 }

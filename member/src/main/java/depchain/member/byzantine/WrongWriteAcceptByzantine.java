@@ -8,6 +8,7 @@ import depchain.common.messaging.*;
 import depchain.common.messaging.consensus.AcceptMessage;
 import depchain.common.messaging.consensus.StateMessage;
 import depchain.common.messaging.consensus.WriteMessage;
+import depchain.common.messaging.library.AppendMessage;
 import depchain.member.domain.Config;
 import depchain.member.domain.Member;
 import depchain.member.state.StringChain;

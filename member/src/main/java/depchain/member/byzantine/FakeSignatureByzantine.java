@@ -5,7 +5,7 @@ import depchain.common.PerfectLink;
 import depchain.common.Security;
 import depchain.common.domain.ConsensusState;
 import depchain.common.domain.Entity;
-import depchain.common.messaging.AppendMessage;
+import depchain.common.messaging.library.AppendMessage;
 import depchain.common.messaging.Message;
 import depchain.common.messaging.consensus.ReadMessage;
 import depchain.common.messaging.consensus.StateMessage;

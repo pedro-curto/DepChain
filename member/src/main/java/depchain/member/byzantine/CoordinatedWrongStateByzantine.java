@@ -7,6 +7,7 @@ import depchain.common.domain.ConsensusState;
 import depchain.common.domain.ValueTimestampPair;
 import depchain.common.messaging.*;
 import depchain.common.messaging.consensus.*;
+import depchain.common.messaging.library.AppendMessage;
 import depchain.member.domain.Config;
 import depchain.member.domain.Member;
 import depchain.member.state.StringChain;
