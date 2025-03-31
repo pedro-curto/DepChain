@@ -19,9 +19,7 @@ import java.math.BigInteger;
 import java.security.PublicKey;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.*;
 
 import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.evm.fluent.EVMExecutor;
@@ -45,6 +43,9 @@ public class Member {
     private EVMExecutor evmExecutor;
     private SimpleWorld world;
     private ByteArrayOutputStream bos;
+    // for transfer processing
+    private final ScheduledExecutorService blockSched = Executors.newSingleThreadScheduledExecutor();
+    private static final int BLOCK_TIMEOUT_SECONDS = 5;
 
     public Member(Config config,
                   DCLogger dcLogger,
@@ -71,9 +72,16 @@ public class Member {
         initializeEVM();
         this.running = true;
         startConnections();
+        // start the task that will process the transfer messages
+        blockSched.scheduleAtFixedRate(
+                this::processTransferMessages,
+                BLOCK_TIMEOUT_SECONDS,
+                BLOCK_TIMEOUT_SECONDS,
+                TimeUnit.SECONDS
+        );
         new Thread(this::doConsensus).start();
+        // don't put code after receiveMessages because this thread passes onto receiveMessages
         receiveMessages();
-        // don't put code after this because this thread passes onto receiveMessages
     }
 
     private void initializeEVM() {
@@ -192,6 +200,16 @@ public class Member {
             }
         }
     }
+
+    private void processTransferMessages() {
+        dcLogger.verbose("Not implemented yet");
+        // aggregates transfers from queue
+
+        // constructs block
+
+        // serializes it
+    }
+
 
 
     private void handleBalanceMessage(BalanceOfMessage balanceOfMessage) {

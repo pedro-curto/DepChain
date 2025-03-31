@@ -1,22 +1,27 @@
 {
-  "hash": "GChGP3GNp8A73OU0dOgmWpKHOe18W3aoXL9W3WR7TaE=",
+  "hash": "WCRR16kix45/4CcT33PXKn9ZMCncgqsumQXczJDp87w=",
   "previous_hash": "",
   "transactions": [],
   "state": {
     "accounts": [
       {
-        "address": "0x8dabd865132cf315544051aa4565897fa6160769",
+        "address": "0xe02fdc13827df2cf64560f02998e9bfce42fa14c",
         "name": "paulo",
         "balance": 100
       },
       {
-        "address": "0x2be0d1c4a8efe5aaf95566709eff82e0aa5c025a",
+        "address": "0xaa9b70760071647d7da27f912b9af423580b792e",
         "name": "joao",
         "balance": 100
       },
       {
-        "address": "0x1d190621b415660b7db42a336ae98eafb3b8f204",
+        "address": "0x443a998822adc2616dcca268374966861d971b84",
         "name": "pedro",
+        "balance": 100
+      },
+      {
+        "address": "0xff2922a8084618da59febab83bea0d1c2e76a95c",
+        "name": "andre",
         "balance": 100
       }
     ],

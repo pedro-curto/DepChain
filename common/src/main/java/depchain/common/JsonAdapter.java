@@ -37,7 +37,7 @@ public class JsonAdapter {
 
     public static Transaction parseTransaction(JsonElement json) {
         // TODO
-        return new Transaction();
+        return new Transaction(null, null, 0.0, null, 0);
     }
 
     public static JsonObject serializeBlockChain(BlockChain blockChain) {
