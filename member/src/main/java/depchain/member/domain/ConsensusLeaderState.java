@@ -76,7 +76,7 @@ public class ConsensusLeaderState extends ConsensusState {
 
 	public boolean verifySignatureOfState(StateMessage stateMsg) {
 		ConsensusState consensusSt = stateMsg.getState();
-		PublicKey memberPubKey = Security.getMemberPublicKey(consensusSt.getMemberName());
+		PublicKey memberPubKey = Security.getMembershipPublicKey(consensusSt.getMemberName());
 		String dataToSign = consensusSt.getCurrent().toString() + consensusSt.getWriteset().toString() + consensusSt.getInstance() + consensusSt.getEpoch();
 		return Security.verifyDS(stateMsg.getSignature(), dataToSign, memberPubKey);
 	}

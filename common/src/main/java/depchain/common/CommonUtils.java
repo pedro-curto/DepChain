@@ -1,5 +1,6 @@
 package depchain.common;
 
+import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -8,6 +9,7 @@ import depchain.common.domain.Entity;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -70,7 +72,7 @@ public class CommonUtils {
 
 	public static List<Entity> loadMembership(String filename) {
 		List<Entity> members = new ArrayList<>();
-		System.out.println("Trying to load from: " + filename);
+		//System.out.println("Trying to load from: " + filename);
 		try (BufferedReader br = new BufferedReader(new FileReader(filename))) {
 			String line;
 			while ((line = br.readLine()) != null) {
@@ -140,6 +142,23 @@ public class CommonUtils {
 		} else {
 			System.err.println("Key " + key + " not found in JSON object");
 			throw new IllegalArgumentException("Key " + key + " not found in JSON object");
+		}
+	}
+
+	public static boolean saveJsonToFile(JsonObject json, String filename) {
+		// convert JSON to string
+		Gson gson = new Gson();
+		String jsonString = gson.toJson(json);
+
+		// Save to a file
+		try (FileWriter file = new FileWriter(filename)) {
+			file.write(jsonString);
+			file.flush();
+			System.out.println("JSON saved successfully!");
+			return true;
+		} catch (IOException e) {
+			System.err.println("JSON save failed!");
+			return false;
 		}
 	}
 

@@ -107,7 +107,7 @@ public class Client {
         JsonElement jsonElement = JsonParser.parseString(jsonString);
         JsonObject jsonObject = jsonElement.getAsJsonObject();
         Block genesis_block = JsonAdapter.parseBlock(jsonObject);
-        System.out.println("Genesis block: " + genesis_block);
+        //System.out.println("Genesis block: " + genesis_block);
 
         // load account
         String address = null;
@@ -126,7 +126,7 @@ public class Client {
                 this.accounts.put(account.getName(), account);
             //}
         }
-        dcLogger.log("All accounts: " + this.accounts);
+        //dcLogger.log("All accounts: " + this.accounts);
     }
 
     public void stop() {
@@ -199,12 +199,14 @@ public class Client {
             BigInteger amount = BigInteger.valueOf(Long.parseLong(content[2]));
             // TODO check if he has enough balance here and amount (?)
             String fromAddress = this.myAccount.getAddress();
-            String dataToSign = fromAddress + toAddress + amount + this.nonce;
+            TransferMessage msg = new TransferMessage(fromAddress, toAddress, amount, coinType, nonce);
+            String dataToSign = msg.getDataToSign();
             String signature = Security.makeDS(dataToSign, clientKeys.getPrivate());
-            TransferMessage msg = new TransferMessage(fromAddress, toAddress, amount, coinType, signature, nonce);
+            msg.setSignature(signature);
             // send the message to the leader
             perfectLink.sendMessage(msg, leaderPort);
             dcLogger.verbose("Sent message: " + msg);
+            incrementNonce();
         } else {
             dcLogger.log("Invalid command. Usage: <CoinType> TRANSFER <address> <amount>");
         }
@@ -305,5 +307,9 @@ public class Client {
         System.out.println("-- Commands for ISTCoin and DepCoin (prefix with coin name): --");
         System.out.println("- BALANCE <address>");
         System.out.println("- TRANSFER <address> <amount>");
+    }
+
+    private void incrementNonce() {
+        this.nonce++;
     }
 }

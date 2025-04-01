@@ -4,9 +4,8 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import depchain.common.*;
-import depchain.common.domain.ConsensusState;
-import depchain.common.domain.Entity;
-import depchain.common.domain.ValueTimestampPair;
+import depchain.common.domain.*;
+import depchain.common.domain.Transaction.TransactionType;
 import depchain.common.messaging.*;
 import depchain.common.messaging.consensus.*;
 import depchain.common.messaging.library.*;
@@ -17,6 +16,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.math.BigInteger;
 import java.security.PublicKey;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
@@ -31,8 +31,11 @@ public class Member {
     protected Config config;
     protected final DCLogger dcLogger;
     protected PerfectLink perfectLink;
+    // state info
     protected ConsensusState consensusState;
     protected final StringChain stringChain;
+    protected BlockChainState blockChainState;
+    // queues for message processing
     protected BlockingQueue<Message> messageQueue;
     protected BlockingQueue<AppendMessage> appendQueue;
     protected BlockingQueue<TransferMessage> transferQueue = new LinkedBlockingQueue<>();
@@ -90,9 +93,10 @@ public class Member {
         PrintStream ps = new PrintStream(bos);
         StandardJsonTracer tracer = new StandardJsonTracer(ps, true, true, true, true);
         // load accounts
-        JsonObject json = CommonUtils.getGenesisJsonObject();
-        JsonObject stateObject = CommonUtils.jsonGetter(json, "state");
+        JsonObject rootJson = CommonUtils.getGenesisJsonObject();
+        JsonObject stateObject = CommonUtils.jsonGetter(rootJson, "state");
         JsonArray accountsArray = stateObject.getAsJsonArray("accounts");
+        List<Account> accounts = new ArrayList<>();
         boolean first = true;
         for (JsonElement accountEl : accountsArray) {
             JsonObject accountObj = accountEl.getAsJsonObject();
@@ -114,14 +118,30 @@ public class Member {
                 first = false;
                 continue; // avoids creating the account again
             }
+            // TODO -> if I do this it's indifferent because every account starts at 0, am i doing it right?
             // add account to world
             //this.world.createAccount(accountAddr, 0, balanceWei);
+            // create account
+            Account account = new Account(accountAddrStr, balance);
+            accounts.add(account);
         }
         // make some calls to basic info
         ContractFunctions.callName(this.evmExecutor, this.bos);
         ContractFunctions.callSymbol(this.evmExecutor, this.bos);
         ContractFunctions.callTotalSupply(this.evmExecutor, this.bos);
         ContractFunctions.callDecimals(this.evmExecutor, this.bos);
+        // construct initial blockchain state
+        Block genesisBlock = CommonUtils.loadGenesisBlock();
+        if (genesisBlock == null) {
+            throw new RuntimeException("Failed to load genesis block");
+        }
+        this.blockChainState = new BlockChainState(accounts, genesisBlock);
+        // prevHash (null), transactions (empty), blockNumber (1), timestamp (?)
+        //String hash = CommonUtils.jsonGetter(rootJson, "hash").getAsString();
+        //long timestamp = System.currentTimeMillis();
+        //// TODO -> get the timestamp from the genesis file
+        //Block genesisBlock = new Block(null, new ArrayList<>(), 1, timestamp);
+        //this.blockChainState = new BlockChainState(accounts, genesisBlock);
     }
 
     /***
@@ -204,10 +224,40 @@ public class Member {
     private void processTransferMessages() {
         dcLogger.verbose("Not implemented yet");
         // aggregates transfers from queue
+        // TODO is this resilient to concurrency? (draining the transfer queue while another request comes and tries to add)
+        List<TransferMessage> tmp = new ArrayList<>();
+        List<Transaction> transactions = new ArrayList<>();
+        transferQueue.drainTo(tmp);
+        if (tmp.isEmpty()) {
+            dcLogger.verbose("No transfer messages to process");
+            return;
+        }
+        for (TransferMessage msg : tmp) {
+            if (!Security.validateTransferMessage(msg)) {
+                dcLogger.log("Signature for transfer message is invalid: " + msg);
+                continue;
+            }
+            Transaction tx = new Transaction(msg.getFrom(), msg.getTo(), msg.getValue(),
+                    msg.getSignature(), msg.getNonce(), TransactionType.TRANSFER);
+            transactions.add(tx);
+            //executeTransaction(transaction);
 
-        // constructs block
-
-        // serializes it
+        }
+        // constructs block: prevHash, txs, blockNum, ts (he calculates hash on constructor)
+        // TODO -> how to compute hash of new block?
+        Block lastBlock = this.blockChainState.getLastBlock();
+        String prevHash = lastBlock.getHash();
+        long timestamp = System.currentTimeMillis();
+        Block block = new Block(prevHash, transactions, lastBlock.getBlockNumber()+1, timestamp);
+        this.blockChainState.setLastBlock(block);
+        // serialize it
+        JsonObject blockJson = JsonAdapter.serializeBlock(block);
+        boolean result = CommonUtils.saveJsonToFile(blockJson, config.getBlockDir() + "/block" + block.getBlockNumber() + ".json");
+        if (result) {
+            dcLogger.log("Block " + block.getBlockNumber() + " saved successfully");
+        } else {
+            dcLogger.log("Failed to save block " + block.getBlockNumber());
+        }
     }
 
 
@@ -234,6 +284,10 @@ public class Member {
         }
         ContractFunctions.callBalanceOf(evmExecutor, bos, from);
         ContractFunctions.callBalanceOf(evmExecutor, bos, to);
+        // serializes transaction to json
+        Transaction transaction = new Transaction(transferMessage.getFrom(), transferMessage.getTo(), value,
+                transferMessage.getSignature(), transferMessage.getNonce(), TransactionType.TRANSFER);
+        //transaction.save();
     }
 
     public void handleRead(ReadMessage readMessage) {
@@ -495,7 +549,7 @@ public class Member {
     public boolean verifyMemberStateAuthenticity(StateMessage stateMessage) {
         ConsensusState consensusSt = stateMessage.getState();
         String memberName = consensusSt.getMemberName();
-        PublicKey memberPubKey = Security.getMemberPublicKey(memberName);
+        PublicKey memberPubKey = Security.getMembershipPublicKey(memberName);
         String reconstructSignatureData = consensusSt.getCurrent().toString() + consensusSt.getWriteset().toString() + consensusSt.getInstance() + consensusSt.getEpoch();
         return Security.verifyDS(stateMessage.getSignature(), reconstructSignatureData, memberPubKey);
     }
@@ -506,7 +560,7 @@ public class Member {
         // TODO -> fix this hardcoded for 1 client
         dcLogger.log("Leader Vts: " + leaderVts);
         String reconstructSignatureData = leaderVts.getValue() + leaderVts.getNonce();
-        PublicKey clientPubKey = Security.getMemberPublicKey(config.getClients().getFirst().getEntityName());
+        PublicKey clientPubKey = Security.getMembershipPublicKey(config.getClients().getFirst().getEntityName());
         return Security.verifyDS(clientSignature, reconstructSignatureData, clientPubKey);
     }
 

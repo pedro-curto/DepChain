@@ -1,29 +1,62 @@
 package depchain.common.domain;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import depchain.common.JsonAdapter;
+
+import java.io.FileWriter;
+import java.io.IOException;
+import java.math.BigInteger;
+
 public class Transaction {
-    private Account sender;
-    private Account recipient;
-    private Double amount;
+    // based on: https://ethereum.org/en/developers/docs/transactions/
+    private String senderAddr;
+    private String recipientAddr;
+    private BigInteger amount;
     private String signature;
     private long nonce;
+    private TransactionType type;
 
-    public Transaction(Account sender, Account recipient, Double amount, String signature, long nonce) {
-        this.sender = sender;
-        this.recipient = recipient;
+    public Transaction(String senderAddr, String recipientAddr, BigInteger amount, String signature, long nonce, TransactionType type) {
+        this.senderAddr = senderAddr;
+        this.recipientAddr = recipientAddr;
         this.amount = amount;
         this.signature = signature;
         this.nonce = nonce;
+        this.type = type;
     }
 
-    public Account getSender() {
-        return sender;
+    public enum TransactionType {
+        TRANSFER, TRANSFER_FROM, APPROVE
     }
 
-    public Account getRecipient() {
-        return recipient;
+    public void save() {
+        JsonObject json = JsonAdapter.serializeTransaction(this);
+
+        // Convert JSON object to string
+        Gson gson = new Gson();
+        String jsonString = gson.toJson(json);
+
+        // Save to a file
+        try (FileWriter file = new FileWriter("transaction.json")) {
+            file.write(jsonString);
+            file.flush();
+            System.out.println("(Transaction) JSON saved successfully!");
+        } catch (IOException e) {
+            System.err.println("(Transaction) JSON save failed!");
+            throw new RuntimeException(e);
+        }
     }
 
-    public Double getAmount() {
+    public String getSender() {
+        return senderAddr;
+    }
+
+    public String getRecipient() {
+        return recipientAddr;
+    }
+
+    public BigInteger getAmount() {
         return amount;
     }
 
@@ -33,6 +66,10 @@ public class Transaction {
 
     public long getNonce() {
         return nonce;
+    }
+
+    public TransactionType getType() {
+        return type;
     }
 
 }

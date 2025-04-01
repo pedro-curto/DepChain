@@ -126,6 +126,10 @@ for i in "${!client[@]}"; do
     # generates hash of pubkey for genesis file
     pk_hash=$(python3 ../generate-pk-hash.py "$CLIENTS_DIR/$user/${user}.pubkey" | grep "SHA-256 Hash of Public Key:" | cut -d' ' -f6)
     echo "Generated hash for ${user}'s public key: ${pk_hash}"
+    # store user pubkey at the membership directory under the hash
+    mkdir -p "$MEMBERS_DIR/$pk_hash"
+    cp "$CLIENTS_DIR/$user/${user}.pubkey" "$MEMBERS_DIR/$pk_hash/$pk_hash.pubkey"
+    echo "Stored ${pk_hash}'s public key at $MEMBERS_DIR/$pk_hash/$pk_hash.pubkey"
 
     # add account entry to genesis file
     if [ $i -gt 0 ]; then

@@ -11,12 +11,11 @@ public class TransferMessage extends Message {
 	private String signature;
 	private long nonce;
 
-	public TransferMessage(String from, String to, BigInteger value, CoinType coinType, String signature, long nonce) {
+	public TransferMessage(String from, String to, BigInteger value, CoinType coinType, long nonce) {
 		super(MessageType.TRANSFER, coinType);
 		this.from = from;
 		this.to = to;
 		this.value = value;
-		this.signature = signature;
 		this.nonce = nonce;
 	}
 
@@ -38,6 +37,14 @@ public class TransferMessage extends Message {
 
 	public long getNonce() {
 		return nonce;
+	}
+
+	public void setSignature (String signature) {
+		this.signature = signature;
+	}
+
+	public String getDataToSign() {
+		return from + to + value + nonce;
 	}
 
 	@Override

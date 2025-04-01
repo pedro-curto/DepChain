@@ -615,3 +615,6 @@ keys/
 *.txt
 
 contracts
+block*.json
+transaction.json
+genesis-file.json

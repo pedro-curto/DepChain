@@ -5,9 +5,16 @@ import java.util.stream.Collectors;
 
 public class BlockChainState {
     private Map<String, Account> accounts = new HashMap<>();
+    private Block lastBlock;
 
     public BlockChainState(List<Account> accounts) {
         accounts.forEach(account -> this.accounts.put(account.getAddress(), account));
+    }
+
+    public BlockChainState(List<Account> accounts, Block lastBlock) {
+        this.accounts = new HashMap<>();
+        accounts.forEach(account -> this.accounts.put(account.getAddress(), account));
+        this.lastBlock = lastBlock;
     }
 
     public Map<String, Account> getAccounts() {
@@ -35,4 +42,20 @@ public class BlockChainState {
                 .map(Account::toString)
                 .collect(Collectors.joining(", ")) + "}";
     }
+
+    public Block getLastBlock() {
+        return lastBlock;
+    }
+
+	public void setLastBlock(Block block) {
+        this.lastBlock = block;
+    }
+
+    public void addAccount(Account account) {
+        accounts.put(account.getAddress(), account);
+    }
+
+    public void removeAccount(String address) {
+        accounts.remove(address);
+	}
 }

@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class BlockChain{
     private final String backupFileName = "";
@@ -73,5 +74,12 @@ public class BlockChain{
 
     public List<Block> getBlocks() {
         return new ArrayList<>(blockchain);
+    }
+
+    @Override
+    public String toString() {
+        return "BLOCKCHAIN {blocks: " + blockchain.stream()
+                .map(Block::toString)
+                .collect(Collectors.joining(", ")) + ", state: " + state + "}";
     }
 }

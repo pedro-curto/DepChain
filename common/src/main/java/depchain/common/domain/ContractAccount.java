@@ -6,7 +6,7 @@ public class ContractAccount extends Account {
     String evmByteCode;
     EOAccount owner;
 
-    public ContractAccount(String address, Double balance, String storage, String evmByteCode) {
+    public ContractAccount(String address, long balance, String storage, String evmByteCode) {
         super(address, balance);
         this.storage = storage;
         this.evmByteCode = evmByteCode;

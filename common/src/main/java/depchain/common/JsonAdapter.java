@@ -2,6 +2,8 @@ package depchain.common;
 
 import com.google.gson.*;
 import depchain.common.domain.*;
+
+import java.math.BigInteger;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -37,7 +39,8 @@ public class JsonAdapter {
 
     public static Transaction parseTransaction(JsonElement json) {
         // TODO
-        return new Transaction(null, null, 0.0, null, 0);
+        return new Transaction(null, null, new BigInteger("0"), null, 0,
+                Transaction.TransactionType.TRANSFER);
     }
 
     public static JsonObject serializeBlockChain(BlockChain blockChain) {
@@ -57,6 +60,8 @@ public class JsonAdapter {
         JsonObject json = new JsonObject();
         json.addProperty("hash", block.getHash());
         json.addProperty("previous_hash", block.getPreviousHash());
+        json.addProperty("block_number", block.getBlockNumber());
+        json.addProperty("timestamp", block.getTimestamp());
 
         JsonArray transactions = new JsonArray();
         block.getTransactions()
@@ -64,8 +69,8 @@ public class JsonAdapter {
                 .map(JsonAdapter::serializeTransaction)
                 .forEach(transactions::add);
         json.add("transactions", transactions);
-
-        json.add("state", JsonAdapter.serializeBlockChainState(block.getState()));
+        // TODO -> i dont think we're going to have a state in the block
+        //json.add("state", JsonAdapter.serializeBlockChainState(block.getState()));
         return json;
     }
 
@@ -92,6 +97,12 @@ public class JsonAdapter {
     public static JsonObject serializeTransaction(Transaction transaction) {
         // TODO
         JsonObject json = new JsonObject();
+        json.addProperty("sender", transaction.getSender());
+        json.addProperty("recipient", transaction.getRecipient());
+        json.addProperty("amount", transaction.getAmount());
+        json.addProperty("signature", transaction.getSignature());
+        json.addProperty("nonce", transaction.getNonce());
+        json.addProperty("type", transaction.getType().toString());
         return json;
     }
 
