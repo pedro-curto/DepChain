@@ -4,7 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import depchain.common.domain.Entity;
 import depchain.common.messaging.*;
-import depchain.common.messaging.Message.MessageType;
+import depchain.common.messaging.Message;
 import depchain.common.messaging.consensus.*;
 import depchain.common.messaging.library.*;
 import depchain.common.session.Session;

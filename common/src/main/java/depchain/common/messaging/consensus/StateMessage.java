@@ -2,6 +2,7 @@ package depchain.common.messaging.consensus;
 
 import depchain.common.domain.ConsensusState;
 import depchain.common.messaging.Message;
+import depchain.common.messaging.MessageType;
 
 public class StateMessage extends Message {
 

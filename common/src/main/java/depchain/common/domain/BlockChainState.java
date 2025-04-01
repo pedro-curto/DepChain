@@ -26,7 +26,9 @@ public class BlockChainState {
             System.out.println("Existing accounts: " + accounts.keySet());
             throw new IllegalArgumentException("Account with address " + address + " does not exist.");
         }
-        return new Account(accounts.get(address));
+        return accounts.get(address);
+        // new account? assim o balance vai ser alterado
+        //return new Account(accounts.get(address));
     }
 
     public BlockChainState copy() {

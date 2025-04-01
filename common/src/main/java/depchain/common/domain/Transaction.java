@@ -3,6 +3,7 @@ package depchain.common.domain;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import depchain.common.JsonAdapter;
+import depchain.common.messaging.CoinType;
 
 import java.io.FileWriter;
 import java.io.IOException;
@@ -16,14 +17,18 @@ public class Transaction {
     private String signature;
     private long nonce;
     private TransactionType type;
+    private boolean success;
+    private CoinType coinType;
 
-    public Transaction(String senderAddr, String recipientAddr, BigInteger amount, String signature, long nonce, TransactionType type) {
+    public Transaction(String senderAddr, String recipientAddr, BigInteger amount, String signature,
+                       long nonce, TransactionType type, CoinType coinType) {
         this.senderAddr = senderAddr;
         this.recipientAddr = recipientAddr;
         this.amount = amount;
         this.signature = signature;
         this.nonce = nonce;
         this.type = type;
+        this.coinType = coinType;
     }
 
     public enum TransactionType {
@@ -70,6 +75,19 @@ public class Transaction {
 
     public TransactionType getType() {
         return type;
+    }
+
+    public boolean getSuccess() {
+        return success;
+    }
+
+    public CoinType getCoinType() {
+        return coinType;
+    }
+
+
+    public void setStatus(boolean success) {
+        this.success = success;
     }
 
 }

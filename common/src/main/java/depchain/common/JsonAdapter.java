@@ -40,7 +40,7 @@ public class JsonAdapter {
     public static Transaction parseTransaction(JsonElement json) {
         // TODO
         return new Transaction(null, null, new BigInteger("0"), null, 0,
-                Transaction.TransactionType.TRANSFER);
+                Transaction.TransactionType.TRANSFER, null);
     }
 
     public static JsonObject serializeBlockChain(BlockChain blockChain) {
@@ -103,6 +103,8 @@ public class JsonAdapter {
         json.addProperty("signature", transaction.getSignature());
         json.addProperty("nonce", transaction.getNonce());
         json.addProperty("type", transaction.getType().toString());
+        json.addProperty("coin_type", transaction.getCoinType().toString());
+        json.addProperty("success", transaction.getSuccess());
         return json;
     }
 

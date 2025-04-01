@@ -20,25 +20,6 @@ public class Message {
 	}
 	//TODO -> use (address + port) or an id to identify processes as it is more correct
 
-	public enum MessageType {
-		APPEND,
-		ACK,
-		CLIENT_REPLY,
-		KEY_EXCHANGE,
-		READ,
-		WRITE,
-		STATE,
-		COLLECTED,
-		ACCEPT,
-		CLIENT,
-		// blockchain operations
-		BALANCE_OF, TRANSFER, APPROVE, ALLOWANCE, TRANSFER_FROM,
-	}
-
-	public enum CoinType {
-		ISTCOIN, DEPCOIN,
-	}
-
 	public Message(long sequenceNumber, MessageType messageType) {
 		this.sequenceNumber = sequenceNumber;
 		this.type = messageType;
@@ -73,6 +54,10 @@ public class Message {
 	}
 	public int getPort() {
 		return port;
+	}
+
+	public CoinType getCoinType() {
+		return coinType;
 	}
 
 	public String getHmacData() {

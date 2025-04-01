@@ -1,6 +1,8 @@
 package depchain.common.messaging.library;
 
+import depchain.common.messaging.CoinType;
 import depchain.common.messaging.Message;
+import depchain.common.messaging.MessageType;
 
 import java.math.BigInteger;
 
@@ -54,6 +56,7 @@ public class TransferMessage extends Message {
 				", to='" + to + '\'' +
 				", value=" + value +
 				", nonce=" + nonce +
+				", coinType=" + super.getCoinType() +
 				'}';
 	}
 

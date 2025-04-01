@@ -1,6 +1,7 @@
 package depchain.common.messaging.consensus;
 
 import depchain.common.messaging.Message;
+import depchain.common.messaging.MessageType;
 
 public class AcceptMessage extends Message {
 

@@ -107,6 +107,8 @@ public class Member {
             Address accountAddr = Address.fromHexString(accountAddrStr);
             Wei balanceWei = Wei.fromEth(balance);
             dcLogger.log("Loading account with address: " + accountAddr + " and balance: " + balanceWei);
+            Account account = new Account(accountAddrStr, balance);
+            accounts.add(account);
             // TODO -> get a better condition for the blacklist owner?
             if (first) {
                 // deploys the contract with himself as sender
@@ -122,8 +124,6 @@ public class Member {
             // add account to world
             //this.world.createAccount(accountAddr, 0, balanceWei);
             // create account
-            Account account = new Account(accountAddrStr, balance);
-            accounts.add(account);
         }
         // make some calls to basic info
         ContractFunctions.callName(this.evmExecutor, this.bos);
@@ -222,7 +222,6 @@ public class Member {
     }
 
     private void processTransferMessages() {
-        dcLogger.verbose("Not implemented yet");
         // aggregates transfers from queue
         // TODO is this resilient to concurrency? (draining the transfer queue while another request comes and tries to add)
         List<TransferMessage> tmp = new ArrayList<>();
@@ -238,9 +237,8 @@ public class Member {
                 continue;
             }
             Transaction tx = new Transaction(msg.getFrom(), msg.getTo(), msg.getValue(),
-                    msg.getSignature(), msg.getNonce(), TransactionType.TRANSFER);
+                    msg.getSignature(), msg.getNonce(), TransactionType.TRANSFER, msg.getCoinType());
             transactions.add(tx);
-            //executeTransaction(transaction);
 
         }
         // constructs block: prevHash, txs, blockNum, ts (he calculates hash on constructor)
@@ -261,7 +259,6 @@ public class Member {
     }
 
 
-
     private void handleBalanceMessage(BalanceOfMessage balanceOfMessage) {
         Address addr = Address.fromHexString(balanceOfMessage.getAddress());
         BigInteger balance = ContractFunctions.callBalanceOf(this.evmExecutor, this.bos, addr);
@@ -271,6 +268,17 @@ public class Member {
 
     private void handleTransfer(TransferMessage transferMessage) {
         dcLogger.log("Received transfer message: " + transferMessage);
+        if (transferMessage.getCoinType() == CoinType.ISTCOIN) {
+            handleISTCoinTransfer(transferMessage);
+            return;
+        } else if (transferMessage.getCoinType() == CoinType.DEPCOIN) {
+            handleDepCoinTransfer(transferMessage);
+            return;
+        }
+        dcLogger.log("Unrecognized coin type");
+    }
+
+    private void handleISTCoinTransfer(TransferMessage transferMessage) {
         Address from = Address.fromHexString(transferMessage.getFrom());
         Address to = Address.fromHexString(transferMessage.getTo());
         ContractFunctions.callBalanceOf(evmExecutor, bos, from);
@@ -285,9 +293,28 @@ public class Member {
         ContractFunctions.callBalanceOf(evmExecutor, bos, from);
         ContractFunctions.callBalanceOf(evmExecutor, bos, to);
         // serializes transaction to json
-        Transaction transaction = new Transaction(transferMessage.getFrom(), transferMessage.getTo(), value,
-                transferMessage.getSignature(), transferMessage.getNonce(), TransactionType.TRANSFER);
+        //Transaction transaction = new Transaction(transferMessage.getFrom(), transferMessage.getTo(), value,
+        //        transferMessage.getSignature(), transferMessage.getNonce(), TransactionType.TRANSFER);
         //transaction.save();
+    }
+
+    private void handleDepCoinTransfer(TransferMessage transferMessage) {
+        BigInteger value = transferMessage.getValue();
+        Account fromAccount = this.blockChainState.getAccount(transferMessage.getFrom());
+        Account toAccount = this.blockChainState.getAccount(transferMessage.getTo());
+        if (fromAccount.getBalance().compareTo(value) < 0) {
+            dcLogger.log("Not enough balance");
+            return;
+        }
+        if (value == null || value.compareTo(BigInteger.ZERO) <= 0) {
+            dcLogger.log("Invalid value");
+            return;
+        }
+        fromAccount.decreaseBalance(value);
+        toAccount.increaseBalance(value);
+		dcLogger.verbose("New balances:" );
+        dcLogger.verbose(fromAccount + ": " + fromAccount.getBalance());
+        dcLogger.verbose(toAccount + ": " + toAccount.getBalance());
     }
 
     public void handleRead(ReadMessage readMessage) {
@@ -546,6 +573,9 @@ public class Member {
         return leaderValue.getValue();
     }
 
+    private void checkBalance(TransferMessage msg) {
+    }
+
     public boolean verifyMemberStateAuthenticity(StateMessage stateMessage) {
         ConsensusState consensusSt = stateMessage.getState();
         String memberName = consensusSt.getMemberName();
@@ -557,7 +587,7 @@ public class Member {
     public boolean checkClientSignature(ValueTimestampPair leaderVts) {
         String clientSignature = leaderVts.getClientSignature();
         if (clientSignature == null) return false;
-        // TODO -> fix this hardcoded for 1 client
+        // TODO -> fix this hardcoded for 1 client (FIX GETFIRST())
         dcLogger.log("Leader Vts: " + leaderVts);
         String reconstructSignatureData = leaderVts.getValue() + leaderVts.getNonce();
         PublicKey clientPubKey = Security.getMembershipPublicKey(config.getClients().getFirst().getEntityName());

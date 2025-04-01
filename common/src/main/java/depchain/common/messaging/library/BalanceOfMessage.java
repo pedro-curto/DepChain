@@ -1,6 +1,8 @@
 package depchain.common.messaging.library;
 
+import depchain.common.messaging.CoinType;
 import depchain.common.messaging.Message;
+import depchain.common.messaging.MessageType;
 
 public class BalanceOfMessage extends Message {
 	private String address;

@@ -1,24 +1,17 @@
 package depchain.client.domain;
 
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import depchain.common.*;
 import depchain.common.domain.Account;
 import depchain.common.domain.Block;
 import depchain.common.domain.Entity;
 import depchain.common.messaging.*;
-import depchain.common.messaging.Message.CoinType;
+import depchain.common.messaging.CoinType;
 import depchain.common.messaging.library.AppendMessage;
 import depchain.common.messaging.library.BalanceOfMessage;
 import depchain.common.messaging.library.TransferMessage;
 
-import java.io.IOException;
 import java.math.BigInteger;
 import java.net.DatagramSocket;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.security.KeyPair;
 import java.util.*;
 import java.util.concurrent.BlockingQueue;
@@ -44,9 +37,11 @@ public class Client {
     private final boolean debug;
     private volatile boolean running = true;
     private final boolean testEnvironment;
-    private Account myAccount;
-    // {clientName: account}
-    private Map<String, Account> accounts;
+    // 0x... address for client to send requests to the members
+    //private Account myAccount;
+    private String myAddress;
+    // {clientName: address}
+    private Map<String, String> addresses;
 
     public Client(String clientName,
                   int port,
@@ -86,47 +81,42 @@ public class Client {
         // start a thread to deliver incoming messages
         Thread messageDeliveringThread = new Thread(() -> deliverMessage(messageQueue));
         messageDeliveringThread.start();
-        this.assignAccount();
+        assignAddress();
         // start processing user input
         if (!testEnvironment) {
             processUserInput();
         }
     }
 
-    public void assignAccount() {
+    public void assignAddress() {
         // load the genesis file
-        Path currentDir = Paths.get(System.getProperty("user.dir"));
-        Path rootDir = currentDir.getParent();
-        Path genesisPath = rootDir.resolve("genesis-file.json");
-        String jsonString = null;
-        try {
-            jsonString = Files.readString(genesisPath);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-        JsonElement jsonElement = JsonParser.parseString(jsonString);
-        JsonObject jsonObject = jsonElement.getAsJsonObject();
-        Block genesis_block = JsonAdapter.parseBlock(jsonObject);
-        //System.out.println("Genesis block: " + genesis_block);
+        Block genesisBlock = CommonUtils.loadGenesisBlock();
 
         // load account
         String address = null;
         try {
             address = KeyUtils.hashPublicKey(clientKeys.getPublic());
         } catch (Exception e) {
+            dcLogger.error("Error hashing public key: " + e.getMessage());
             throw new RuntimeException(e);
         }
-        System.out.println("Client address: " + address);
-        this.myAccount = genesis_block.getState().getAccount(address);
-        dcLogger.log("Account assigned: " + this.myAccount);
-        // stores other accounts
-        this.accounts = new HashMap<>();
-        for (Account account : genesis_block.getState().getAccounts().values()) {
+        this.myAddress = address;
+        dcLogger.verbose("Client address: " + address);
+        // sanity check, to see if it exists in the genesis block
+        if (genesisBlock.getState() != null &&
+            !genesisBlock.getState().getAccounts().containsKey(address)) {
+            dcLogger.alert("Account not found in genesis block.");
+            return;
+        }
+        // loads remaining addresses
+        this.addresses = new HashMap<>();
+        for (Account account : genesisBlock.getState().getAccounts().values()) {
             //if (!account.getAddress().equals(this.myAccount.getAddress())) {
-                this.accounts.put(account.getName(), account);
+            // TODO -> this should be {address: account}, but it's simpler to type the client name
+                this.addresses.put(account.getName(), account.getAddress());
             //}
         }
-        //dcLogger.log("All accounts: " + this.accounts);
+        dcLogger.verbose("All addresses: " + this.addresses);
     }
 
     public void stop() {
@@ -139,15 +129,23 @@ public class Client {
         while (running) {
             System.out.print("> ");
             String[] content = input.nextLine().split(" ");
-            System.out.print("content: " + Arrays.toString(content) + "\n");
+            //System.out.print("content: " + Arrays.toString(content) + "\n");
             if (content[0].equalsIgnoreCase("QUIT") || content[0].equalsIgnoreCase("EXIT")) {
                 input.close();
                 System.exit(0);
             } else if (content[0].equalsIgnoreCase("HELP")) {
                 printHelpInfo();
             } else if (content[0].equalsIgnoreCase("ISTCoin")) {
+                if (content.length < 2) {
+                    System.out.println("Invalid command. Usage: ISTCoin <command> <args>");
+                    continue;
+                }
                 handleCoinCommand(Arrays.copyOfRange(content, 1, content.length), CoinType.ISTCOIN);
             } else if (content[0].equalsIgnoreCase("DepCoin")) {
+                if (content.length < 2) {
+                    System.out.println("Invalid command. Usage: DepCoin <command> <args>");
+                    continue;
+                }
                 handleCoinCommand(Arrays.copyOfRange(content, 1, content.length), CoinType.DEPCOIN);
             } else {
                 System.out.println("Invalid Command.");
@@ -190,15 +188,15 @@ public class Client {
         if (content.length == 3) {
             String nameOfToAddress = content[1];
             dcLogger.verbose("nameOfToAddress: " + nameOfToAddress);
-            dcLogger.verbose("accounts: " + accounts);
-            if (!accounts.containsKey(nameOfToAddress)) {
+            dcLogger.verbose("addresses: " + addresses);
+            if (!addresses.containsKey(nameOfToAddress)) {
                 System.out.println("Invalid account address!");
                 return;
             }
-            String toAddress = accounts.get(nameOfToAddress).getAddress();
+            String toAddress = addresses.get(nameOfToAddress);
             BigInteger amount = BigInteger.valueOf(Long.parseLong(content[2]));
             // TODO check if he has enough balance here and amount (?)
-            String fromAddress = this.myAccount.getAddress();
+            String fromAddress = this.myAddress;
             TransferMessage msg = new TransferMessage(fromAddress, toAddress, amount, coinType, nonce);
             String dataToSign = msg.getDataToSign();
             String signature = Security.makeDS(dataToSign, clientKeys.getPrivate());
@@ -216,11 +214,11 @@ public class Client {
         if (content.length == 2) {
             String accName = content[1];
             // TODO -> só podemos verificar o balance da nossa conta?
-            if (!accounts.containsKey(accName)) {
+            if (!addresses.containsKey(accName)) {
                 System.out.println("Invalid account address!");
                 return;
             }
-            String addr = accounts.get(accName).getAddress();
+            String addr = addresses.get(accName);
             // broadcast request to members
             BalanceOfMessage msg = new BalanceOfMessage(addr, this.port, coinType);
             broadcastMessage(msg);
