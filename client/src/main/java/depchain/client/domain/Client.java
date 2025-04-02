@@ -68,7 +68,7 @@ public class Client {
             dcLogger.log("Keys not loaded successfully.");
         }
         // init socket, messageQueue and the perfectLink abstraction
-        DatagramSocket socket = new DatagramSocket(port);;
+        DatagramSocket socket = new DatagramSocket(port);
         messageQueue = new LinkedBlockingQueue<>();
         // start sessions
         List<Entity> entities = new ArrayList<>(members);
@@ -135,6 +135,12 @@ public class Client {
                 System.exit(0);
             } else if (content[0].equalsIgnoreCase("HELP")) {
                 printHelpInfo();
+            } else if (content[0].equalsIgnoreCase("APPEND")) {
+                if (content.length < 2) {
+                    System.out.println("Invalid command. Usage: APPEND <string>");
+                    continue;
+                }
+                sendAppend(content[1]);
             } else if (content[0].equalsIgnoreCase("ISTCoin")) {
                 if (content.length < 2) {
                     System.out.println("Invalid command. Usage: ISTCoin <command> <args>");
@@ -298,10 +304,11 @@ public class Client {
 
     private void printHelpInfo() {
         System.out.println("-- Available commands: --");
-        System.out.println("1. ISTCoin <command> <args>");
-        System.out.println("2. DepCoin <command> <args>");
-        System.out.println("3. QUIT | EXIT");
-        System.out.println("4. HELP");
+        System.out.println("1. APPEND <string> (compatibility with Delivery 1)");
+        System.out.println("2. ISTCoin <command> <args>");
+        System.out.println("3. DepCoin <command> <args>");
+        System.out.println("4. QUIT | EXIT");
+        System.out.println("5. HELP");
         System.out.println("-- Commands for ISTCoin and DepCoin (prefix with coin name): --");
         System.out.println("- BALANCE <address>");
         System.out.println("- TRANSFER <address> <amount>");

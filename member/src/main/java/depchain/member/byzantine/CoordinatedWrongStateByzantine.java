@@ -91,7 +91,7 @@ public class CoordinatedWrongStateByzantine extends Member {
         dcLogger.log("Received: " + acceptMessage);
 
         // Resending echo message to member
-        AcceptMessage echo = new AcceptMessage(acceptMessage.getValue(), config.getPort(), acceptMessage.getConsensusInstance());
+        AcceptMessage echo = new AcceptMessage(acceptMessage.getValts(), config.getPort(), acceptMessage.getConsensusInstance());
         sendToMember(echo, acceptMessage.getPort());
         dcLogger.log("Sending fake echo ACCEPT message to " + acceptMessage.getPort() + "... ");
 

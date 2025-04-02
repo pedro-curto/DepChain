@@ -5,18 +5,18 @@ import java.util.ArrayList;
 public class StringChain {
 
     // TODO -> this will not be here
-    private ArrayList<String> blockchain;
+    private ArrayList<String> stringChain;
 
-    public StringChain(ArrayList<String> blockchain) {
-        this.blockchain = blockchain;
+    public StringChain(ArrayList<String> stringChain) {
+        this.stringChain = stringChain;
     }
 
     public synchronized void appendString(String str) {
-        blockchain.add(str);
-        System.err.println("[BLOCKCHAIN]: " + blockchain);
+        stringChain.add(str);
+        System.err.println("[STRINGCHAIN]: " + stringChain);
     }
 
     public boolean contains(String str) {
-        return blockchain.contains(str);
+        return stringChain.contains(str);
     }
 }

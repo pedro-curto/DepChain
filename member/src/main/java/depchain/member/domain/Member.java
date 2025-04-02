@@ -403,6 +403,7 @@ public class Member {
      */
     public void startConsensus(AppendMessage appendMessage) {
         // checks for replays
+        // TODO -> check client signature here?
         long lastClientNonce = clientNonces.getOrDefault(appendMessage.getPort(), -1L);
         if (appendMessage.getNonce() <= lastClientNonce) {
             dcLogger.alert("Received replayed message");
@@ -415,7 +416,8 @@ public class Member {
         // of the message
         ConsensusLeaderState leaderState = (ConsensusLeaderState) consensusState;
         if (consensusState.getCurrent().getValue().isEmpty()) {
-            ValueTimestampPair newValue = new ValueTimestampPair(0, appendMessage.getValue(), this.getName(), appendMessage.getNonce());
+            ValueTimestampPair newValue = new ValueTimestampPair(0, appendMessage.getValue(),
+                    appendMessage.getPort(), appendMessage.getNonce());
             newValue.setClientSignature(appendMessage.getSignature());
             leaderState.setCurrent(newValue);
         }
@@ -451,16 +453,16 @@ public class Member {
             this.consensusState.nextEpoch();
             return false;
         }
-        String value = decideOnCollectedValues(collectedStates);
-        if (value == null) {
+        ValueTimestampPair decidedVTP = decideOnCollectedValues(collectedStates);
+        if (decidedVTP == null) {
             // abort
             dcLogger.log("aborted after deciding null value");
             this.consensusState.nextEpoch();
             return false;
         }
-        ValueTimestampPair decidePair = new ValueTimestampPair(this.consensusState.getEpoch(), value);
-        this.consensusState.updateWriteSet(decidePair);
-        WriteMessage writeMessage = new WriteMessage(decidePair, config.getPort(), consensusState.getInstance());
+        //ValueTimestampPair decidePair = new ValueTimestampPair(this.consensusState.getEpoch(), value);
+        this.consensusState.updateWriteSet(decidedVTP);
+        WriteMessage writeMessage = new WriteMessage(decidedVTP, config.getPort(), consensusState.getInstance());
         dcLogger.log("Broadcasting: " + writeMessage);
         broadCastMessage(writeMessage);
         return writePhase();
@@ -472,24 +474,24 @@ public class Member {
      */
     public boolean writePhase() {
         dcLogger.log("Waiting for write quorum of size: " + config.getByzantineQuorum() + "...");
-        String writeValue = this.consensusState.waitForWriteQuorum(config.getByzantineQuorum());
-        if (writeValue == null) {
+        ValueTimestampPair writeValts = this.consensusState.waitForWriteQuorum(config.getByzantineQuorum());
+        if (writeValts == null) {
             // Abort
             dcLogger.log("ABORTED (WRITE)");
             this.consensusState.nextEpoch();
             return false;
         }
         dcLogger.log("Quorum of WRITE reached");
-        ValueTimestampPair writeValts = new ValueTimestampPair(this.consensusState.getEpoch(), writeValue);
+        //ValueTimestampPair writeValts = new ValueTimestampPair(this.consensusState.getEpoch(), writeValue);
         this.consensusState.setCurrent(writeValts);
 
         // Broadcast ACCEPT and wait for quorum to DECIDE value
-        AcceptMessage acceptMessage = new AcceptMessage(consensusState.getCurrent().getValue(), config.getPort(), consensusState.getInstance());
+        AcceptMessage acceptMessage = new AcceptMessage(consensusState.getCurrent(), config.getPort(), consensusState.getInstance());
         dcLogger.log("Broadcasting: " + acceptMessage);
         broadCastMessage(acceptMessage);
 
         dcLogger.log("Waiting for accept quorum of size: " + config.getByzantineQuorum() + "...");
-        String accept = this.consensusState.waitForAcceptQuorum(config.getByzantineQuorum());
+        ValueTimestampPair accept = this.consensusState.waitForAcceptQuorum(config.getByzantineQuorum());
         if (accept == null) {
             // Abort
             dcLogger.log("ABORTED (ACCEPT)");
@@ -500,8 +502,9 @@ public class Member {
 
         // DECIDE value
         this.stringChain.appendString(consensusState.getCurrent().getValue());
-        ClientReplyMessage clientReplyMessage = new ClientReplyMessage(accept, true, consensusState.getInstance());
-        broadCastToClients(clientReplyMessage);
+        ClientReplyMessage clientReplyMessage = new ClientReplyMessage(accept.getValue(), true, consensusState.getInstance());
+        sendToClient(clientReplyMessage, accept.getClientPort());
+        //broadCastToClients(clientReplyMessage);
         this.consensusState.nextInstance();
         return true;
     }
@@ -513,9 +516,9 @@ public class Member {
      * @param collectedStates collection of all the members states
      * @return the value to write during this epoch, null if did not find any
      */
-    public String decideOnCollectedValues(List<StateMessage> collectedStates) {
+    public ValueTimestampPair decideOnCollectedValues(List<StateMessage> collectedStates) {
         ValueTimestampPair leaderValue = null;
-        ValueTimestampPair highest = new ValueTimestampPair(-1, null, null, -1);
+        ValueTimestampPair highest = new ValueTimestampPair(-1, null, -1, -1);
 
         for (StateMessage thisState : collectedStates) {
             if (!verifyMemberStateAuthenticity(thisState)) {
@@ -533,7 +536,7 @@ public class Member {
 
             ValueTimestampPair vts = thisState.getState().getCurrent();
             // sets vts clientName to name that comes in the consensus state inside state message
-            vts.setClientName(thisState.getState().getMemberName());
+            //vts.setClientName(thisState.getState().getMemberName());
             if (highest.getTimestamp() > vts.getTimestamp()) {
                 continue;
             }
@@ -559,7 +562,7 @@ public class Member {
         }
 
         if (highest.getValue() != null) {
-            return highest.getValue();
+            return highest;
         }
         // default to leader value
         if (leaderValue == null || leaderValue.getValue() == null) {
@@ -570,7 +573,7 @@ public class Member {
             dcLogger.error("Leader forged new value");
             return null;
         }
-        return leaderValue.getValue();
+        return leaderValue;
     }
 
     private void checkBalance(TransferMessage msg) {
@@ -632,6 +635,11 @@ public class Member {
             }
             perfectLink.sendMessage(message, member.getPort());
         }
+    }
+
+    public void sendToClient(Message message, int port) {
+        dcLogger.log("Sending " + message.getType() + " message... to client " + message.getPort());
+        perfectLink.sendMessage(message, port);
     }
 
     public void broadCastToClients(Message message) {

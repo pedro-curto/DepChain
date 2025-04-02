@@ -18,8 +18,8 @@ public class ConsensusState {
     public final Object lock;
     private Map<Integer, WriteMessage> writeMessages;
     private Map<Integer, AcceptMessage> acceptMessages;
-    private Map<String, Integer> writeCounters = new HashMap<>();
-    private Map<String, Integer> acceptCounters = new HashMap<>();
+    private Map<ValueTimestampPair, Integer> writeCounters = new HashMap<>();
+    private Map<ValueTimestampPair, Integer> acceptCounters = new HashMap<>();
     private CollectedMessage collectedMessage = null;
     private int epoch = 0;
     private DCLogger logger;
@@ -81,8 +81,8 @@ public class ConsensusState {
                 // Write message not received yet
                 writeMessages.put(writeMessage.getPort(), writeMessage);
 
-                String value = writeMessage.getValts().getValue();
-                writeCounters.put(value, writeCounters.getOrDefault(value, 0) + 1);
+                ValueTimestampPair valts = writeMessage.getValts();
+                writeCounters.put(valts, writeCounters.getOrDefault(valts, 0) + 1);
             }
             lock.notifyAll();
         }
@@ -94,7 +94,7 @@ public class ConsensusState {
                 // Accept message not received yet
                 acceptMessages.put(acceptMessage.getPort(), acceptMessage);
 
-                String value = acceptMessage.getValue();
+                ValueTimestampPair value = acceptMessage.getValts();
                 acceptCounters.put(value, acceptCounters.getOrDefault(value, 0) + 1);
             }
             lock.notifyAll();
@@ -123,16 +123,16 @@ public class ConsensusState {
         return false;
     }
 
-    private void printValues(Map<String, Integer> values) {
-        for (String value : values.keySet()) {
+    private void printValues(Map<ValueTimestampPair, Integer> values) {
+        for (ValueTimestampPair value : values.keySet()) {
             System.out.print(values.get(value) + "x <" + value + ">, ");
         }
     }
 
-    private String decideValue(Map<String, Integer> values) {
+    private ValueTimestampPair decideValue(Map<ValueTimestampPair, Integer> values) {
         int maxCounter = 0;
-        String maxValue = null;
-        for (String value : values.keySet()) {
+        ValueTimestampPair maxValue = null;
+        for (ValueTimestampPair value : values.keySet()) {
             if (values.get(value) > maxCounter) {
                 maxCounter = values.get(value);
                 maxValue = value;
@@ -164,7 +164,7 @@ public class ConsensusState {
         return copy;
     }
 
-    public String waitForWriteQuorum(int byzantineQuorum) {
+    public ValueTimestampPair waitForWriteQuorum(int byzantineQuorum) {
         logger.log("Reached waiting for write quorum");
         logger.log("Timeout: " + TIMEOUT);
         if(waitForQuorum(byzantineQuorum, writeCounters, TIMEOUT)) {
@@ -179,7 +179,7 @@ public class ConsensusState {
         return null;
     }
 
-    public String waitForAcceptQuorum(int byzantineQuorum) {
+    public ValueTimestampPair waitForAcceptQuorum(int byzantineQuorum) {
         if(waitForQuorum(byzantineQuorum, acceptCounters, TIMEOUT)) {
             // Quorum reached
             System.out.print("[ConsensusState] Accepted values: ");
@@ -191,7 +191,7 @@ public class ConsensusState {
         return null;
     }
 
-    public boolean waitForQuorum(int byzantineQuorum, Map<String, Integer> counter, long timeoutMillis) {
+    public boolean waitForQuorum(int byzantineQuorum, Map<ValueTimestampPair, Integer> counter, long timeoutMillis) {
         synchronized (lock) {
 
             System.out.println("reached waiting for quorum");
