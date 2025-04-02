@@ -34,25 +34,25 @@ public class BlockChain{
         return rootDir.resolve(backupFileName);
     }
 
-    public void load() {
-        String jsonString = null;
-        try {
-            jsonString = Files.readString(backupPath);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-        JsonElement jsonElement = JsonParser.parseString(jsonString);
-        JsonObject jsonObject = jsonElement.getAsJsonObject();
-        // load blocks
-        jsonObject.getAsJsonArray("blocks")
-                .asList()
-                .stream()
-                .map(JsonElement::getAsJsonObject)
-                .map(JsonAdapter::parseBlock)
-                .forEach(block -> blockchain.add(block));
-        // state is the same as the state of the last block appended
-        this.state = blockchain.getLast().getState().copy();
-    }
+//    public void load() {
+//        String jsonString = null;
+//        try {
+//            jsonString = Files.readString(backupPath);
+//        } catch (IOException e) {
+//            throw new RuntimeException(e);
+//        }
+//        JsonElement jsonElement = JsonParser.parseString(jsonString);
+//        JsonObject jsonObject = jsonElement.getAsJsonObject();
+//        // load blocks
+//        jsonObject.getAsJsonArray("blocks")
+//                .asList()
+//                .stream()
+//                .map(JsonElement::getAsJsonObject)
+//                .map(JsonAdapter::parseBlock)
+//                .forEach(block -> blockchain.add(block));
+//        // state is the same as the state of the last block appended
+//        this.state = blockchain.getLast().getState().copy();
+//    }
 
     public void save() {
         JsonObject json = JsonAdapter.serializeBlockChain(this);

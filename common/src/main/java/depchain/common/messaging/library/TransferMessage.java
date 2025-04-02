@@ -7,11 +7,11 @@ import depchain.common.messaging.MessageType;
 import java.math.BigInteger;
 
 public class TransferMessage extends Message {
-	private String from;
-	private String to;
-	private BigInteger value;
-	private String signature;
+	private String from; // remove
+	private String to; // remove
+	private BigInteger value; // remove
 	private long nonce;
+	private String signature;
 
 	public TransferMessage(String from, String to, BigInteger value, CoinType coinType, long nonce) {
 		super(MessageType.TRANSFER, coinType);

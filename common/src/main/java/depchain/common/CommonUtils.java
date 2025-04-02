@@ -116,7 +116,7 @@ public class CommonUtils {
 		}
 		JsonElement jsonElement = JsonParser.parseString(jsonString);
 		JsonObject jsonObject = jsonElement.getAsJsonObject();
-		return JsonAdapter.parseBlock(jsonObject);
+		return JsonAdapter.parseBlock(jsonObject, true);
 	}
 
 	public static JsonObject getGenesisJsonObject() {

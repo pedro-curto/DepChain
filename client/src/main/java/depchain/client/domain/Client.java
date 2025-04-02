@@ -184,6 +184,7 @@ public class Client {
     }
 
     private void handleAllowanceCommand(String[] content, CoinType coinType) {
+        //if (content.length == 2) {
     }
 
     private void handleApproveCommand(String[] content, CoinType coinType) {
@@ -312,6 +313,8 @@ public class Client {
         System.out.println("-- Commands for ISTCoin and DepCoin (prefix with coin name): --");
         System.out.println("- BALANCE <address>");
         System.out.println("- TRANSFER <address> <amount>");
+        System.out.println("- APPROVE <address> <amount>");
+        System.out.println("- ALLOWANCE <address>");
     }
 
     private void incrementNonce() {

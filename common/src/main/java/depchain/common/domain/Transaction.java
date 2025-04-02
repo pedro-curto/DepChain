@@ -90,4 +90,17 @@ public class Transaction {
         this.success = success;
     }
 
+    @Override
+    public String toString() {
+        return "Transaction{" +
+                "senderAddr='" + senderAddr + '\'' +
+                ", recipientAddr='" + recipientAddr + '\'' +
+                ", amount=" + amount +
+                ", nonce=" + nonce +
+                ", type=" + type +
+                ", success=" + success +
+                ", coinType=" + coinType +
+                '}';
+    }
+
 }

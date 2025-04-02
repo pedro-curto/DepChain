@@ -5,7 +5,6 @@ import java.util.Objects;
 public class ValueTimestampPair {
 
 	private int timestamp;
-
 	private final String value;
 	private String clientSignature;
 	private int clientPort;

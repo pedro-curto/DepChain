@@ -3,6 +3,7 @@ package depchain.member.domain;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import depchain.common.*;
 import depchain.common.domain.*;
 import depchain.common.domain.Transaction.TransactionType;
@@ -10,6 +11,7 @@ import depchain.common.messaging.*;
 import depchain.common.messaging.consensus.*;
 import depchain.common.messaging.library.*;
 import depchain.contract.ContractFunctions;
+import depchain.contract.ContractUtils;
 import depchain.member.state.StringChain;
 
 import java.io.ByteArrayOutputStream;
@@ -76,12 +78,14 @@ public class Member {
         this.running = true;
         startConnections();
         // start the task that will process the transfer messages
-        blockSched.scheduleAtFixedRate(
-                this::processTransferMessages,
-                BLOCK_TIMEOUT_SECONDS,
-                BLOCK_TIMEOUT_SECONDS,
-                TimeUnit.SECONDS
-        );
+        if (this.isLeader()) {
+            blockSched.scheduleAtFixedRate(
+                    this::processTransferMessages,
+                    BLOCK_TIMEOUT_SECONDS,
+                    BLOCK_TIMEOUT_SECONDS,
+                    TimeUnit.SECONDS
+            );
+        }
         new Thread(this::doConsensus).start();
         // don't put code after receiveMessages because this thread passes onto receiveMessages
         receiveMessages();
@@ -197,8 +201,6 @@ public class Member {
                     case TRANSFER:
                         TransferMessage transferMessage = (TransferMessage) message;
                         this.transferQueue.put(transferMessage);
-                        // TODO -> remove below
-                        handleTransfer(transferMessage);
                         break;
                     case BALANCE_OF:
                         BalanceOfMessage balanceOfMessage = (BalanceOfMessage) message;
@@ -228,12 +230,12 @@ public class Member {
         List<Transaction> transactions = new ArrayList<>();
         transferQueue.drainTo(tmp);
         if (tmp.isEmpty()) {
-            dcLogger.verbose("No transfer messages to process");
+            //dcLogger.verbose("No transfer messages to process");
             return;
         }
         for (TransferMessage msg : tmp) {
             if (!Security.validateTransferMessage(msg)) {
-                dcLogger.log("Signature for transfer message is invalid: " + msg);
+                dcLogger.alert("Signature for transfer message is invalid: " + msg);
                 continue;
             }
             Transaction tx = new Transaction(msg.getFrom(), msg.getTo(), msg.getValue(),
@@ -250,12 +252,22 @@ public class Member {
         this.blockChainState.setLastBlock(block);
         // serialize it
         JsonObject blockJson = JsonAdapter.serializeBlock(block);
-        boolean result = CommonUtils.saveJsonToFile(blockJson, config.getBlockDir() + "/block" + block.getBlockNumber() + ".json");
-        if (result) {
-            dcLogger.log("Block " + block.getBlockNumber() + " saved successfully");
-        } else {
-            dcLogger.log("Failed to save block " + block.getBlockNumber());
+        String blockStr = "BLOCK:" + blockJson.toString();
+        AppendMessage appendMessage = new AppendMessage(blockStr, config.getPort(), block.getBlockNumber());
+        dcLogger.verbose("Blockstr: " + blockStr);
+        dcLogger.verbose("Append Message: " + appendMessage);
+        try {
+            appendQueue.put(appendMessage);
+        } catch (InterruptedException e) {
+            dcLogger.error("Error while processing append message: " + e.getMessage());
         }
+
+        //boolean result = CommonUtils.saveJsonToFile(blockJson, config.getBlockDir() + "/block" + block.getBlockNumber() + ".json");
+        //if (result) {
+        //    dcLogger.log("Block " + block.getBlockNumber() + " saved successfully");
+        //} else {
+        //    dcLogger.log("Failed to save block " + block.getBlockNumber());
+        //}
     }
 
 
@@ -264,57 +276,6 @@ public class Member {
         BigInteger balance = ContractFunctions.callBalanceOf(this.evmExecutor, this.bos, addr);
         dcLogger.log("Balance of " + addr + ": " + balance);
         // TODO -> send balance to client
-    }
-
-    private void handleTransfer(TransferMessage transferMessage) {
-        dcLogger.log("Received transfer message: " + transferMessage);
-        if (transferMessage.getCoinType() == CoinType.ISTCOIN) {
-            handleISTCoinTransfer(transferMessage);
-            return;
-        } else if (transferMessage.getCoinType() == CoinType.DEPCOIN) {
-            handleDepCoinTransfer(transferMessage);
-            return;
-        }
-        dcLogger.log("Unrecognized coin type");
-    }
-
-    private void handleISTCoinTransfer(TransferMessage transferMessage) {
-        Address from = Address.fromHexString(transferMessage.getFrom());
-        Address to = Address.fromHexString(transferMessage.getTo());
-        ContractFunctions.callBalanceOf(evmExecutor, bos, from);
-        ContractFunctions.callBalanceOf(evmExecutor, bos, to);
-        BigInteger value = transferMessage.getValue();
-        boolean result = ContractFunctions.transferTokens(evmExecutor, bos, from, to, value);
-        if (result) {
-            dcLogger.log("Transfer successful");
-        } else {
-            dcLogger.log("Transfer failed");
-        }
-        ContractFunctions.callBalanceOf(evmExecutor, bos, from);
-        ContractFunctions.callBalanceOf(evmExecutor, bos, to);
-        // serializes transaction to json
-        //Transaction transaction = new Transaction(transferMessage.getFrom(), transferMessage.getTo(), value,
-        //        transferMessage.getSignature(), transferMessage.getNonce(), TransactionType.TRANSFER);
-        //transaction.save();
-    }
-
-    private void handleDepCoinTransfer(TransferMessage transferMessage) {
-        BigInteger value = transferMessage.getValue();
-        Account fromAccount = this.blockChainState.getAccount(transferMessage.getFrom());
-        Account toAccount = this.blockChainState.getAccount(transferMessage.getTo());
-        if (fromAccount.getBalance().compareTo(value) < 0) {
-            dcLogger.log("Not enough balance");
-            return;
-        }
-        if (value == null || value.compareTo(BigInteger.ZERO) <= 0) {
-            dcLogger.log("Invalid value");
-            return;
-        }
-        fromAccount.decreaseBalance(value);
-        toAccount.increaseBalance(value);
-		dcLogger.verbose("New balances:" );
-        dcLogger.verbose(fromAccount + ": " + fromAccount.getBalance());
-        dcLogger.verbose(toAccount + ": " + toAccount.getBalance());
     }
 
     public void handleRead(ReadMessage readMessage) {
@@ -405,7 +366,8 @@ public class Member {
         // checks for replays
         // TODO -> check client signature here?
         long lastClientNonce = clientNonces.getOrDefault(appendMessage.getPort(), -1L);
-        if (appendMessage.getNonce() <= lastClientNonce) {
+        // if it doesn't start with BLOCK:, it's an append msg
+        if (!appendMessage.getValue().startsWith("BLOCK:") && appendMessage.getNonce() <= lastClientNonce) {
             dcLogger.alert("Received replayed message");
             return;
         }
@@ -501,6 +463,14 @@ public class Member {
         dcLogger.log("Quorum of accept reached");
 
         // DECIDE value
+        String value = consensusState.getCurrent().getValue();
+        if (value.startsWith("BLOCK:")) {
+            // block decided in consensus, handle appropriately
+            dcLogger.verbose("Block decided: " + value);
+            executeTransactions(value);
+            return true;
+        }
+        // else, it was an APPEND request -> append to stringchain
         this.stringChain.appendString(consensusState.getCurrent().getValue());
         ClientReplyMessage clientReplyMessage = new ClientReplyMessage(accept.getValue(), true, consensusState.getInstance());
         sendToClient(clientReplyMessage, accept.getClientPort());
@@ -569,11 +539,83 @@ public class Member {
             dcLogger.error("Did not get leader value in COLLECTED message");
             return null;
         }
-        if (!checkClientSignature(leaderValue)) {
+        // TODO -> how to check client signatures for blocks? check for each field?
+        if (!leaderValue.getValue().startsWith("BLOCK:") && !checkClientSignature(leaderValue)) {
             dcLogger.error("Leader forged new value");
             return null;
         }
         return leaderValue;
+    }
+
+    private void handleTransactions(List<Transaction> transactions) {
+        for (Transaction tx : transactions) {
+            boolean result = false;
+            if (tx.getCoinType() == CoinType.ISTCOIN) {
+                result = handleISTCoinTransaction(tx);
+            } else if (tx.getCoinType() == CoinType.DEPCOIN) {
+                result = handleDepCoinTransaction(tx);
+            } else {
+                // sigma sigma boy
+                dcLogger.log("Unknown coin type");
+            }
+            tx.setStatus(result);
+        }
+    }
+
+    private boolean handleISTCoinTransaction(Transaction tx) {
+        Address from = Address.fromHexString(tx.getSender());
+        Address to = Address.fromHexString(tx.getRecipient());
+        BigInteger value = tx.getAmount();
+
+        boolean result = ContractFunctions.transferTokens(evmExecutor, bos, from, to, value);
+        if (result) {
+            dcLogger.log("Transfer successful");
+        } else {
+            dcLogger.log("Transfer failed");
+        }
+        return result;
+    }
+
+    private boolean handleDepCoinTransaction(Transaction tx) {
+        BigInteger value = tx.getAmount();
+        Account fromAccount = this.blockChainState.getAccount(tx.getSender());
+        Account toAccount = this.blockChainState.getAccount(tx.getRecipient());
+
+        if (value == null || value.compareTo(BigInteger.ZERO) <= 0) {
+            dcLogger.log("Invalid value");
+            return false;
+        }
+        if (fromAccount.getBalance().compareTo(value) < 0) {
+            dcLogger.log("Not enough balance");
+            return false;
+        }
+
+        fromAccount.decreaseBalance(value);
+        toAccount.increaseBalance(value);
+        dcLogger.verbose("New balances:" );
+        dcLogger.verbose(fromAccount + ": " + fromAccount.getBalance());
+        dcLogger.verbose(toAccount + ": " + toAccount.getBalance());
+        return true;
+    }
+
+    private void executeTransactions(String value) {
+        // we receive a BLOCK:{jsonOfblock} message
+        String blockStr = value.substring("BLOCK:".length()).trim();
+        dcLogger.log("BlockStr: " + blockStr);
+        JsonObject blockJson = JsonParser.parseString(blockStr).getAsJsonObject();
+        dcLogger.log("BlockJson: " + blockJson.toString());
+        Block block = JsonAdapter.parseBlock(blockJson, false);
+        dcLogger.log("Executing transactions in block: " + block);
+
+        handleTransactions(block.getTransactions());
+        // update transaction results (if we use the previous ref of blockJson, all tx's status are false)
+        blockJson = JsonAdapter.serializeBlock(block);
+        boolean result = CommonUtils.saveJsonToFile(blockJson, config.getBlockDir() + "/block" + block.getBlockNumber() + ".json");
+        if (result) {
+            dcLogger.log("Block " + block.getBlockNumber() + " saved successfully");
+        } else {
+            dcLogger.log("Failed to save block " + block.getBlockNumber());
+        }
     }
 
     private void checkBalance(TransferMessage msg) {

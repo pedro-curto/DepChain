@@ -2,6 +2,7 @@ package depchain.common;
 
 import com.google.gson.*;
 import depchain.common.domain.*;
+import depchain.common.messaging.CoinType;
 
 import java.math.BigInteger;
 import java.util.List;
@@ -9,7 +10,7 @@ import java.util.stream.Collectors;
 
 public class JsonAdapter {
 
-    public static Block parseBlock(JsonObject json) {
+    public static Block parseBlock(JsonObject json, boolean isGenesis) {
        String hash = json.get("hash").getAsString();
        String previousHash = json.get("previous_hash").getAsString();
 
@@ -19,8 +20,14 @@ public class JsonAdapter {
                 .map(JsonAdapter::parseTransaction)
                 .collect(Collectors.toList());
 
-        BlockChainState blockChainState = parseBlockChainState(json.getAsJsonObject("state"));
-        return new Block(hash, previousHash, transactions, blockChainState);
+        if (isGenesis) {
+            BlockChainState blockChainState = parseBlockChainState(json.getAsJsonObject("state"));
+            return new Block(hash, previousHash, transactions, blockChainState);
+        }
+        // String previousHash, List<Transaction> transactions, long blockNumber, long timestamp
+        long blockNumber = json.get("block_number").getAsLong();
+        long timestamp = json.get("timestamp").getAsLong();
+        return new Block(previousHash, transactions, blockNumber, timestamp);
     }
 
     public static BlockChainState parseBlockChainState(JsonObject json) {
@@ -38,9 +45,16 @@ public class JsonAdapter {
     }
 
     public static Transaction parseTransaction(JsonElement json) {
-        // TODO
-        return new Transaction(null, null, new BigInteger("0"), null, 0,
-                Transaction.TransactionType.TRANSFER, null);
+        JsonObject obj = json.getAsJsonObject();
+        return new Transaction(
+                obj.get("sender").getAsString(),
+                obj.get("recipient").getAsString(),
+                obj.get("amount").getAsBigInteger(),
+                obj.get("signature").getAsString(),
+                obj.get("nonce").getAsLong(),
+                Transaction.TransactionType.valueOf(obj.get("type").getAsString()),
+                CoinType.valueOf(obj.get("coin_type").getAsString())
+        );
     }
 
     public static JsonObject serializeBlockChain(BlockChain blockChain) {
