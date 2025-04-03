@@ -151,7 +151,8 @@ public class PerfectLink {
                 int clientPort = packet.getPort();
                 dcLogger.error("(" + clientPort + ") parsing " + received + " : " + e);
                 // reply with error
-                sendMessage(new ClientReplyMessage("", false, -1), clientPort);
+                // TODO make a subclass of ClientReplyMessage for Error, for now type is random
+                sendMessage(new ClientReplyMessage("", false, -1, MessageType.STRING_REPLY), clientPort);
                 continue;
             }
             MessageType type = message.getType();

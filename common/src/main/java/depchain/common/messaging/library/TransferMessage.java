@@ -15,8 +15,18 @@ public class TransferMessage extends Message {
 	private long nonce;
 	private String signature;
 	private TransactionType transactionType;
+	private int clientPort;
 
-	public TransferMessage(String from, String spender, String to, BigInteger value, CoinType coinType, long nonce, TransactionType transactionType) {
+	public TransferMessage(
+			String from,
+			String spender,
+			String to,
+			BigInteger value,
+			CoinType coinType,
+			long nonce,
+			TransactionType transactionType,
+			int clientPort
+	) {
 		super(MessageType.TRANSFER, coinType);
 		this.from = from;
 		this.spender = spender;
@@ -24,6 +34,7 @@ public class TransferMessage extends Message {
 		this.value = value;
 		this.nonce = nonce;
 		this.transactionType = transactionType;
+		this.clientPort = clientPort;
 	}
 
 	public String getFrom() {
@@ -48,6 +59,10 @@ public class TransferMessage extends Message {
 
 	public long getNonce() {
 		return nonce;
+	}
+
+	public int getClientPort() {
+		return clientPort;
 	}
 
 	public void setSignature (String signature) {

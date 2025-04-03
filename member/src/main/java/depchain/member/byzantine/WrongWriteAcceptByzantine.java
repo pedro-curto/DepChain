@@ -84,7 +84,12 @@ public class WrongWriteAcceptByzantine extends Member {
         // DECIDE value
         this.stringChain.appendString(consensusState.getCurrent().getValue());
         if (isLeader()) {
-            ClientReplyMessage clientReplyMessage = new ClientReplyMessage(accept.getValue(),true, consensusState.getInstance());
+            ClientReplyMessage clientReplyMessage = new ClientReplyMessage(
+                    accept.getValue(),
+                    true,
+                    consensusState.getInstance(),
+                    MessageType.STRING_REPLY
+            );
             broadCastToClients(clientReplyMessage);
         }
         this.consensusState.nextInstance();

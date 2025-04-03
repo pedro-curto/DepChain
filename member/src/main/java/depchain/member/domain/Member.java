@@ -1,7 +1,5 @@
 package depchain.member.domain;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import depchain.common.*;
@@ -10,7 +8,6 @@ import depchain.common.messaging.*;
 import depchain.common.messaging.consensus.*;
 import depchain.common.messaging.library.*;
 import depchain.contract.ContractFunctions;
-import depchain.contract.ContractUtils;
 import depchain.member.state.StringChain;
 
 import java.io.ByteArrayOutputStream;
@@ -23,7 +20,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
 
-import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.evm.fluent.EVMExecutor;
 import org.hyperledger.besu.evm.fluent.SimpleWorld;
 import org.hyperledger.besu.datatypes.Address;
@@ -41,7 +37,8 @@ public class Member {
     protected BlockingQueue<Message> messageQueue;
     protected BlockingQueue<AppendMessage> appendQueue;
     protected BlockingQueue<TransferMessage> transferQueue = new LinkedBlockingQueue<>();
-    private Map<Integer, Long> clientNonces = new ConcurrentHashMap<>();
+    private final Map<Integer, Long> clientNonces = new ConcurrentHashMap<>();
+    private long serverNonce = 0L;
     private volatile boolean running;
     private boolean caughtInvalidSignature = false;
     // smart contract fields
@@ -49,7 +46,6 @@ public class Member {
     private SimpleWorld world;
     private ByteArrayOutputStream bos;
     // for transfer processing
-    private ContractFunctions contractFunctions;
     private final ScheduledExecutorService blockSched = Executors.newSingleThreadScheduledExecutor();
     private static final int BLOCK_TIMEOUT_SECONDS = 5;
 
@@ -212,7 +208,12 @@ public class Member {
                         break;
                     case TRANSFER:
                         TransferMessage transferMessage = (TransferMessage) message;
-                        this.transferQueue.put(transferMessage);
+                        // TODO check signature before incrementing nonce??
+                        if(isValidClientNonce(transferMessage.getNonce(), transferMessage.getPort())) {
+                            // TODO can have concurrency bug between validation and nonce increment!
+                            setClientNonce(transferMessage.getNonce(), transferMessage.getPort());
+                            this.transferQueue.put(transferMessage);
+                        }
                         break;
                     case BALANCE_OF:
                         BalanceOfMessage balanceOfMessage = (BalanceOfMessage) message;
@@ -251,10 +252,18 @@ public class Member {
                 dcLogger.alert("Signature for transfer message is invalid: " + msg);
                 continue;
             }
-            Transaction tx = new Transaction(msg.getFrom(), msg.getSpender(), msg.getTo(), msg.getValue(),
-                    msg.getSignature(), msg.getNonce(), msg.getTransactionType(), msg.getCoinType(), msg.getPort());
+            Transaction tx = new Transaction(
+                    msg.getFrom(),
+                    msg.getSpender(),
+                    msg.getTo(),
+                    msg.getValue(),
+                    msg.getSignature(),
+                    msg.getNonce(),
+                    msg.getTransactionType(),
+                    msg.getCoinType(),
+                    msg.getClientPort()
+            );
             transactions.add(tx);
-
         }
         // constructs block: prevHash, txs, blockNum, ts (he calculates hash on constructor)
         // TODO -> how to compute hash of new block?
@@ -265,7 +274,7 @@ public class Member {
         this.blockChainState.setLastBlock(block);
         // serialize it
         JsonObject blockJson = JsonAdapter.serializeBlock(block);
-        String blockStr = "BLOCK:" + blockJson.toString();
+        String blockStr = "BLOCK:" + blockJson;
         AppendMessage appendMessage = new AppendMessage(blockStr, config.getPort(), block.getBlockNumber());
         dcLogger.verbose("Blockstr: " + blockStr);
         dcLogger.verbose("Append Message: " + appendMessage);
@@ -341,7 +350,7 @@ public class Member {
                 balanceOfMessage.getAddress(),
                 balance,
                 balanceOfMessage.getCoinType(),
-                clientNonces.get(balanceOfMessage.getPort()),
+                this.serverNonce,
                 this.config.getPort()
         );
 
@@ -370,7 +379,7 @@ public class Member {
                 allowanceMessage.getSpender(),
                 allowance,
                 allowanceMessage.getCoinType(),
-                clientNonces.get(allowanceMessage.getPort()),
+                this.serverNonce,
                 this.config.getPort()
         );
 
@@ -394,7 +403,7 @@ public class Member {
                 isBlackListedMessage.getAccount(),
                 result,
                 isBlackListedMessage.getCoinType(),
-                clientNonces.get(isBlackListedMessage.getPort()),
+                this.serverNonce,
                 this.config.getPort()
         );
 
@@ -436,7 +445,7 @@ public class Member {
     public void startConsensus(AppendMessage appendMessage) {
         // checks for replays
         // TODO -> check client signature here?
-        long lastClientNonce = clientNonces.getOrDefault(appendMessage.getPort(), -1L);
+        long lastClientNonce = getClientNonce(appendMessage.getPort());
         // if it doesn't start with BLOCK:, it's an append msg
         if (!appendMessage.getValue().startsWith("BLOCK:") && appendMessage.getNonce() <= lastClientNonce) {
             dcLogger.alert("Received replayed message");
@@ -544,7 +553,12 @@ public class Member {
         }
         // else, it was an APPEND request -> append to stringchain
         this.stringChain.appendString(consensusState.getCurrent().getValue());
-        ClientReplyMessage clientReplyMessage = new ClientReplyMessage(accept.getValue(), true, consensusState.getInstance());
+        ClientReplyMessage clientReplyMessage = new ClientReplyMessage(
+                accept.getValue(),
+                true,
+                consensusState.getInstance(),
+                MessageType.STRING_REPLY
+        );
         sendToClient(clientReplyMessage, accept.getClientPort());
         this.consensusState.nextInstance();
         return true;
@@ -649,14 +663,11 @@ public class Member {
                     tx.getRecipient(),
                     tx.getCoinType(),
                     tx.getTransactionType(),
-                    // TODO check if this is the supposed nonce (idfk)
-                    // TODO I think it's either tx.getNonce() or the clientNonce, or maybe both
-                    clientNonces.get(tx.getClientPort()),
-                    //tx.getNonce(),
+                    this.serverNonce,
                     config.getPort()
             );
             // TODO the reply needs to be signed by member (byzantine can pretend to be other member)
-
+            dcLogger.log("SENDING " + transferReply.getType() + "!!!");
             sendToClient(transferReply, tx.getClientPort());
         }
     }
@@ -750,10 +761,9 @@ public class Member {
     }
 
     public void sendToClient(Message message, int port) {
-        dcLogger.log("Sending " + message.getType() + " message... to client " + message.getPort());
+        dcLogger.log("Sending " + message.getType() + " message... to client " + port);
         perfectLink.sendMessage(message, port);
-        // increment client nonce
-        clientNonces.put(message.getPort(), clientNonces.get(message.getPort() + 1));
+        incrementServerNonce();
     }
 
     public void broadCastToClients(Message message) {
@@ -761,7 +771,7 @@ public class Member {
         for (Entity client : config.getClients()) {
             dcLogger.log("[" + message.getType() + " MESSAGE]: " + client.getEntityName());
             perfectLink.sendMessage(message, client.getPort());
-            clientNonces.put(client.getPort(), clientNonces.get(client.getPort() + 1));
+            incrementServerNonce();
         }
     }
 
@@ -793,6 +803,24 @@ public class Member {
         running = false;
         perfectLink.stop();
         blockSched.shutdownNow();
+    }
+
+    private long getClientNonce(Integer port) {
+        return this.clientNonces.getOrDefault(port, -1L);
+    }
+
+    private void setClientNonce(long nonce, int port) {
+        if (isValidClientNonce(nonce, port)) {
+            clientNonces.put(port, nonce);
+        }
+    }
+
+    private boolean isValidClientNonce(long nonce, int port) {
+        return nonce > getClientNonce(port);
+    }
+
+    private void incrementServerNonce() {
+        this.serverNonce++;
     }
 
     public boolean caughtInvalidSignature() {

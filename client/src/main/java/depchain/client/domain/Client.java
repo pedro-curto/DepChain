@@ -193,8 +193,9 @@ public class Client {
     }
 
     private void handleIsBlackListed(String[] content, CoinType coinType) {
-        if (content.length != 2) {
+        if (content.length != 3) {
             System.out.println("Invalid command. Usage: <CoinType> ISBLACKLISTED <owner> <account>");
+            return;
         }
         String owner = content[1];
         String account = content[2];
@@ -218,7 +219,20 @@ public class Client {
             return;
         }
         String addr = addresses.get(nameAddress);
-        TransferMessage msg = new TransferMessage(this.myAddress, null, addr, null, coinType, nonce, TransactionType.BLACKLIST);
+        TransferMessage msg = new TransferMessage(
+                this.myAddress,
+                null,
+                addr,
+                //  TODO have to send BigInteger.ZERO otherwise json can't convert null to BigInteger in parseBlock
+                BigInteger.ZERO, // change this in the future
+                coinType,
+                nonce,
+                TransactionType.BLACKLIST,
+                this.port
+        );
+        String dataToSign = msg.getDataToSign();
+        String signature = Security.makeDS(dataToSign, clientKeys.getPrivate());
+        msg.setSignature(signature);
         sendMessageToLeader(msg);
     }
 
@@ -233,7 +247,20 @@ public class Client {
             return;
         }
         String addr = addresses.get(nameAddress);
-        TransferMessage msg = new TransferMessage(this.myAddress, null, addr, null, coinType, nonce, TransactionType.UNBLACKLIST);
+        TransferMessage msg = new TransferMessage(
+                this.myAddress,
+                null,
+                addr,
+                //  TODO have to send BigInteger.ZERO otherwise json can't convert null to BigInteger in parseBlock
+                BigInteger.ZERO, // change this in the future
+                coinType,
+                nonce,
+                TransactionType.UNBLACKLIST,
+                this.port
+        );
+        String dataToSign = msg.getDataToSign();
+        String signature = Security.makeDS(dataToSign, clientKeys.getPrivate());
+        msg.setSignature(signature);
         sendMessageToLeader(msg);
     }
 
@@ -256,8 +283,16 @@ public class Client {
         String ownerAddr = addresses.get(nameOfOwnerAddr);
         String toAddr = addresses.get(nameOfToAddr);
         // the invoker (myself, the client) is the spender
-        TransferMessage msg = new TransferMessage(ownerAddr, this.myAddress, toAddr, amount, coinType, nonce, TransactionType.TRANSFER_FROM);
-
+        TransferMessage msg = new TransferMessage(
+                ownerAddr,
+                this.myAddress,
+                toAddr,
+                amount,
+                coinType,
+                nonce,
+                TransactionType.TRANSFER_FROM,
+                this.port
+        );
         String dataToSign = msg.getDataToSign();
         String signature = Security.makeDS(dataToSign, clientKeys.getPrivate());
         msg.setSignature(signature);
@@ -294,10 +329,20 @@ public class Client {
             return;
         }
         String spenderAddr = addresses.get(spender);
-        TransferMessage msg = new TransferMessage(myAddress, null, spenderAddr, amount, coinType, nonce, TransactionType.APPROVE);
+        TransferMessage msg = new TransferMessage(
+                myAddress,
+                null,
+                spenderAddr,
+                amount,
+                coinType,
+                nonce,
+                TransactionType.APPROVE,
+                this.port
+        );
         String dataToSign = msg.getDataToSign();
         String signature = Security.makeDS(dataToSign, clientKeys.getPrivate());
         msg.setSignature(signature);
+
         sendMessageToLeader(msg);
     }
 
@@ -314,7 +359,16 @@ public class Client {
         String toAddress = addresses.get(nameOfToAddress);
         BigInteger amount = BigInteger.valueOf(Long.parseLong(content[2]));
         // TODO check if he has enough balance here and amount (?)
-        TransferMessage msg = new TransferMessage(this.myAddress, null, toAddress, amount, coinType, nonce, TransactionType.TRANSFER);
+        TransferMessage msg = new TransferMessage(
+                this.myAddress,
+                null,
+                toAddress,
+                amount,
+                coinType,
+                nonce,
+                TransactionType.TRANSFER,
+                this.port
+        );
         String dataToSign = msg.getDataToSign();
         String signature = Security.makeDS(dataToSign, clientKeys.getPrivate());
         msg.setSignature(signature);
@@ -367,16 +421,48 @@ public class Client {
             } catch (InterruptedException e) {
                 continue;
             }
-            if (message instanceof ClientReplyMessage) {
-                ClientReplyMessage replyMessage = (ClientReplyMessage) message;
-                switch (replyMessage.getReplyType()) {
-                    case TRANSFER_REPLY -> handleTransferReply((TransferReply) replyMessage);
-                    case BALANCE_REPLY -> handleBalanceReply((BalanceReply) replyMessage);
-                    case ALLOWANCE_REPLY -> handleAllowanceReply((AllowanceReply) replyMessage);
-                    default -> handleStringReply(replyMessage);
-                }
+            System.out.println("Delivering " + message.getType() + "...");
+            switch (message.getType()) {
+                case TRANSFER_REPLY:
+                    TransferReply transferReply = (TransferReply) message;
+                    handleTransferReply(transferReply);
+                    break;
+                case BALANCE_REPLY:
+                    BalanceReply balanceReply = (BalanceReply) message;
+                    handleBalanceReply(balanceReply);
+                    break;
+                case ALLOWANCE_REPLY:
+                    AllowanceReply allowanceReply = (AllowanceReply) message;
+                    handleAllowanceReply(allowanceReply);
+                    break;
+                case STRING_REPLY:
+                    ClientReplyMessage clientReplyMessage = (ClientReplyMessage) message;
+                    handleStringReply(clientReplyMessage);
+                    break;
+                case IS_BLACK_LISTED_REPLY:
+                    IsBlackListedReply isBlackListedReply = (IsBlackListedReply) message;
+                    handleIsBlackListedReply(isBlackListedReply);
+                default:
+                    System.out.println("Reply type does not exist");
             }
         }
+    }
+
+    private void handleIsBlackListedReply(IsBlackListedReply reply) {
+        memberReplyMessages.putIfAbsent(reply, 0);
+        memberReplyMessages.put(reply, memberReplyMessages.get(reply) + 1);
+        // reached quorum of f+1 equal messages
+        if (memberReplyMessages.get(reply) == this.faultyProcesses+1) {
+            System.out.println("IsBlacklisted: {");
+            System.out.println("owner "+ reply.getOwner());
+            System.out.println("account: " + reply.getAccount());
+            System.out.println("result: " + reply.isBlackListed());
+            System.out.println("}");
+        }
+        else {
+            System.out.println("Not reached quorum yet.");
+        }
+
     }
 
     private void handleStringReply(ClientReplyMessage reply) {

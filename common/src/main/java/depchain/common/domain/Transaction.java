@@ -23,8 +23,16 @@ public class Transaction {
     private CoinType coinType;
     private int clientPort;
 
-    public Transaction(String senderAddr, String spenderAddr, String recipientAddr, BigInteger amount, String signature,
-                       long nonce, TransactionType transactionType, CoinType coinType, int clientPort) {
+    public Transaction(String senderAddr,
+                       String spenderAddr,
+                       String recipientAddr,
+                       BigInteger amount,
+                       String signature,
+                       long nonce,
+                       TransactionType transactionType,
+                       CoinType coinType,
+                       int clientPort
+    ) {
         this.senderAddr = senderAddr;
         this.spenderAddr = spenderAddr;
         this.recipientAddr = recipientAddr;

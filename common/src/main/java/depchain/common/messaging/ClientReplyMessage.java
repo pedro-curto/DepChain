@@ -11,12 +11,12 @@ public class ClientReplyMessage extends Message {
 	MessageType replyType;
     private long nonce;
 
-    public ClientReplyMessage(String value, boolean success, int instanceOfDecision) {
-        super(MessageType.CLIENT_REPLY);
+    public ClientReplyMessage(String value, boolean success, int instanceOfDecision, MessageType replyType) {
+        super(replyType);
         this.value = value;
         this.success = success;
         this.instanceOfDecision = instanceOfDecision;
-		this.replyType = MessageType.STRING_REPLY;
+		this.replyType = replyType;
     }
 
 	public ClientReplyMessage(
@@ -27,7 +27,7 @@ public class ClientReplyMessage extends Message {
         long nonce,
         int memberPort
     ) {
-		super(MessageType.CLIENT_REPLY, memberPort);
+		super(replyType, memberPort);
 		this.replyType = replyType;
 		this.success = success;
 		this.instanceOfDecision = instanceOfDecision;
