@@ -308,8 +308,8 @@ public class PerfectLink {
                 return gson.fromJson(received, TransferMessage.class);
             case BALANCE_OF:
                 return gson.fromJson(received, BalanceOfMessage.class);
-            case APPROVE:
-                return gson.fromJson(received, ApproveMessage.class);
+            //case APPROVE:
+            //    return gson.fromJson(received, ApproveMessage.class);
             case ALLOWANCE:
                 return gson.fromJson(received, AllowanceMessage.class);
             default:

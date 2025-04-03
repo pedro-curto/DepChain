@@ -6,9 +6,7 @@ import depchain.common.domain.Block;
 import depchain.common.domain.Entity;
 import depchain.common.messaging.*;
 import depchain.common.messaging.CoinType;
-import depchain.common.messaging.library.AppendMessage;
-import depchain.common.messaging.library.BalanceOfMessage;
-import depchain.common.messaging.library.TransferMessage;
+import depchain.common.messaging.library.*;
 
 import java.math.BigInteger;
 import java.net.DatagramSocket;
@@ -172,6 +170,9 @@ public class Client {
             case "TRANSFER":
                 handleTransferCommand(content, coinType);
                 break;
+            case "TRANSFER_FROM":
+                handleTransferFromCommand(content, coinType);
+                break;
             case "APPROVE":
                 handleApproveCommand(content, coinType);
                 break;
@@ -183,12 +184,75 @@ public class Client {
         }
     }
 
+    private void handleTransferFromCommand(String[] content, CoinType coinType) {
+        if (content.length != 4) {
+            dcLogger.log("Invalid command. Usage: <CoinType> TRANSFER_FROM <owner> <to> <amount>");
+            return;
+        }
+        String nameOfOwnerAddr = content[1];
+        String nameOfToAddr = content[2];
+        BigInteger amount = BigInteger.valueOf(Long.parseLong(content[3]));
+        dcLogger.verbose("nameOfOwnerAddr: " + nameOfOwnerAddr);
+        dcLogger.verbose("nameOfToAddress: " + nameOfToAddr);
+        dcLogger.verbose("addresses: " + addresses);
+        if (!addresses.containsKey(nameOfOwnerAddr)) {
+            System.out.println("Invalid owner account address!");
+            return;
+        }
+        if (!addresses.containsKey(nameOfToAddr)) {
+            System.out.println("Invalid destination account address!");
+            return;
+        }
+        String ownerAddr = addresses.get(nameOfOwnerAddr);
+        String toAddr = addresses.get(nameOfToAddr);
+        String fromAddress = this.myAddress;
+        // the invoker (myself, the client) is the spender
+        TransferMessage msg = new TransferMessage(ownerAddr, this.myAddress, toAddr, amount, coinType, nonce, TransactionType.TRANSFER_FROM);
+        String dataToSign = msg.getDataToSign();
+        dcLogger.verbose("dataToSign: " + dataToSign);
+        String signature = Security.makeDS(dataToSign, clientKeys.getPrivate());
+        msg.setSignature(signature);
+        // send the message to the leader
+        perfectLink.sendMessage(msg, leaderPort);
+        dcLogger.verbose("Sent message: " + msg);
+        incrementNonce();
+    }
+
     private void handleAllowanceCommand(String[] content, CoinType coinType) {
-        //if (content.length == 2) {
+        if (content.length != 2) {
+            dcLogger.log("Invalid command. Usage: <CoinType> ALLOWANCE <spender>");
+            return;
+        }
+        String spender = content[1];
+        if (!addresses.containsKey(spender)) {
+            System.out.println("Invalid account address!");
+            return;
+        };
+        String spenderAddr = addresses.get(spender);
+        // TODO -> acho que o spender address sou eu (?)
+        AllowanceMessage msg = new AllowanceMessage(this.myAddress, spenderAddr, this.port, coinType);
+        broadcastMessage(msg);
     }
 
     private void handleApproveCommand(String[] content, CoinType coinType) {
-
+        if (content.length != 3) {
+            dcLogger.log("Invalid command. Usage: <CoinType> APPROVE <spender> <amount>");
+            return;
+        }
+        String spender = content[1];
+        BigInteger amount = BigInteger.valueOf(Long.parseLong(content[2]));
+        if (!addresses.containsKey(spender)) {
+            System.out.println("Invalid account address!");
+            return;
+        }
+        String spenderAddr = addresses.get(spender);
+        TransferMessage msg = new TransferMessage(myAddress, null, spenderAddr, amount, coinType, nonce, TransactionType.APPROVE);
+        String dataToSign = msg.getDataToSign();
+        String signature = Security.makeDS(dataToSign, clientKeys.getPrivate());
+        msg.setSignature(signature);
+        perfectLink.sendMessage(msg, leaderPort);
+        dcLogger.verbose("Sent message: " + msg);
+        incrementNonce();
     }
 
     private void handleTransferCommand(String[] content, CoinType coinType) {
@@ -204,7 +268,7 @@ public class Client {
             BigInteger amount = BigInteger.valueOf(Long.parseLong(content[2]));
             // TODO check if he has enough balance here and amount (?)
             String fromAddress = this.myAddress;
-            TransferMessage msg = new TransferMessage(fromAddress, toAddress, amount, coinType, nonce);
+            TransferMessage msg = new TransferMessage(fromAddress, null, toAddress, amount, coinType, nonce, TransactionType.TRANSFER);
             String dataToSign = msg.getDataToSign();
             String signature = Security.makeDS(dataToSign, clientKeys.getPrivate());
             msg.setSignature(signature);
@@ -313,8 +377,9 @@ public class Client {
         System.out.println("-- Commands for ISTCoin and DepCoin (prefix with coin name): --");
         System.out.println("- BALANCE <address>");
         System.out.println("- TRANSFER <address> <amount>");
-        System.out.println("- APPROVE <address> <amount>");
-        System.out.println("- ALLOWANCE <address>");
+        System.out.println("- TRANSFER_FROM <owner> <to> <amount>");
+        System.out.println("- APPROVE <spender> <amount>");
+        System.out.println("- ALLOWANCE <spender>");
     }
 
     private void incrementNonce() {

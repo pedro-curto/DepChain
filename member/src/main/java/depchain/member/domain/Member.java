@@ -6,7 +6,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import depchain.common.*;
 import depchain.common.domain.*;
-import depchain.common.domain.Transaction.TransactionType;
+import depchain.common.messaging.TransactionType;
 import depchain.common.messaging.*;
 import depchain.common.messaging.consensus.*;
 import depchain.common.messaging.library.*;
@@ -19,6 +19,7 @@ import java.io.PrintStream;
 import java.math.BigInteger;
 import java.security.PublicKey;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
@@ -210,10 +211,6 @@ public class Member {
                         AllowanceMessage allowanceMessage = (AllowanceMessage) message;
                         handleAllowanceMessage(allowanceMessage);
                         break;
-                    case APPROVE:
-                        ApproveMessage approveMessage = (ApproveMessage) message;
-                        handleApproveMessage(approveMessage);
-                        break;
                     default:
                         dcLogger.log("Unknown message type");
                 }
@@ -224,22 +221,24 @@ public class Member {
     }
 
     private void processTransferMessages() {
+        // TODO -> order txs by nonce per client
         // aggregates transfers from queue
-        // TODO is this resilient to concurrency? (draining the transfer queue while another request comes and tries to add)
         List<TransferMessage> tmp = new ArrayList<>();
         List<Transaction> transactions = new ArrayList<>();
         transferQueue.drainTo(tmp);
         if (tmp.isEmpty()) {
-            //dcLogger.verbose("No transfer messages to process");
+            dcLogger.verbose("No transfer messages to process");
             return;
         }
+        // sort tmp based on nonces
+        tmp.sort(Comparator.comparingLong(TransferMessage::getNonce));
         for (TransferMessage msg : tmp) {
             if (!Security.validateTransferMessage(msg)) {
                 dcLogger.alert("Signature for transfer message is invalid: " + msg);
                 continue;
             }
-            Transaction tx = new Transaction(msg.getFrom(), msg.getTo(), msg.getValue(),
-                    msg.getSignature(), msg.getNonce(), TransactionType.TRANSFER, msg.getCoinType());
+            Transaction tx = new Transaction(msg.getFrom(), msg.getSpender(), msg.getTo(), msg.getValue(),
+                    msg.getSignature(), msg.getNonce(), msg.getTransactionType(), msg.getCoinType(), msg.getPort());
             transactions.add(tx);
 
         }
@@ -271,11 +270,16 @@ public class Member {
     }
 
 
+
     private void handleBalanceMessage(BalanceOfMessage balanceOfMessage) {
         Address addr = Address.fromHexString(balanceOfMessage.getAddress());
-        BigInteger balance = ContractFunctions.callBalanceOf(this.evmExecutor, this.bos, addr);
+        BigInteger balance = BigInteger.ZERO;
+        if (balanceOfMessage.getCoinType() == CoinType.ISTCOIN) {
+            balance = ISTCoinHandler.handleBalance(addr, this.evmExecutor, this.bos);
+        } else if (balanceOfMessage.getCoinType() == CoinType.DEPCOIN) {
+            balance = DepCoinHandler.handleBalance(addr, this.blockChainState, this.dcLogger);
+        }
         dcLogger.log("Balance of " + addr + ": " + balance);
-        // TODO -> send balance to client
     }
 
     public void handleRead(ReadMessage readMessage) {
@@ -320,14 +324,21 @@ public class Member {
         consensusState.addAcceptMessage(acceptMessage);
     }
 
-    private void handleApproveMessage(ApproveMessage approveMessage) {
-        dcLogger.verbose("Received: " + approveMessage);
-        dcLogger.verbose("Not implemented yet");
-    }
-
     private void handleAllowanceMessage(AllowanceMessage allowanceMessage) {
         dcLogger.verbose("Received: " + allowanceMessage);
-        dcLogger.verbose("Not implemented yet");
+        Address owner = Address.fromHexString(allowanceMessage.getOwner());
+        Address spender = Address.fromHexString(allowanceMessage.getSpender());
+        BigInteger allowance = BigInteger.ZERO;
+
+        if (allowanceMessage.getCoinType() == CoinType.ISTCOIN) {
+            allowance = ISTCoinHandler.handleAllowance(owner, spender, this.evmExecutor, this.bos);
+        } else if (allowanceMessage.getCoinType() == CoinType.DEPCOIN) {
+            allowance = DepCoinHandler.handleAllowance(owner, spender, this.blockChainState, this.dcLogger);
+        } else {
+            dcLogger.log("Unknown coin type");
+        }
+        dcLogger.log("[" + allowanceMessage.getCoinType() + "] Allowance of " + owner + " to " + spender + ": " + allowance);
+        // TODO responder a client
     }
 
 
@@ -468,13 +479,13 @@ public class Member {
             // block decided in consensus, handle appropriately
             dcLogger.verbose("Block decided: " + value);
             executeTransactions(value);
+            this.consensusState.nextInstance();
             return true;
         }
         // else, it was an APPEND request -> append to stringchain
         this.stringChain.appendString(consensusState.getCurrent().getValue());
         ClientReplyMessage clientReplyMessage = new ClientReplyMessage(accept.getValue(), true, consensusState.getInstance());
         sendToClient(clientReplyMessage, accept.getClientPort());
-        //broadCastToClients(clientReplyMessage);
         this.consensusState.nextInstance();
         return true;
     }
@@ -551,51 +562,22 @@ public class Member {
         for (Transaction tx : transactions) {
             boolean result = false;
             if (tx.getCoinType() == CoinType.ISTCOIN) {
-                result = handleISTCoinTransaction(tx);
+                result = ISTCoinHandler.handleTransaction(tx, this.evmExecutor, this.bos);
             } else if (tx.getCoinType() == CoinType.DEPCOIN) {
-                result = handleDepCoinTransaction(tx);
+                result = DepCoinHandler.handleTransaction(tx, this.blockChainState, this.dcLogger);
             } else {
-                // sigma sigma boy
                 dcLogger.log("Unknown coin type");
             }
             tx.setStatus(result);
+            if (result) {
+                //ClientReplyMessage replay = new ClientReplyMessage(tx, true, this.consensusState.getInstance());
+                //sendToClient(replay, );
+                dcLogger.verbose("Transfer successful");
+            } else {
+                ClientReplyMessage replay = new ClientReplyMessage(tx, false, this.consensusState.getInstance());
+                dcLogger.verbose("Transfer failed");
+            }
         }
-    }
-
-    private boolean handleISTCoinTransaction(Transaction tx) {
-        Address from = Address.fromHexString(tx.getSender());
-        Address to = Address.fromHexString(tx.getRecipient());
-        BigInteger value = tx.getAmount();
-
-        boolean result = ContractFunctions.transferTokens(evmExecutor, bos, from, to, value);
-        if (result) {
-            dcLogger.log("Transfer successful");
-        } else {
-            dcLogger.log("Transfer failed");
-        }
-        return result;
-    }
-
-    private boolean handleDepCoinTransaction(Transaction tx) {
-        BigInteger value = tx.getAmount();
-        Account fromAccount = this.blockChainState.getAccount(tx.getSender());
-        Account toAccount = this.blockChainState.getAccount(tx.getRecipient());
-
-        if (value == null || value.compareTo(BigInteger.ZERO) <= 0) {
-            dcLogger.log("Invalid value");
-            return false;
-        }
-        if (fromAccount.getBalance().compareTo(value) < 0) {
-            dcLogger.log("Not enough balance");
-            return false;
-        }
-
-        fromAccount.decreaseBalance(value);
-        toAccount.increaseBalance(value);
-        dcLogger.verbose("New balances:" );
-        dcLogger.verbose(fromAccount + ": " + fromAccount.getBalance());
-        dcLogger.verbose(toAccount + ": " + toAccount.getBalance());
-        return true;
     }
 
     private void executeTransactions(String value) {
@@ -635,7 +617,16 @@ public class Member {
         // TODO -> fix this hardcoded for 1 client (FIX GETFIRST())
         dcLogger.log("Leader Vts: " + leaderVts);
         String reconstructSignatureData = leaderVts.getValue() + leaderVts.getNonce();
-        PublicKey clientPubKey = Security.getMembershipPublicKey(config.getClients().getFirst().getEntityName());
+        // gets client with same port as the one in the vts
+        Entity client = config.getClients().stream()
+                .filter(c -> c.getPort() == leaderVts.getClientPort())
+                .findFirst()
+                .orElse(null);
+        if (client == null) {
+            dcLogger.log("Client not found");
+            return false;
+        }
+        PublicKey clientPubKey = Security.getMembershipPublicKey(client.getEntityName());
         return Security.verifyDS(clientSignature, reconstructSignatureData, clientPubKey);
     }
 

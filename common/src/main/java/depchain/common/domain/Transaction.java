@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import depchain.common.JsonAdapter;
 import depchain.common.messaging.CoinType;
+import depchain.common.messaging.TransactionType;
 
 import java.io.FileWriter;
 import java.io.IOException;
@@ -12,27 +13,27 @@ import java.math.BigInteger;
 public class Transaction {
     // based on: https://ethereum.org/en/developers/docs/transactions/
     private String senderAddr;
+    private String spenderAddr; // we need this field to handle TRANSFER_FROMs
     private String recipientAddr;
     private BigInteger amount;
     private String signature;
     private long nonce;
-    private TransactionType type;
+    private TransactionType transactionType;
     private boolean success;
     private CoinType coinType;
+    private int clientPort;
 
-    public Transaction(String senderAddr, String recipientAddr, BigInteger amount, String signature,
-                       long nonce, TransactionType type, CoinType coinType) {
+    public Transaction(String senderAddr, String spenderAddr, String recipientAddr, BigInteger amount, String signature,
+                       long nonce, TransactionType transactionType, CoinType coinType, int clientPort) {
         this.senderAddr = senderAddr;
+        this.spenderAddr = spenderAddr;
         this.recipientAddr = recipientAddr;
         this.amount = amount;
         this.signature = signature;
         this.nonce = nonce;
-        this.type = type;
+        this.transactionType = transactionType;
         this.coinType = coinType;
-    }
-
-    public enum TransactionType {
-        TRANSFER, TRANSFER_FROM, APPROVE
+        this.clientPort = clientPort;
     }
 
     public void save() {
@@ -57,6 +58,10 @@ public class Transaction {
         return senderAddr;
     }
 
+    public String getSpender() {
+        return spenderAddr;
+    }
+
     public String getRecipient() {
         return recipientAddr;
     }
@@ -73,8 +78,8 @@ public class Transaction {
         return nonce;
     }
 
-    public TransactionType getType() {
-        return type;
+    public TransactionType getTransactionType() {
+        return transactionType;
     }
 
     public boolean getSuccess() {
@@ -83,6 +88,10 @@ public class Transaction {
 
     public CoinType getCoinType() {
         return coinType;
+    }
+
+    public int getClientPort() {
+        return clientPort;
     }
 
 
@@ -94,10 +103,11 @@ public class Transaction {
     public String toString() {
         return "Transaction{" +
                 "senderAddr='" + senderAddr + '\'' +
+                "spenderAddr='" + spenderAddr + '\'' +
                 ", recipientAddr='" + recipientAddr + '\'' +
                 ", amount=" + amount +
                 ", nonce=" + nonce +
-                ", type=" + type +
+                ", transactionType=" + transactionType +
                 ", success=" + success +
                 ", coinType=" + coinType +
                 '}';

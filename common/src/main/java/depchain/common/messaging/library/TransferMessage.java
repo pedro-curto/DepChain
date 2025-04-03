@@ -3,26 +3,35 @@ package depchain.common.messaging.library;
 import depchain.common.messaging.CoinType;
 import depchain.common.messaging.Message;
 import depchain.common.messaging.MessageType;
+import depchain.common.messaging.TransactionType;
 
 import java.math.BigInteger;
 
 public class TransferMessage extends Message {
-	private String from; // remove
-	private String to; // remove
-	private BigInteger value; // remove
+	private String from;
+	private String spender; // necessary for TRANSFER_FROM transactions
+	private String to;
+	private BigInteger value;
 	private long nonce;
 	private String signature;
+	private TransactionType transactionType;
 
-	public TransferMessage(String from, String to, BigInteger value, CoinType coinType, long nonce) {
+	public TransferMessage(String from, String spender, String to, BigInteger value, CoinType coinType, long nonce, TransactionType transactionType) {
 		super(MessageType.TRANSFER, coinType);
 		this.from = from;
+		this.spender = spender;
 		this.to = to;
 		this.value = value;
 		this.nonce = nonce;
+		this.transactionType = transactionType;
 	}
 
 	public String getFrom() {
 		return from;
+	}
+
+	public String getSpender() {
+		return spender;
 	}
 
 	public String getTo() {
@@ -45,18 +54,27 @@ public class TransferMessage extends Message {
 		this.signature = signature;
 	}
 
+	public TransactionType getTransactionType() {
+		return transactionType;
+	}
+
 	public String getDataToSign() {
-		return from + to + value + nonce;
+		if (transactionType == TransactionType.TRANSFER_FROM) {
+			return from + spender + to + value + nonce + transactionType;
+		}
+		return from + to + value + nonce + transactionType;
 	}
 
 	@Override
 	public String toString() {
 		return "TransferMessage{" +
 				"from='" + from + '\'' +
+				", spender=" + spender + '\'' +
 				", to='" + to + '\'' +
 				", value=" + value +
 				", nonce=" + nonce +
 				", coinType=" + super.getCoinType() +
+				", transactionType=" + transactionType +
 				'}';
 	}
 

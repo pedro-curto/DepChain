@@ -3,6 +3,7 @@ package depchain.common;
 import com.google.gson.*;
 import depchain.common.domain.*;
 import depchain.common.messaging.CoinType;
+import depchain.common.messaging.TransactionType;
 
 import java.math.BigInteger;
 import java.util.List;
@@ -48,12 +49,15 @@ public class JsonAdapter {
         JsonObject obj = json.getAsJsonObject();
         return new Transaction(
                 obj.get("sender").getAsString(),
+                obj.get("spender").getAsString(),
                 obj.get("recipient").getAsString(),
                 obj.get("amount").getAsBigInteger(),
                 obj.get("signature").getAsString(),
                 obj.get("nonce").getAsLong(),
-                Transaction.TransactionType.valueOf(obj.get("type").getAsString()),
-                CoinType.valueOf(obj.get("coin_type").getAsString())
+                TransactionType.valueOf(obj.get("type").getAsString()),
+                CoinType.valueOf(obj.get("coin_type").getAsString()),
+                // TODO -> check
+                obj.get("clientPort").getAsInt()
         );
     }
 
@@ -109,16 +113,22 @@ public class JsonAdapter {
     }
 
     public static JsonObject serializeTransaction(Transaction transaction) {
-        // TODO
         JsonObject json = new JsonObject();
+        // FIX: hardcoded
         json.addProperty("sender", transaction.getSender());
+        if (transaction.getSpender() == null) {
+            json.addProperty("spender", "0x");
+        } else {
+            json.addProperty("spender", transaction.getSpender());
+        }
         json.addProperty("recipient", transaction.getRecipient());
         json.addProperty("amount", transaction.getAmount());
         json.addProperty("signature", transaction.getSignature());
         json.addProperty("nonce", transaction.getNonce());
-        json.addProperty("type", transaction.getType().toString());
+        json.addProperty("type", transaction.getTransactionType().toString());
         json.addProperty("coin_type", transaction.getCoinType().toString());
         json.addProperty("success", transaction.getSuccess());
+        json.addProperty("clientPort", transaction.getClientPort());
         return json;
     }
 

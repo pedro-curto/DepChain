@@ -1,5 +1,6 @@
 package depchain.common;
 
+import depchain.common.messaging.TransactionType;
 import depchain.common.messaging.library.TransferMessage;
 
 import javax.crypto.*;
@@ -164,8 +165,10 @@ public final class Security {
 	public static boolean validateTransferMessage(TransferMessage msg) {
 		// check if the signature is valid
 		String dataToSign = msg.getDataToSign();
+		System.out.println("Data to sign: " + dataToSign);
 		String signature = msg.getSignature();
-		PublicKey publicKey = getMembershipPublicKey(msg.getFrom());
+		String senderId = msg.getTransactionType() == TransactionType.TRANSFER_FROM ? msg.getSpender() : msg.getFrom();
+		PublicKey publicKey = getMembershipPublicKey(senderId);
 		boolean isValid = verifyDS(signature, dataToSign, publicKey);
 		if (!isValid) {
 			System.err.println("Error: Signature is not valid");
