@@ -21,9 +21,16 @@ public class TransferReply extends ClientReplyMessage {
             String spenderAddr,
             String recipienAddr,
             CoinType coinType,
-            long nonce
+            long nonce,
+            int memberPort
     ) {
-        super(MessageType.TRANSFER_REPLY, success, instanceOfDecision, coinType, nonce);
+        super(MessageType.TRANSFER_REPLY,
+                success,
+                instanceOfDecision,
+                coinType,
+                nonce,
+                memberPort
+        );
         this.amount = amount;
         this.senderAddr = senderAddr;
         this.spenderAddr = spenderAddr;

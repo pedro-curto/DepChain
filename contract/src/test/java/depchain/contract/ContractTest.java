@@ -19,10 +19,12 @@ public class ContractTest {
     private static final String CONTRACT_STR = "1234567891234567891234567891234567891234";
     private static final String RECIPIENT_STR = "1111111111111111111111111111111111111111";
     private static final String SPENDER_STR = "2222222222222222222222222222222222222222";
+    private static final String OWNER_STR = "3333333333333333333333333333333333333333";
     private static final Address SENDER = Address.fromHexString(SENDER_STR);
     private static final Address CONTRACT = Address.fromHexString(CONTRACT_STR);
     private static final Address RECIPIENT = Address.fromHexString(RECIPIENT_STR);
     private static final Address SPENDER = Address.fromHexString(SPENDER_STR);
+    private static final Address OWNER = Address.fromHexString(OWNER_STR);
 
     private SimpleWorld world;
     private EVMExecutor executor;
@@ -140,6 +142,72 @@ public class ContractTest {
         Assertions.assertEquals(new BigInteger("9999999500"), senderBalance);
         Assertions.assertEquals(BigInteger.valueOf(500), recipientBalance);
         Assertions.assertEquals(BigInteger.valueOf(500), newAllowance);
+    }
+
+    @Test
+    public void testBlacklistFunctionalities() {
+        /*
+         * Starts by checking if we can blacklist while not being the owner, and if the
+         * blacklist and unblacklist functionalities work.
+         * For transfer, transferFrom and approve, individually blocks a sender and recipient
+         * (and spender when applied) and checks if the transfer fails.
+         */
+        EVMExecutor executor = ContractFunctions.deployContract(OWNER_STR, CONTRACT_STR, world, tracer,
+                this.deploymentBytecode, this.runtimeBytecode);
+        // gives some money to sender, spender, recipient
+        ContractFunctions.transferTokens(executor, bos, OWNER, SENDER, BigInteger.valueOf(1000));
+        ContractFunctions.transferTokens(executor, bos, OWNER, SPENDER, BigInteger.valueOf(1000));
+        ContractFunctions.transferTokens(executor, bos, OWNER, RECIPIENT, BigInteger.valueOf(1000));
+
+        // attempt blacklist operation without being an owner
+        ContractFunctions.addToBlacklist(executor, SENDER, RECIPIENT);
+        boolean result = ContractFunctions.callIsBlacklisted(executor, bos, SENDER, RECIPIENT);
+        Assertions.assertFalse(result);
+
+        // blacklist operations with owner
+        ContractFunctions.addToBlacklist(executor, OWNER, RECIPIENT);
+        result = ContractFunctions.callIsBlacklisted(executor, bos, OWNER, RECIPIENT);
+        Assertions.assertTrue(result);
+        ContractFunctions.removeFromBlacklist(executor, OWNER, RECIPIENT);
+        result = ContractFunctions.callIsBlacklisted(executor, bos, SENDER, RECIPIENT);
+        Assertions.assertFalse(result);
+
+        // owner gives an allowance to sender
+        ContractFunctions.approve(executor, bos, OWNER, SENDER, BigInteger.valueOf(1000));
+        BigInteger allowance = ContractFunctions.callAllowance(executor, bos, OWNER, SENDER);
+        System.out.println("Allowance from owner to sender: " + allowance);
+        Assertions.assertEquals(BigInteger.valueOf(1000), allowance);
+
+        // block sender and check result of three operations
+        ContractFunctions.addToBlacklist(executor, OWNER, SENDER);
+        boolean transferResult = ContractFunctions.transferTokens(executor, bos, SENDER, RECIPIENT, BigInteger.valueOf(100));
+        Assertions.assertFalse(transferResult);
+        boolean approveResult = ContractFunctions.approve(executor, bos, SENDER, SPENDER, BigInteger.valueOf(100));
+        Assertions.assertFalse(approveResult);
+        // sender is spender
+        boolean transferFromResult = ContractFunctions.transferFrom(executor, bos, OWNER, SENDER, RECIPIENT,
+                BigInteger.valueOf(100));
+        Assertions.assertFalse(transferFromResult);
+
+        // unblock sender and block recipient, check result
+        ContractFunctions.removeFromBlacklist(executor, OWNER, SENDER);
+        ContractFunctions.addToBlacklist(executor, OWNER, RECIPIENT);
+        transferResult = ContractFunctions.transferTokens(executor, bos, SENDER, RECIPIENT, BigInteger.valueOf(100));
+        Assertions.assertFalse(transferResult);
+        approveResult = ContractFunctions.approve(executor, bos, OWNER, RECIPIENT, BigInteger.valueOf(100));
+        Assertions.assertFalse(approveResult);
+        // sender is spender
+        transferFromResult = ContractFunctions.transferFrom(executor, bos, OWNER, SENDER, RECIPIENT,
+                BigInteger.valueOf(100));
+        Assertions.assertFalse(transferFromResult);
+
+        // 1. unblocks recipient 2. sender approves to spender 3. blocks sender 4. spender tries to transfer to recipient
+        ContractFunctions.removeFromBlacklist(executor, OWNER, RECIPIENT);
+        ContractFunctions.approve(executor, bos, SENDER, SPENDER, BigInteger.valueOf(1000));
+        ContractFunctions.addToBlacklist(executor, OWNER, SENDER);
+        transferResult = ContractFunctions.transferFrom(executor, bos, SPENDER, SENDER, RECIPIENT,
+                BigInteger.valueOf(100));
+        Assertions.assertFalse(transferResult);
     }
 
 }

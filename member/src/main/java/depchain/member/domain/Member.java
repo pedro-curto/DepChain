@@ -283,19 +283,6 @@ public class Member {
         //}
     }
 
-
-
-    private void handleBalanceMessage(BalanceOfMessage balanceOfMessage) {
-        Address addr = Address.fromHexString(balanceOfMessage.getAddress());
-        BigInteger balance = BigInteger.ZERO;
-        if (balanceOfMessage.getCoinType() == CoinType.ISTCOIN) {
-            balance = ISTCoinHandler.handleBalance(addr, this.evmExecutor, this.bos);
-        } else if (balanceOfMessage.getCoinType() == CoinType.DEPCOIN) {
-            balance = DepCoinHandler.handleBalance(addr, this.blockChainState, this.dcLogger);
-        }
-        dcLogger.log("Balance of " + addr + ": " + balance);
-    }
-
     public void handleRead(ReadMessage readMessage) {
         dcLogger.log("Received: " + readMessage);
         // sign: current||writeset||instance||epoch
@@ -338,6 +325,29 @@ public class Member {
         consensusState.addAcceptMessage(acceptMessage);
     }
 
+    private void handleBalanceMessage(BalanceOfMessage balanceOfMessage) {
+        Address addr = Address.fromHexString(balanceOfMessage.getAddress());
+        BigInteger balance = BigInteger.ZERO;
+        if (balanceOfMessage.getCoinType() == CoinType.ISTCOIN) {
+            balance = ISTCoinHandler.handleBalance(addr, this.evmExecutor, this.bos);
+        } else if (balanceOfMessage.getCoinType() == CoinType.DEPCOIN) {
+            balance = DepCoinHandler.handleBalance(addr, this.blockChainState, this.dcLogger);
+        }
+        dcLogger.log("Balance of " + addr + ": " + balance);
+
+        BalanceReply balanceReply = new BalanceReply(
+                true, // TODO always send success to client, maybe balance could error...
+                this.consensusState.getInstance(),
+                balanceOfMessage.getAddress(),
+                balance,
+                balanceOfMessage.getCoinType(),
+                clientNonces.get(balanceOfMessage.getPort()),
+                this.config.getPort()
+        );
+
+        sendToClient(balanceReply, balanceOfMessage.getPort());
+    }
+
     private void handleAllowanceMessage(AllowanceMessage allowanceMessage) {
         dcLogger.verbose("Received: " + allowanceMessage);
         Address owner = Address.fromHexString(allowanceMessage.getOwner());
@@ -352,7 +362,19 @@ public class Member {
             dcLogger.log("Unknown coin type");
         }
         dcLogger.log("[" + allowanceMessage.getCoinType() + "] Allowance of " + owner + " to " + spender + ": " + allowance);
-        // TODO responder a client
+
+        AllowanceReply allowanceReply = new AllowanceReply(
+                true, // TODO always send success to client, maybe allowance could error...
+                this.consensusState.getInstance(),
+                allowanceMessage.getOwner(),
+                allowanceMessage.getSpender(),
+                allowance,
+                allowanceMessage.getCoinType(),
+                clientNonces.get(allowanceMessage.getPort()),
+                this.config.getPort()
+        );
+
+        sendToClient(allowanceReply, allowanceMessage.getPort());
     }
 
     private void handleIsBlackListedMessage(IsBlackListedMessage isBlackListedMessage) {
@@ -365,7 +387,18 @@ public class Member {
         } else if (isBlackListedMessage.getCoinType() == CoinType.DEPCOIN) {
             dcLogger.error("IsBlacklisted not implemented in DepCoin");
         }
-        // TODO responder a client
+        IsBlackListedReply isBlackListedReply = new IsBlackListedReply(
+                true, // TODO always send success to client, maybe isBlackListed could error...
+                this.consensusState.getInstance(),
+                isBlackListedMessage.getOwner(),
+                isBlackListedMessage.getAccount(),
+                result,
+                isBlackListedMessage.getCoinType(),
+                clientNonces.get(isBlackListedMessage.getPort()),
+                this.config.getPort()
+        );
+
+        sendToClient(isBlackListedReply, isBlackListedMessage.getPort());
     }
 
 
@@ -597,7 +630,6 @@ public class Member {
             }
             tx.setStatus(result);
             if (result) {
-                //ClientReplyMessage replay = new ClientReplyMessage(tx, true, this.consensusState.getInstance());
                 dcLogger.verbose("Transfer successful");
             } else {
                 dcLogger.verbose("Transfer failed");
@@ -623,9 +655,6 @@ public class Member {
         } else {
             dcLogger.log("Failed to save block " + block.getBlockNumber());
         }
-    }
-
-    private void checkBalance(TransferMessage msg) {
     }
 
     public boolean verifyMemberStateAuthenticity(StateMessage stateMessage) {
@@ -698,6 +727,8 @@ public class Member {
     public void sendToClient(Message message, int port) {
         dcLogger.log("Sending " + message.getType() + " message... to client " + message.getPort());
         perfectLink.sendMessage(message, port);
+        // increment client nonce
+        clientNonces.put(message.getPort(), clientNonces.get(message.getPort() + 1));
     }
 
     public void broadCastToClients(Message message) {
@@ -705,6 +736,7 @@ public class Member {
         for (Entity client : config.getClients()) {
             dcLogger.log("[" + message.getType() + " MESSAGE]: " + client.getEntityName());
             perfectLink.sendMessage(message, client.getPort());
+            clientNonces.put(client.getPort(), clientNonces.get(client.getPort() + 1));
         }
     }
 
@@ -733,8 +765,9 @@ public class Member {
     }
 
     public void stop() {
-        perfectLink.stop();
         running = false;
+        perfectLink.stop();
+        blockSched.shutdownNow();
     }
 
     public boolean caughtInvalidSignature() {

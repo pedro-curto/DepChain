@@ -7,23 +7,22 @@ import depchain.common.messaging.MessageType;
 import java.math.BigInteger;
 import java.util.Objects;
 
-public class AllowanceReply extends ClientReplyMessage {
-
+public class IsBlackListedReply extends ClientReplyMessage {
     private String owner;
-    private String spender;
-    private BigInteger allowance;
+    private String account;
+    private boolean isBlackListed;
 
-    public AllowanceReply(
+    public IsBlackListedReply(
             boolean success,
             int instanceOfDecision,
             String owner,
-            String spender,
-            BigInteger allowance,
+            String account,
+            boolean isBlackListed,
             CoinType coinType,
             long nonce,
             int memberPort
     ) {
-        super(MessageType.BALANCE_REPLY,
+        super(MessageType.IS_BLACK_LISTED_REPLY,
                 success,
                 instanceOfDecision,
                 coinType,
@@ -31,34 +30,36 @@ public class AllowanceReply extends ClientReplyMessage {
                 memberPort
         );
         this.owner = owner;
-        this.spender = spender;
-        this.allowance = allowance;
+        this.account = account;
+        this.isBlackListed = isBlackListed;
     }
 
     public String getOwner() {
         return owner;
     }
-    public String getSpender() {
-        return spender;
+
+    public String getAccount() {
+        return account;
     }
-    public BigInteger getAllowance() {
-        return allowance;
+
+    public boolean isBlackListed() {
+        return isBlackListed;
     }
 
     @Override
     public boolean equals(Object obj) {
         if (!super.equals(obj)) return false;
-        if (!(obj instanceof AllowanceReply)) return false;
-        AllowanceReply other = (AllowanceReply) obj;
+        if (!(obj instanceof IsBlackListedReply)) return false;
+        IsBlackListedReply other = (IsBlackListedReply) obj;
         return (
                 other.getOwner().equals(owner) &&
-                other.getSpender().equals(spender) &&
-                other.getAllowance().equals(allowance)
+                        other.getAccount().equals(account) &&
+                        other.isBlackListed() == isBlackListed
         );
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(super.hashCode(), owner, spender, allowance);
+        return Objects.hash(super.hashCode(), owner, account, isBlackListed);
     }
 }

@@ -24,9 +24,10 @@ public class ClientReplyMessage extends Message {
         boolean success,
         int instanceOfDecision,
         CoinType coinType,
-        long nonce
+        long nonce,
+        int memberPort
     ) {
-		super(MessageType.CLIENT_REPLY);
+		super(MessageType.CLIENT_REPLY, memberPort);
 		this.replyType = replyType;
 		this.success = success;
 		this.instanceOfDecision = instanceOfDecision;

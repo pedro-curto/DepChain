@@ -17,9 +17,16 @@ public class BalanceReply extends ClientReplyMessage {
             String address,
             BigInteger balance,
             CoinType coinType,
-            long nonce
+            long nonce,
+            int memberPort
     ) {
-        super(MessageType.BALANCE_REPLY, success, instanceOfDecision, coinType, nonce);
+        super(MessageType.BALANCE_REPLY,
+                success,
+                instanceOfDecision,
+                coinType,
+                nonce,
+                memberPort
+        );
         this.address = address;
         this.balance = balance;
     }
