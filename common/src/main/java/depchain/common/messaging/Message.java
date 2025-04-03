@@ -6,7 +6,7 @@ public class Message {
 	private final MessageType type;
 	private String hmac = null;
 	private int port = -1; // used as id since all processes are running in localhost
-	private CoinType coinType;
+	protected CoinType coinType;
 
 	public Message(MessageType messageType, CoinType coinType) {
 		this.type = messageType;
