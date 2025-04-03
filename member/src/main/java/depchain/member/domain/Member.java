@@ -1,28 +1,53 @@
 package depchain.member.domain;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import depchain.common.*;
-import depchain.common.domain.ConsensusState;
-import depchain.common.domain.Entity;
-import depchain.common.domain.ValueTimestampPair;
+import depchain.common.domain.*;
 import depchain.common.messaging.*;
+import depchain.common.messaging.consensus.*;
+import depchain.common.messaging.library.*;
+import depchain.contract.ContractFunctions;
 import depchain.member.state.StringChain;
+
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.math.BigInteger;
 import java.security.PublicKey;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.*;
+
+import org.hyperledger.besu.evm.fluent.EVMExecutor;
+import org.hyperledger.besu.evm.fluent.SimpleWorld;
+import org.hyperledger.besu.datatypes.Address;
+import org.hyperledger.besu.evm.tracing.StandardJsonTracer;
 
 public class Member {
     protected Config config;
     protected final DCLogger dcLogger;
     protected PerfectLink perfectLink;
+    // state info
     protected ConsensusState consensusState;
     protected final StringChain stringChain;
+    protected BlockChainState blockChainState;
+    // queues for message processing
     protected BlockingQueue<Message> messageQueue;
     protected BlockingQueue<AppendMessage> appendQueue;
-    private Map<Integer, Long> clientNonces = new ConcurrentHashMap<>();
+    protected BlockingQueue<TransferMessage> transferQueue = new LinkedBlockingQueue<>();
+    private final Map<Integer, Long> clientNonces = new ConcurrentHashMap<>();
+    private long serverNonce = 0L;
     private volatile boolean running;
     private boolean caughtInvalidSignature = false;
+    // smart contract fields
+    private EVMExecutor evmExecutor;
+    private SimpleWorld world;
+    private ByteArrayOutputStream bos;
+    // for transfer processing
+    private final ScheduledExecutorService blockSched = Executors.newSingleThreadScheduledExecutor();
+    private static final int BLOCK_TIMEOUT_SECONDS = 5;
 
     public Member(Config config,
                   DCLogger dcLogger,
@@ -45,10 +70,90 @@ public class Member {
             dcLogger.error("Leader not found");
             return;
         }
+        // evm stuff
+        initializeEVM();
         this.running = true;
         startConnections();
+        // start the task that will process the transfer messages
+        if (this.isLeader()) {
+            blockSched.scheduleAtFixedRate(
+                    this::processTransferMessages,
+                    BLOCK_TIMEOUT_SECONDS,
+                    BLOCK_TIMEOUT_SECONDS,
+                    TimeUnit.SECONDS
+            );
+        }
         new Thread(this::doConsensus).start();
+        // don't put code after receiveMessages because this thread passes onto receiveMessages
         receiveMessages();
+    }
+
+    private void initializeEVM() {
+        this.world = new SimpleWorld();
+        this.bos = new ByteArrayOutputStream();
+        PrintStream ps = new PrintStream(bos);
+        StandardJsonTracer tracer = new StandardJsonTracer(ps, true, true, true, true);
+        GenesisBlock genesisBlock = CommonUtils.loadGenesisBlock();
+        if (genesisBlock == null) {
+            throw new RuntimeException("Failed to load genesis block");
+        }
+        dcLogger.log("Genesis block: " + genesisBlock);
+        // deploy contract
+        ContractData contractData = genesisBlock.getContractData();
+        String contractAddr = contractData.getAddress();
+        String ownerAddr = contractData.getOwnerAddress();
+        dcLogger.verbose("Owner: " + ownerAddr);
+        this.evmExecutor = ContractFunctions.deployContract(ownerAddr, contractAddr, this.world, tracer, contractData.getDeploymentBytecode(), contractData.getRuntimeBytecode());
+
+        // make some calls to basic info
+        ContractFunctions.callName(this.evmExecutor, this.bos);
+        ContractFunctions.callSymbol(this.evmExecutor, this.bos);
+        ContractFunctions.callTotalSupply(this.evmExecutor, this.bos);
+        ContractFunctions.callDecimals(this.evmExecutor, this.bos);
+
+        // prints all balances
+        for (Account account: genesisBlock.getAccounts()) {
+            Address addr = Address.fromHexString(account.getAddress());
+            ContractFunctions.callBalanceOf(this.evmExecutor, this.bos, addr);
+        }
+
+        // construct initial blockchain state
+        this.blockChainState = new BlockChainState(genesisBlock.getAccounts(), genesisBlock);
+        // load accounts
+//        JsonObject rootJson = CommonUtils.getGenesisJsonObject();
+//        JsonObject stateObject = CommonUtils.jsonGetter(rootJson, "state");
+//        JsonArray accountsArray = stateObject.getAsJsonArray("accounts");
+//        List<Account> accounts = new ArrayList<>();
+//        //boolean first = true;
+//        JsonObject contractObj = CommonUtils.jsonGetter(stateObject, "contract");
+//        String owner = CommonUtils.jsonGetter(stateObject, "owner").getAsString();
+//        dcLogger.log("Owner: " + owner);
+//        for (JsonElement accountEl : accountsArray) {
+//            JsonObject accountObj = accountEl.getAsJsonObject();
+//            String accountAddrStr = accountObj.get("address").getAsString();
+//            String name = accountObj.get("name").getAsString();
+//            long balance = accountObj.get("balance").getAsLong();
+//            // create address and balance to give to MutableAccount
+//            Address accountAddr = Address.fromHexString(accountAddrStr);
+//            //Wei balanceWei = Wei.fromEth(balance);
+//            dcLogger.log("Loading account with address: " + accountAddr + " and balance: " + balance);
+//            Account account = new Account(accountAddrStr, balance);
+//            accounts.add(account);
+//            // TODO -> get a better condition for the blacklist owner?
+//            if (first) {
+//                // deploys the contract with himself as sender
+//                dcLogger.log("Deploying contract...");
+//                String contractAddr = contractObj.get("address").getAsString();
+//                dcLogger.log("Contract address: " + contractAddr);
+//                this.evmExecutor = ContractFunctions.deployContract(accountAddrStr, contractAddr, this.world, tracer);
+//                first = false;
+//                continue; // avoids creating the account again
+//            }
+//            // TODO -> if I do this it's indifferent because every account starts at 0, am i doing it right?
+//            // add account to world
+//            //this.world.createAccount(accountAddr, 0, balanceWei);
+//            // create account
+//        }
     }
 
     /***
@@ -101,6 +206,26 @@ public class Member {
                         if (acceptMessage.getConsensusInstance() == this.consensusState.getInstance())
                             handleAccept(acceptMessage);
                         break;
+                    case TRANSFER:
+                        TransferMessage transferMessage = (TransferMessage) message;
+                        // TODO check signature before incrementing nonce??
+                        if(isValidClientNonce(transferMessage.getNonce(), transferMessage.getPort())) {
+                            // TODO can have concurrency bug between validation and nonce increment!
+                            setClientNonce(transferMessage.getNonce(), transferMessage.getPort());
+                            this.transferQueue.put(transferMessage);
+                        }
+                        break;
+                    case BALANCE_OF:
+                        BalanceOfMessage balanceOfMessage = (BalanceOfMessage) message;
+                        handleBalanceMessage(balanceOfMessage);
+                        break;
+                    case ALLOWANCE:
+                        AllowanceMessage allowanceMessage = (AllowanceMessage) message;
+                        handleAllowanceMessage(allowanceMessage);
+                        break;
+                    case IS_BLACK_LISTED:
+                        IsBlackListedMessage isBlackListedMessage = (IsBlackListedMessage) message;
+                        handleIsBlackListedMessage(isBlackListedMessage);
                     default:
                         dcLogger.log("Unknown message type");
                 }
@@ -108,6 +233,63 @@ public class Member {
                 dcLogger.error("Error while processing message: " + e.getMessage());
             }
         }
+    }
+
+    private void processTransferMessages() {
+        // TODO -> order txs by nonce per client
+        // aggregates transfers from queue
+        List<TransferMessage> tmp = new ArrayList<>();
+        List<Transaction> transactions = new ArrayList<>();
+        transferQueue.drainTo(tmp);
+        if (tmp.isEmpty()) {
+            dcLogger.verbose("No transfer messages to process");
+            return;
+        }
+        // sort tmp based on nonces
+        tmp.sort(Comparator.comparingLong(TransferMessage::getNonce));
+        for (TransferMessage msg : tmp) {
+            if (!Security.validateTransferMessage(msg)) {
+                dcLogger.alert("Signature for transfer message is invalid: " + msg);
+                continue;
+            }
+            Transaction tx = new Transaction(
+                    msg.getFrom(),
+                    msg.getSpender(),
+                    msg.getTo(),
+                    msg.getValue(),
+                    msg.getSignature(),
+                    msg.getNonce(),
+                    msg.getTransactionType(),
+                    msg.getCoinType(),
+                    msg.getClientPort()
+            );
+            transactions.add(tx);
+        }
+        // constructs block: prevHash, txs, blockNum, ts (he calculates hash on constructor)
+        // TODO -> how to compute hash of new block?
+        Block lastBlock = this.blockChainState.getLastBlock();
+        String prevHash = lastBlock.getHash();
+        long timestamp = System.currentTimeMillis();
+        Block block = new Block(prevHash, transactions, lastBlock.getBlockNumber()+1, timestamp);
+        this.blockChainState.setLastBlock(block);
+        // serialize it
+        JsonObject blockJson = JsonAdapter.serializeBlock(block);
+        String blockStr = "BLOCK:" + blockJson;
+        AppendMessage appendMessage = new AppendMessage(blockStr, config.getPort(), block.getBlockNumber());
+        dcLogger.verbose("Blockstr: " + blockStr);
+        dcLogger.verbose("Append Message: " + appendMessage);
+        try {
+            appendQueue.put(appendMessage);
+        } catch (InterruptedException e) {
+            dcLogger.error("Error while processing append message: " + e.getMessage());
+        }
+
+        //boolean result = CommonUtils.saveJsonToFile(blockJson, config.getBlockDir() + "/block" + block.getBlockNumber() + ".json");
+        //if (result) {
+        //    dcLogger.log("Block " + block.getBlockNumber() + " saved successfully");
+        //} else {
+        //    dcLogger.log("Failed to save block " + block.getBlockNumber());
+        //}
     }
 
     public void handleRead(ReadMessage readMessage) {
@@ -152,6 +334,82 @@ public class Member {
         consensusState.addAcceptMessage(acceptMessage);
     }
 
+    private void handleBalanceMessage(BalanceOfMessage balanceOfMessage) {
+        Address addr = Address.fromHexString(balanceOfMessage.getAddress());
+        BigInteger balance = BigInteger.ZERO;
+        if (balanceOfMessage.getCoinType() == CoinType.ISTCOIN) {
+            balance = ISTCoinHandler.handleBalance(addr, this.evmExecutor, this.bos);
+        } else if (balanceOfMessage.getCoinType() == CoinType.DEPCOIN) {
+            balance = DepCoinHandler.handleBalance(addr, this.blockChainState, this.dcLogger);
+        }
+        dcLogger.log("Balance of " + addr + ": " + balance);
+
+        BalanceReply balanceReply = new BalanceReply(
+                true, // TODO always send success to client, maybe balance could error...
+                this.consensusState.getInstance(),
+                balanceOfMessage.getAddress(),
+                balance,
+                balanceOfMessage.getCoinType(),
+                this.serverNonce,
+                this.config.getPort()
+        );
+
+        sendToClient(balanceReply, balanceOfMessage.getPort());
+    }
+
+    private void handleAllowanceMessage(AllowanceMessage allowanceMessage) {
+        dcLogger.verbose("Received: " + allowanceMessage);
+        Address owner = Address.fromHexString(allowanceMessage.getOwner());
+        Address spender = Address.fromHexString(allowanceMessage.getSpender());
+        BigInteger allowance = BigInteger.ZERO;
+
+        if (allowanceMessage.getCoinType() == CoinType.ISTCOIN) {
+            allowance = ISTCoinHandler.handleAllowance(owner, spender, this.evmExecutor, this.bos);
+        } else if (allowanceMessage.getCoinType() == CoinType.DEPCOIN) {
+            allowance = DepCoinHandler.handleAllowance(owner, spender, this.blockChainState, this.dcLogger);
+        } else {
+            dcLogger.log("Unknown coin type");
+        }
+        dcLogger.log("[" + allowanceMessage.getCoinType() + "] Allowance of " + owner + " to " + spender + ": " + allowance);
+
+        AllowanceReply allowanceReply = new AllowanceReply(
+                true, // TODO always send success to client, maybe allowance could error...
+                this.consensusState.getInstance(),
+                allowanceMessage.getOwner(),
+                allowanceMessage.getSpender(),
+                allowance,
+                allowanceMessage.getCoinType(),
+                this.serverNonce,
+                this.config.getPort()
+        );
+
+        sendToClient(allowanceReply, allowanceMessage.getPort());
+    }
+
+    private void handleIsBlackListedMessage(IsBlackListedMessage isBlackListedMessage) {
+        dcLogger.verbose("Received: " + isBlackListedMessage);
+        Address owner = Address.fromHexString(isBlackListedMessage.getOwner());
+        Address spender = Address.fromHexString(isBlackListedMessage.getAccount());
+        boolean result = false;
+        if (isBlackListedMessage.getCoinType() == CoinType.ISTCOIN) {
+            result = ISTCoinHandler.handleIsBlackListed(owner, spender, this.evmExecutor, this.bos);
+        } else if (isBlackListedMessage.getCoinType() == CoinType.DEPCOIN) {
+            dcLogger.error("IsBlacklisted not implemented in DepCoin");
+        }
+        IsBlackListedReply isBlackListedReply = new IsBlackListedReply(
+                true, // TODO always send success to client, maybe isBlackListed could error...
+                this.consensusState.getInstance(),
+                isBlackListedMessage.getOwner(),
+                isBlackListedMessage.getAccount(),
+                result,
+                isBlackListedMessage.getCoinType(),
+                this.serverNonce,
+                this.config.getPort()
+        );
+
+        sendToClient(isBlackListedReply, isBlackListedMessage.getPort());
+    }
+
 
     /***
      * Waits for new append requests and starts consensus to add them in the blockchain
@@ -186,8 +444,10 @@ public class Member {
      */
     public void startConsensus(AppendMessage appendMessage) {
         // checks for replays
-        long lastClientNonce = clientNonces.getOrDefault(appendMessage.getPort(), -1L);
-        if (appendMessage.getNonce() <= lastClientNonce) {
+        // TODO -> check client signature here?
+        long lastClientNonce = getClientNonce(appendMessage.getPort());
+        // if it doesn't start with BLOCK:, it's an append msg
+        if (!appendMessage.getValue().startsWith("BLOCK:") && appendMessage.getNonce() <= lastClientNonce) {
             dcLogger.alert("Received replayed message");
             return;
         }
@@ -198,7 +458,8 @@ public class Member {
         // of the message
         ConsensusLeaderState leaderState = (ConsensusLeaderState) consensusState;
         if (consensusState.getCurrent().getValue().isEmpty()) {
-            ValueTimestampPair newValue = new ValueTimestampPair(0, appendMessage.getValue(), this.getName(), appendMessage.getNonce());
+            ValueTimestampPair newValue = new ValueTimestampPair(0, appendMessage.getValue(),
+                    appendMessage.getPort(), appendMessage.getNonce());
             newValue.setClientSignature(appendMessage.getSignature());
             leaderState.setCurrent(newValue);
         }
@@ -234,16 +495,16 @@ public class Member {
             this.consensusState.nextEpoch();
             return false;
         }
-        String value = decideOnCollectedValues(collectedStates);
-        if (value == null) {
+        ValueTimestampPair decidedVTP = decideOnCollectedValues(collectedStates);
+        if (decidedVTP == null) {
             // abort
             dcLogger.log("aborted after deciding null value");
             this.consensusState.nextEpoch();
             return false;
         }
-        ValueTimestampPair decidePair = new ValueTimestampPair(this.consensusState.getEpoch(), value);
-        this.consensusState.updateWriteSet(decidePair);
-        WriteMessage writeMessage = new WriteMessage(decidePair, config.getPort(), consensusState.getInstance());
+        //ValueTimestampPair decidePair = new ValueTimestampPair(this.consensusState.getEpoch(), value);
+        this.consensusState.updateWriteSet(decidedVTP);
+        WriteMessage writeMessage = new WriteMessage(decidedVTP, config.getPort(), consensusState.getInstance());
         dcLogger.log("Broadcasting: " + writeMessage);
         broadCastMessage(writeMessage);
         return writePhase();
@@ -255,24 +516,24 @@ public class Member {
      */
     public boolean writePhase() {
         dcLogger.log("Waiting for write quorum of size: " + config.getByzantineQuorum() + "...");
-        String writeValue = this.consensusState.waitForWriteQuorum(config.getByzantineQuorum());
-        if (writeValue == null) {
+        ValueTimestampPair writeValts = this.consensusState.waitForWriteQuorum(config.getByzantineQuorum());
+        if (writeValts == null) {
             // Abort
             dcLogger.log("ABORTED (WRITE)");
             this.consensusState.nextEpoch();
             return false;
         }
         dcLogger.log("Quorum of WRITE reached");
-        ValueTimestampPair writeValts = new ValueTimestampPair(this.consensusState.getEpoch(), writeValue);
+        //ValueTimestampPair writeValts = new ValueTimestampPair(this.consensusState.getEpoch(), writeValue);
         this.consensusState.setCurrent(writeValts);
 
         // Broadcast ACCEPT and wait for quorum to DECIDE value
-        AcceptMessage acceptMessage = new AcceptMessage(consensusState.getCurrent().getValue(), config.getPort(), consensusState.getInstance());
+        AcceptMessage acceptMessage = new AcceptMessage(consensusState.getCurrent(), config.getPort(), consensusState.getInstance());
         dcLogger.log("Broadcasting: " + acceptMessage);
         broadCastMessage(acceptMessage);
 
         dcLogger.log("Waiting for accept quorum of size: " + config.getByzantineQuorum() + "...");
-        String accept = this.consensusState.waitForAcceptQuorum(config.getByzantineQuorum());
+        ValueTimestampPair accept = this.consensusState.waitForAcceptQuorum(config.getByzantineQuorum());
         if (accept == null) {
             // Abort
             dcLogger.log("ABORTED (ACCEPT)");
@@ -282,9 +543,23 @@ public class Member {
         dcLogger.log("Quorum of accept reached");
 
         // DECIDE value
+        String value = consensusState.getCurrent().getValue();
+        if (value.startsWith("BLOCK:")) {
+            // block decided in consensus, handle appropriately
+            dcLogger.verbose("Block decided: " + value);
+            executeTransactions(value);
+            this.consensusState.nextInstance();
+            return true;
+        }
+        // else, it was an APPEND request -> append to stringchain
         this.stringChain.appendString(consensusState.getCurrent().getValue());
-        ClientReplyMessage clientReplyMessage = new ClientReplyMessage(accept, true, consensusState.getInstance());
-        broadCastToClients(clientReplyMessage);
+        ClientReplyMessage clientReplyMessage = new ClientReplyMessage(
+                accept.getValue(),
+                true,
+                consensusState.getInstance(),
+                MessageType.STRING_REPLY
+        );
+        sendToClient(clientReplyMessage, accept.getClientPort());
         this.consensusState.nextInstance();
         return true;
     }
@@ -296,9 +571,9 @@ public class Member {
      * @param collectedStates collection of all the members states
      * @return the value to write during this epoch, null if did not find any
      */
-    public String decideOnCollectedValues(List<StateMessage> collectedStates) {
+    public ValueTimestampPair decideOnCollectedValues(List<StateMessage> collectedStates) {
         ValueTimestampPair leaderValue = null;
-        ValueTimestampPair highest = new ValueTimestampPair(-1, null, null, -1);
+        ValueTimestampPair highest = new ValueTimestampPair(-1, null, -1, -1);
 
         for (StateMessage thisState : collectedStates) {
             if (!verifyMemberStateAuthenticity(thisState)) {
@@ -316,7 +591,7 @@ public class Member {
 
             ValueTimestampPair vts = thisState.getState().getCurrent();
             // sets vts clientName to name that comes in the consensus state inside state message
-            vts.setClientName(thisState.getState().getMemberName());
+            //vts.setClientName(thisState.getState().getMemberName());
             if (highest.getTimestamp() > vts.getTimestamp()) {
                 continue;
             }
@@ -342,24 +617,86 @@ public class Member {
         }
 
         if (highest.getValue() != null) {
-            return highest.getValue();
+            return highest;
         }
         // default to leader value
         if (leaderValue == null || leaderValue.getValue() == null) {
             dcLogger.error("Did not get leader value in COLLECTED message");
             return null;
         }
-        if (!checkClientSignature(leaderValue)) {
+        // TODO -> how to check client signatures for blocks? check for each field?
+        if (!leaderValue.getValue().startsWith("BLOCK:") && !checkClientSignature(leaderValue)) {
             dcLogger.error("Leader forged new value");
             return null;
         }
-        return leaderValue.getValue();
+        return leaderValue;
+    }
+
+    private void handleTransactions(List<Transaction> transactions) {
+        for (Transaction tx : transactions) {
+            boolean result = false;
+            if (tx.getCoinType() == CoinType.ISTCOIN) {
+                result = ISTCoinHandler.handleTransaction(tx, this.evmExecutor, this.bos);
+            } else if (tx.getCoinType() == CoinType.DEPCOIN) {
+                result = DepCoinHandler.handleTransaction(tx, this.blockChainState, this.dcLogger);
+            } else {
+                dcLogger.log("Unknown coin type");
+            }
+            tx.setStatus(result);
+            if (result) {
+                dcLogger.verbose("Transfer successful");
+            } else {
+                dcLogger.verbose("Transfer failed");
+            }
+        }
+    }
+
+    private void replyTransactions(List<Transaction> transactions) {
+        for(Transaction tx: transactions) {
+            // TODO could make a TransferReply constructor with a Transaction as argument
+            TransferReply transferReply = new TransferReply(
+                    tx.getSuccess(),
+                    this.consensusState.getInstance(),
+                    tx.getAmount(),
+                    tx.getSender(),
+                    tx.getSpender(),
+                    tx.getRecipient(),
+                    tx.getCoinType(),
+                    tx.getTransactionType(),
+                    this.serverNonce,
+                    config.getPort()
+            );
+            // TODO the reply needs to be signed by member (byzantine can pretend to be other member)
+            dcLogger.log("SENDING " + transferReply.getType() + "!!!");
+            sendToClient(transferReply, tx.getClientPort());
+        }
+    }
+
+    private void executeTransactions(String value) {
+        // we receive a BLOCK:{jsonOfblock} message
+        String blockStr = value.substring("BLOCK:".length()).trim();
+        dcLogger.log("BlockStr: " + blockStr);
+        JsonObject blockJson = JsonParser.parseString(blockStr).getAsJsonObject();
+        dcLogger.log("BlockJson: " + blockJson.toString());
+        Block block = JsonAdapter.parseBlock(blockJson);
+        dcLogger.log("Executing transactions in block: " + block);
+
+        handleTransactions(block.getTransactions());
+        replyTransactions(block.getTransactions());
+        // update transaction results (if we use the previous ref of blockJson, all tx's status are false)
+        blockJson = JsonAdapter.serializeBlock(block);
+        boolean result = CommonUtils.saveJsonToFile(blockJson, config.getBlockDir() + "/block" + block.getBlockNumber() + ".json");
+        if (result) {
+            dcLogger.log("Block " + block.getBlockNumber() + " saved successfully");
+        } else {
+            dcLogger.log("Failed to save block " + block.getBlockNumber());
+        }
     }
 
     public boolean verifyMemberStateAuthenticity(StateMessage stateMessage) {
         ConsensusState consensusSt = stateMessage.getState();
         String memberName = consensusSt.getMemberName();
-        PublicKey memberPubKey = Security.getMemberPublicKey(memberName);
+        PublicKey memberPubKey = Security.getMembershipPublicKey(memberName);
         String reconstructSignatureData = consensusSt.getCurrent().toString() + consensusSt.getWriteset().toString() + consensusSt.getInstance() + consensusSt.getEpoch();
         return Security.verifyDS(stateMessage.getSignature(), reconstructSignatureData, memberPubKey);
     }
@@ -367,10 +704,19 @@ public class Member {
     public boolean checkClientSignature(ValueTimestampPair leaderVts) {
         String clientSignature = leaderVts.getClientSignature();
         if (clientSignature == null) return false;
-        // TODO -> fix this hardcoded for 1 client
+        // TODO -> fix this hardcoded for 1 client (FIX GETFIRST())
         dcLogger.log("Leader Vts: " + leaderVts);
         String reconstructSignatureData = leaderVts.getValue() + leaderVts.getNonce();
-        PublicKey clientPubKey = Security.getMemberPublicKey(config.getClients().getFirst().getEntityName());
+        // gets client with same port as the one in the vts
+        Entity client = config.getClients().stream()
+                .filter(c -> c.getPort() == leaderVts.getClientPort())
+                .findFirst()
+                .orElse(null);
+        if (client == null) {
+            dcLogger.log("Client not found");
+            return false;
+        }
+        PublicKey clientPubKey = Security.getMembershipPublicKey(client.getEntityName());
         return Security.verifyDS(clientSignature, reconstructSignatureData, clientPubKey);
     }
 
@@ -414,11 +760,18 @@ public class Member {
         }
     }
 
+    public void sendToClient(Message message, int port) {
+        dcLogger.log("Sending " + message.getType() + " message... to client " + port);
+        perfectLink.sendMessage(message, port);
+        incrementServerNonce();
+    }
+
     public void broadCastToClients(Message message) {
         dcLogger.log("BroadCasting to clients " + message.getType() + " message...");
         for (Entity client : config.getClients()) {
             dcLogger.log("[" + message.getType() + " MESSAGE]: " + client.getEntityName());
             perfectLink.sendMessage(message, client.getPort());
+            incrementServerNonce();
         }
     }
 
@@ -447,8 +800,27 @@ public class Member {
     }
 
     public void stop() {
-        perfectLink.stop();
         running = false;
+        perfectLink.stop();
+        blockSched.shutdownNow();
+    }
+
+    private long getClientNonce(Integer port) {
+        return this.clientNonces.getOrDefault(port, -1L);
+    }
+
+    private void setClientNonce(long nonce, int port) {
+        if (isValidClientNonce(nonce, port)) {
+            clientNonces.put(port, nonce);
+        }
+    }
+
+    private boolean isValidClientNonce(long nonce, int port) {
+        return nonce > getClientNonce(port);
+    }
+
+    private void incrementServerNonce() {
+        this.serverNonce++;
     }
 
     public boolean caughtInvalidSignature() {

@@ -5,7 +5,7 @@ import depchain.common.PerfectLink;
 import depchain.common.PerfectLinkByzantine;
 import depchain.common.domain.ConsensusState;
 import depchain.common.domain.Entity;
-import depchain.common.messaging.AppendMessage;
+import depchain.common.messaging.library.AppendMessage;
 import depchain.common.messaging.Message;
 import depchain.member.byzantine.*;
 import depchain.member.domain.Config;

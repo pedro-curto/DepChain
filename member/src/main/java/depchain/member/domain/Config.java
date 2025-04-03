@@ -4,6 +4,7 @@ import depchain.common.CommonUtils;
 import depchain.common.Security;
 import depchain.common.domain.Entity;
 
+import java.io.File;
 import java.security.KeyPair;
 import java.util.List;
 
@@ -12,6 +13,7 @@ public class Config {
     private static final String LEADER_FILE = "/membership/leader.txt";
     private static final String MEMBERSHIP_FILE = "membership/membership.txt";
     private static final String CLIENT_FILE = "membership/client.txt";
+    private final File blockDir;
     protected Entity leader;
     protected List<Entity> members;
     private List<Entity> clients;
@@ -32,6 +34,10 @@ public class Config {
         this.faultyProcesses = Math.floorDiv(members.size() - 1, 3);
         this.byzantineQuorum = members.size() - faultyProcesses;
         this.myKeyPair = Security.getMemberKeyPair(baseDir, myName);
+        this.blockDir = new File(baseDir + "/blocks");
+        if (!blockDir.exists()) {
+            blockDir.mkdirs();
+        }
     }
 
     public String getBaseDir() {
@@ -66,6 +72,9 @@ public class Config {
     }
     public KeyPair getMyKeyPair() {
         return myKeyPair;
+    }
+    public File getBlockDir() {
+        return blockDir;
     }
     public void setMembers(List<Entity> members) {
         this.members = members;

@@ -2,19 +2,27 @@
 
 ## TODO
 - Finish Part 1 fixes:
-  - Aguardar f+1 respostas iguais ou 2f+1 respostas (sem ser iguais) (done)
   - Permitir receber mensagens de épocas e instâncias no futuro
   - Proteger clientes de replay attack (nonce na mensagem do cliente) (checkem please)
-- Implement test (Lab2) for ISTCoin.sol functions
-- Think about blacklist: each client should have its own blacklist?
-- Genesis block
-- Rest of step 3 (transactions, ...)
-- Step 4
+- Test blacklist functions:
+  - Block a member and check if it's not able to make and receive transfers
+  - Unblock a member and check if it's able to make and receive transfers
+  - Test if any member can block and unblock (only owner should be able)
+- Implement transferFrom
+- Implement allowance
+- Implement balanceOf
+- Implement approve
+  - Beware that: "changing an allowance with this method (approve) brings the risk that someone may use both the old and the new allowance by unfortunate transaction ordering. One possible solution to mitigate this race condition is to first reduce the spender’s allowance to 0 and set the desired value afterwards: https://github.com/ethereum/EIPs/issues/20#issuecomment-263524729"
+- Make leader wait for a given time during which he collects transactions and then starts consensus with a
+block of transactions that he collected. Afterward, all members execute the transactions in the block.
 - Step 5
 
 ## Configuration
 
-**First of all, you need to generate the configuration files** (with the membership). To do that, run the following command:
+**First of all, you need to generate the configuration files** (with the membership). 
+For this, we assume you have the `jq` command available (we use it for JSON manipulation).
+
+To generate the configuration files:
 ```bash
 cd scripts
 ./createMembership.sh
@@ -22,30 +30,7 @@ cd scripts
 
 Without this, `mvn clean install` will fail because it runs tests that require the configuration files.
 However, `mvn clean install -DskipTests` will work.
-
-**Installing Contracts**
-
-Start by installing the Solidity compiler via Node.js (npm):
-```bash
-npm install solc --global
-```
-
-Go to the `contracts` directory:
-```bash
-cd contract
-
-Then, compile the contracts (you need ERC20.sol, I cloned the entire contracts repository from Open Zeppelin):
-```bash
-solc --bin --abi ISTCoin.sol -o build/ --overwrite
-```
-
-```bash
- javac -d out -cp ".:jars/*" ISTCoin/src/main/java/ISTCoinMain.java
-```
-
-```bash
-java -cp "out:./jars/*" ISTCoinMain
-```
+This also generates the `genesis-file.json` that will be necessary to generate the genesis block.
 
 
 ## Building the Project
@@ -99,6 +84,7 @@ bar
 ## Testing the Project
 
 ### Automated Tests
+**Member Tests**
 Go to the member directory:
 ```bash
 cd member
@@ -122,6 +108,22 @@ The tests that we have are all contained within `ByzantineBehaviourTest`:
 - `testConsensusWithWrongWriteAcceptByzantine`: tests the consensus algorithm with a Byzantine member that sends wrong WRITEs and ACCEPTs
 - `testConsensusWithByzantinePerfectLink`: tests the consensus algorithm when all members have a Byzantine perfect link, where messages can be lost, duplicated, reordered or corrupted.
 
+**Contract Tests**
+From root:
+```bash
+cd contract
+```
+
+To run all tests:
+```bash
+mvn test
+```
+
+The tests that we have check if:
+- The contract outputs normal info (name, symbol, decimals)
+- The blacklist functionality works
+- The `transfer` and `transferFrom` primitives work as expected
+
 ### Manual Tests
 
 To manually run tests and test the program, use this command to launch all members (no Byzantine):
@@ -143,7 +145,7 @@ Where `<byzantineBehaviour>` can be one of the following:
 - '5': spam messages (STATEs, WRITEs...)
 - '6': send wrong writes and accepts
 
-Afterwards (very important to be **paulo**, since it's the one that we have private and public keys for):
+Afterwards (very important to be **paulo** or some client that you generated the keys for), run the client:
 ```bash
 cd client
 mvn compile exec:java -Dexec.args="2000 paulo"

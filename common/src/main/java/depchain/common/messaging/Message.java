@@ -6,19 +6,19 @@ public class Message {
 	private final MessageType type;
 	private String hmac = null;
 	private int port = -1; // used as id since all processes are running in localhost
-	//TODO -> use (address + port) or an id to identify processes as it is more correct
+	protected CoinType coinType;
 
-	public enum MessageType {
-		APPEND,
-		ACK,
-		CLIENT_REPLY,
-		KEY_EXCHANGE,
-		READ,
-		WRITE,
-		STATE,
-		COLLECTED,
-		ACCEPT,
+	public Message(MessageType messageType, CoinType coinType) {
+		this.type = messageType;
+		this.coinType = coinType;
 	}
+
+	public Message(MessageType messageType, int port, CoinType coinType) {
+		this.type = messageType;
+		this.port = port;
+		this.coinType = coinType;
+	}
+	//TODO -> use (address + port) or an id to identify processes as it is more correct
 
 	public Message(long sequenceNumber, MessageType messageType) {
 		this.sequenceNumber = sequenceNumber;
@@ -54,6 +54,10 @@ public class Message {
 	}
 	public int getPort() {
 		return port;
+	}
+
+	public CoinType getCoinType() {
+		return coinType;
 	}
 
 	public String getHmacData() {

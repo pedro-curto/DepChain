@@ -9,6 +9,11 @@ public class DCLogger {
         this.className = clazz.getSimpleName();
     }
 
+    public void verbose(String message) {
+        if (!debug) return;
+        System.out.println("[" + className + "] " + message);
+    }
+
     public void log(String message) {
         if (!debug) return;
         System.out.println("[" + className + "] " + message);

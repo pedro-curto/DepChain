@@ -1,6 +1,7 @@
 import json
 import hashlib
 import base64
+import sys
 
 def generate_hash(genesis_file):
     with open(genesis_file, 'r') as f:
@@ -16,4 +17,9 @@ def generate_hash(genesis_file):
     hash_base64 = base64.b64encode(hash_bytes).decode()
     print("Genesis Block Hash (Base64):", hash_base64)
 
-generate_hash("genesis-file.json")
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print("Usage: python3 generate-hash.py <filename>")
+        sys.exit(1)
+    file_path = sys.argv[1]
+    generate_hash(file_path)

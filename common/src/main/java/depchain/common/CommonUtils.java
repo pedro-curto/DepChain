@@ -1,9 +1,19 @@
 package depchain.common;
 
+import com.google.gson.*;
+import depchain.common.domain.Account;
+import depchain.common.domain.Block;
 import depchain.common.domain.Entity;
+import depchain.common.domain.GenesisBlock;
+import depchain.common.domain.ContractData;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.PublicKey;
 import java.util.ArrayList;
 import java.util.List;
@@ -62,7 +72,7 @@ public class CommonUtils {
 
 	public static List<Entity> loadMembership(String filename) {
 		List<Entity> members = new ArrayList<>();
-		System.out.println("Trying to load from: " + filename);
+		//System.out.println("Trying to load from: " + filename);
 		try (BufferedReader br = new BufferedReader(new FileReader(filename))) {
 			String line;
 			while ((line = br.readLine()) != null) {
@@ -90,4 +100,57 @@ public class CommonUtils {
 		System.out.println("Loaded members: " + members);
 		return members;
 	}
+
+	public static GenesisBlock loadGenesisBlock() {
+		JsonObject rootJson = getGenesisJsonObject();
+		if (rootJson == null) {
+			System.err.println("Genesis block JSON is null");
+			return null;
+		}
+		return JsonAdapter.parseGenesisBlock(rootJson);
+	}
+
+	public static JsonObject getGenesisJsonObject() {
+		Path currentDir = Paths.get(System.getProperty("user.dir"));
+		Path rootDir = currentDir.getParent();
+		Path genesisPath = rootDir.resolve("genesis-file.json");
+		try {
+			String jsonString = Files.readString(genesisPath);
+			return JsonParser.parseString(jsonString).getAsJsonObject();
+		} catch (IOException e) {
+			System.err.println("Error reading JSON file: " + e.getMessage());
+			return null;
+		}
+	}
+
+	public static JsonObject jsonGetter(JsonObject json, String key) {
+		if (json == null) {
+			System.err.println("JSON object is null");
+			throw new IllegalArgumentException("JSON object is null");
+		}
+		if (json.has(key)) {
+			return json.getAsJsonObject(key);
+		} else {
+			System.err.println("Key " + key + " not found in JSON object");
+			throw new IllegalArgumentException("Key " + key + " not found in JSON object");
+		}
+	}
+
+	public static boolean saveJsonToFile(JsonObject json, String filename) {
+		// convert JSON to string
+		Gson gson = new Gson();
+		String jsonString = gson.toJson(json);
+
+		// Save to a file
+		try (FileWriter file = new FileWriter(filename)) {
+			file.write(jsonString);
+			file.flush();
+			System.out.println("JSON saved successfully!");
+			return true;
+		} catch (IOException e) {
+			System.err.println("JSON save failed!");
+			return false;
+		}
+	}
+
 }

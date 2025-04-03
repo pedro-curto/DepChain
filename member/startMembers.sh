@@ -1,8 +1,22 @@
 #!/bin/bash
 
 MEMBERSHIP_FILE="membership/membership.txt"
+SKIP_FIRST=false
 pids=()
 mkdir -p logs
+
+# args
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --skip-first)
+      SKIP_FIRST=true
+      shift
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
 
 cleanup() {
   echo "Cleaning up..."
@@ -15,6 +29,8 @@ cleanup() {
 
 trap cleanup SIGINT
 
+members=0
+
 # read each line from the membership file
 while IFS=',' read -r memberName address port pubKeyPath
 do
@@ -22,6 +38,13 @@ do
   if [ -z "$memberName" ] || echo "$memberName" | grep -q '^#'; then
     continue
   fi
+
+  valid_members=$((valid_members + 1))
+  if [ "$valid_members" -eq 1 ] && [ "$SKIP_FIRST" = true ]; then
+    echo "Skipping first member: $memberName"
+    continue
+  fi
+
   echo "Starting server for member: $memberName on port: $port"
 
   # launch servers

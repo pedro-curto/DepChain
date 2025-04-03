@@ -1,5 +1,8 @@
 package depchain.common;
 
+import depchain.common.messaging.TransactionType;
+import depchain.common.messaging.library.TransferMessage;
+
 import javax.crypto.*;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.FileInputStream;
@@ -15,6 +18,7 @@ public final class Security {
 
 	private static final String SIGNATURE_ALGO = "SHA256withRSA";
 	private static final String HMAC_ALGO = "HmacSHA256";
+	private static final String DIGEST_ALGO = "SHA-256";
 	private static final String ASYM_ALGO = "RSA";
 
 	/** Calculates digital signature from text. */
@@ -79,7 +83,7 @@ public final class Security {
 		return content;
 	}
 
-	public static PublicKey getMemberPublicKey(String senderId) {
+	public static PublicKey getMembershipPublicKey(String senderId) {
 		String publicKeyPath = "membership/" + senderId + "/" + senderId + ".pubkey";
 		try {
 			return readPublicKey(publicKeyPath);
@@ -157,4 +161,31 @@ public final class Security {
 		}
 		return null;
 	}
+
+	public static boolean validateTransferMessage(TransferMessage msg) {
+		// check if the signature is valid
+		String dataToSign = msg.getDataToSign();
+		System.out.println("Data to sign: " + dataToSign);
+		String signature = msg.getSignature();
+		String senderId = msg.getTransactionType() == TransactionType.TRANSFER_FROM ? msg.getSpender() : msg.getFrom();
+		PublicKey publicKey = getMembershipPublicKey(senderId);
+		boolean isValid = verifyDS(signature, dataToSign, publicKey);
+		if (!isValid) {
+			System.err.println("Error: Signature is not valid");
+		}
+		return isValid;
+	}
+
+	public static String makeDigest(String data) {
+		try {
+			MessageDigest digest = MessageDigest.getInstance(DIGEST_ALGO);
+			digest.update(data.getBytes());
+			byte[] hash = digest.digest();
+			return Base64.getEncoder().encodeToString(hash);
+		} catch (NoSuchAlgorithmException e) {
+			System.err.println("Error: Algorithm not found.");
+		}
+		return null;
+	}
+
 }

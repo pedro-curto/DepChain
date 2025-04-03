@@ -1,6 +1,8 @@
-package depchain.common.messaging;
+package depchain.common.messaging.consensus;
 
 import depchain.common.domain.ValueTimestampPair;
+import depchain.common.messaging.Message;
+import depchain.common.messaging.MessageType;
 
 public class WriteMessage extends Message {
 

@@ -1,4 +1,7 @@
-package depchain.common.messaging;
+package depchain.common.messaging.consensus;
+
+import depchain.common.messaging.Message;
+import depchain.common.messaging.MessageType;
 
 import java.util.List;
 

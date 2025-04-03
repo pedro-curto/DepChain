@@ -4,7 +4,9 @@ import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import depchain.common.domain.Entity;
 import depchain.common.messaging.*;
-import depchain.common.messaging.Message.MessageType;
+import depchain.common.messaging.Message;
+import depchain.common.messaging.consensus.*;
+import depchain.common.messaging.library.*;
 import depchain.common.session.Session;
 import depchain.common.session.SessionTaskKey;
 
@@ -149,7 +151,8 @@ public class PerfectLink {
                 int clientPort = packet.getPort();
                 dcLogger.error("(" + clientPort + ") parsing " + received + " : " + e);
                 // reply with error
-                sendMessage(new ClientReplyMessage("", false, -1), clientPort);
+                // TODO make a subclass of ClientReplyMessage for Error, for now type is random
+                sendMessage(new ClientReplyMessage("", false, -1, MessageType.STRING_REPLY), clientPort);
                 continue;
             }
             MessageType type = message.getType();
@@ -302,6 +305,22 @@ public class PerfectLink {
                 return gson.fromJson(received, AcceptMessage.class);
             case CLIENT_REPLY:
                 return gson.fromJson(received, ClientReplyMessage.class);
+            case TRANSFER:
+                return gson.fromJson(received, TransferMessage.class);
+            case TRANSFER_REPLY:
+                return gson.fromJson(received, TransferReply.class);
+            case BALANCE_OF:
+                return gson.fromJson(received, BalanceOfMessage.class);
+            case BALANCE_REPLY:
+                return gson.fromJson(received, BalanceReply.class);
+            case ALLOWANCE:
+                return gson.fromJson(received, AllowanceMessage.class);
+            case ALLOWANCE_REPLY:
+                return gson.fromJson(received, AllowanceReply.class);
+            case IS_BLACK_LISTED:
+                return gson.fromJson(received, IsBlackListedMessage.class);
+            case IS_BLACK_LISTED_REPLY:
+                return gson.fromJson(received, IsBlackListedReply.class);
             default:
                 dcLogger.log("(messageFromJson) Unknown message type");
                 return message;

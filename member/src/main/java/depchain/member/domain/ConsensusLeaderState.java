@@ -2,8 +2,7 @@ package depchain.member.domain;
 
 import depchain.common.Security;
 import depchain.common.domain.ConsensusState;
-import depchain.common.domain.ValueTimestampPair;
-import depchain.common.messaging.StateMessage;
+import depchain.common.messaging.consensus.StateMessage;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -77,7 +76,7 @@ public class ConsensusLeaderState extends ConsensusState {
 
 	public boolean verifySignatureOfState(StateMessage stateMsg) {
 		ConsensusState consensusSt = stateMsg.getState();
-		PublicKey memberPubKey = Security.getMemberPublicKey(consensusSt.getMemberName());
+		PublicKey memberPubKey = Security.getMembershipPublicKey(consensusSt.getMemberName());
 		String dataToSign = consensusSt.getCurrent().toString() + consensusSt.getWriteset().toString() + consensusSt.getInstance() + consensusSt.getEpoch();
 		return Security.verifyDS(stateMsg.getSignature(), dataToSign, memberPubKey);
 	}

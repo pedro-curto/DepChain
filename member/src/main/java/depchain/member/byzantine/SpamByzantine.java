@@ -4,6 +4,7 @@ import depchain.common.DCLogger;
 import depchain.common.PerfectLink;
 import depchain.common.domain.ConsensusState;
 import depchain.common.messaging.*;
+import depchain.common.messaging.library.AppendMessage;
 import depchain.member.domain.Config;
 import depchain.member.domain.Member;
 import depchain.member.state.StringChain;

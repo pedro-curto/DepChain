@@ -1,10 +1,6 @@
 package depchain.client;
 
-import java.net.*;
-import java.security.PrivateKey;
 import java.util.List;
-
-import com.google.gson.Gson;
 import depchain.client.domain.Client;
 import depchain.common.*;
 import depchain.common.domain.Entity;
@@ -24,7 +20,7 @@ public class ClientMain {
         System.out.println("Client " + clientName + " started at port " + clientPort);
         List<Entity> membershipInfo = CommonUtils.loadMembership(MEMBERSHIP_FILE);
         boolean debug = false;
-        Client client = new Client(clientName, clientPort, membershipInfo, debug, false);
+        Client client = new Client(clientName, clientPort, membershipInfo, false);
         client.start();
     }
 }

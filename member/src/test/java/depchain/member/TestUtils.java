@@ -49,7 +49,7 @@ public class TestUtils {
 	}
 
 	public static Client startClient(String name, int port, List<Entity> members, ExecutorService executor) throws Exception {
-		Client client = new Client(name, port, new ArrayList<>(members), true, true);
+		Client client = new Client(name, port, new ArrayList<>(members), true);
 		executor.submit(() -> {
 			try {
 				client.start();

@@ -612,6 +612,9 @@ security/inputs/seqnumber.txt
 *.privkey
 keys/
 # ignores files from membership and client
-*.txt
+membership/
 
 contracts
+block*.json
+transaction.json
+genesis-file.json

@@ -6,6 +6,8 @@ import depchain.common.Security;
 import depchain.common.domain.ConsensusState;
 import depchain.common.domain.ValueTimestampPair;
 import depchain.common.messaging.*;
+import depchain.common.messaging.consensus.*;
+import depchain.common.messaging.library.AppendMessage;
 import depchain.member.domain.Config;
 import depchain.member.domain.Member;
 import depchain.member.state.StringChain;
@@ -89,7 +91,7 @@ public class CoordinatedWrongStateByzantine extends Member {
         dcLogger.log("Received: " + acceptMessage);
 
         // Resending echo message to member
-        AcceptMessage echo = new AcceptMessage(acceptMessage.getValue(), config.getPort(), acceptMessage.getConsensusInstance());
+        AcceptMessage echo = new AcceptMessage(acceptMessage.getValts(), config.getPort(), acceptMessage.getConsensusInstance());
         sendToMember(echo, acceptMessage.getPort());
         dcLogger.log("Sending fake echo ACCEPT message to " + acceptMessage.getPort() + "... ");
 

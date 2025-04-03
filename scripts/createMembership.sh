@@ -1,7 +1,7 @@
 #!/bin/bash
 # blockchain members
 users=("pedroribeiro" "pedrocurto" "rodrigogreedy" "dybizantino")
-client=("paulo")
+client=("paulo" "joao" "pedro")
 MEMBERS_DIR="../member/membership"
 CLIENTS_DIR="../client/membership"
 MEMBERSHIP_FILE="$MEMBERS_DIR/membership.txt"
@@ -9,7 +9,7 @@ MEMBERS_LEADER_FILE="$MEMBERS_DIR/leader.txt"
 MEMBERSHIP_CLIENT_FILE="$CLIENTS_DIR/membership.txt"
 CLIENT_LEADER_FILE="$CLIENTS_DIR/leader.txt"
 CLIENT_FILE="$MEMBERS_DIR/client.txt"
-CLIENT_PORT=2000
+BASE_CLIENT_PORT=2000
 BASE_PORT=5001
 ADDRESS="localhost"
 
@@ -69,34 +69,108 @@ for i in "${!users[@]}"; do
     fi
 done
 
-# --- CLIENT KEYS ---
-# generate private/public key for client
-user=${client[0]}
-echo "Generating keys for user: ${user}"
-mkdir -p "$CLIENTS_DIR/$user"
-mkdir -p "$MEMBERS_DIR/$user"
+# --- GENESIS FILE GENERATION (ALONG WITH CLIENT KEYS) ---
 
-# generate privkey
-openssl genpkey -algorithm RSA -out "$CLIENTS_DIR/$user/${user}.privkey" -pkeyopt rsa_keygen_bits:2048
-if [ $? -ne 0 ]; then
-    echo "Error: Failed to generate private key for ${user}"
-    exit 1
-fi
-echo "Generated private key for ${user}"
+GENESIS_FILE="../genesis-file.json"
 
-# generate pubkey from privkey
-openssl rsa -pubout -in "$CLIENTS_DIR/$user/${user}.privkey" -out "$CLIENTS_DIR/$user/${user}.pubkey"
-if [ $? -ne 0 ]; then
-    echo "Error: Failed to generate public key for ${user}"
-    exit 1
-fi
-echo "Generated public key for ${user}"
+cat > "$GENESIS_FILE" << EOF
+{
+  "hash": "",
+  "previous_hash": "",
+  "transactions": [],
+  "state": {
+    "accounts": [],
+    "contract": {
+      "address": "0x1234567891234567891234567891234567891234",
+      "deployment_bytecode": "",
+      "runtime_bytecode": "",
+      "owner": ""
+    }
+  }
+}
+EOF
 
-# copy client keys to members dir
-cp "$CLIENTS_DIR/$user/${user}.pubkey" "$MEMBERS_DIR/$user/${user}.pubkey"
-cp "$CLIENTS_DIR/$user/${user}.privkey" "$MEMBERS_DIR/$user/${user}.privkey"
+# generate client keys and add account entries to genesis file accordingly
+accounts_json=""
+for i in "${!client[@]}"; do
+    user=${client[$i]}
+    echo "Generating keys for user: ${user}"
+    mkdir -p "$CLIENTS_DIR/$user"
+    mkdir -p "$MEMBERS_DIR/$user"
 
-# create a client.txt at the membership directory similar to the membership
-echo "${user},${ADDRESS},${CLIENT_PORT},$MEMBERS_DIR/${user}/${user}.pubkey" >> "$CLIENT_FILE"
+    # privkey
+    openssl genpkey -algorithm RSA -out "$CLIENTS_DIR/$user/${user}.privkey" -pkeyopt rsa_keygen_bits:2048
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to generate private key for ${user}"
+        exit 1
+    fi
+    echo "Generated private key for ${user}"
 
-echo "All keys generated successfully."
+    # pubkey from privkey
+    openssl rsa -pubout -in "$CLIENTS_DIR/$user/${user}.privkey" -out "$CLIENTS_DIR/$user/${user}.pubkey"
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to generate public key for ${user}"
+        exit 1
+    fi
+    echo "Generated public key for ${user}"
+
+    # copy client keys to members dir
+    cp "$CLIENTS_DIR/$user/${user}.pubkey" "$MEMBERS_DIR/$user/${user}.pubkey"
+    cp "$CLIENTS_DIR/$user/${user}.privkey" "$MEMBERS_DIR/$user/${user}.privkey"
+
+    # create a client.txt at the membership directory similar to the membership
+    echo "${user},${ADDRESS},$((BASE_CLIENT_PORT + i)),$MEMBERS_DIR/${user}/${user}.pubkey" >> "$CLIENT_FILE"
+
+    # generates hash of pubkey for genesis file
+    pk_hash=$(python3 ../generate-pk-hash.py "$CLIENTS_DIR/$user/${user}.pubkey" | grep "SHA-256 Hash of Public Key:" | cut -d' ' -f6)
+    echo "Generated hash for ${user}'s public key: ${pk_hash}"
+    # store user pubkey at the membership directory under the hash
+    mkdir -p "$MEMBERS_DIR/$pk_hash"
+    cp "$CLIENTS_DIR/$user/${user}.pubkey" "$MEMBERS_DIR/$pk_hash/$pk_hash.pubkey"
+    echo "Stored ${pk_hash}'s public key at $MEMBERS_DIR/$pk_hash/$pk_hash.pubkey"
+
+    # we assume first client is the owner
+    if [ $i -eq 0 ]; then
+            tmp_file=$(mktemp)
+            jq --arg owner "$pk_hash" '.state.contract.owner = $owner' "$GENESIS_FILE" > "$tmp_file"
+            mv "$tmp_file" "$GENESIS_FILE"
+    fi
+
+    # add account entry to genesis file
+    if [ $i -gt 0 ]; then
+        accounts_json+=","
+    fi
+    accounts_json+=$(cat << EOF
+      {
+        "address": "${pk_hash}",
+        "name": "${user}",
+        "balance": 100
+      }
+EOF
+)
+done
+
+# add all accounts to genesis file
+tmp_file=$(mktemp)
+jq --argjson accounts "[$accounts_json]" '.state.accounts = $accounts' "$GENESIS_FILE" > "$tmp_file"
+mv "$tmp_file" "$GENESIS_FILE"
+
+# generate hash for genesis block
+genesis_hash=$(python3 ../genesis-hash.py "$GENESIS_FILE" | grep "Genesis Block Hash (Base64):" | cut -d' ' -f5)
+tmp_file=$(mktemp)
+jq --arg hash "$genesis_hash" '.hash = $hash' "$GENESIS_FILE" > "$tmp_file"
+mv "$tmp_file" "$GENESIS_FILE"
+
+# read bytecodes from file
+deployment_bytecode=$(cat deploymentBytecode.txt)
+runtime_bytecode=$(cat runtimeBytecode.txt)
+tmp_file=$(mktemp)
+jq --arg deployment_bytecode "$deployment_bytecode" '.state.contract.deployment_bytecode = $deployment_bytecode' "$GENESIS_FILE" > "$tmp_file"
+mv "$tmp_file" "$GENESIS_FILE"
+
+tmp_file=$(mktemp)
+jq --arg runtime_bytecode "$runtime_bytecode" '.state.contract.runtime_bytecode = $runtime_bytecode' "$GENESIS_FILE" > "$tmp_file"
+mv "$tmp_file" "$GENESIS_FILE"
+
+
+echo "All keys generated and genesis file created successfully."

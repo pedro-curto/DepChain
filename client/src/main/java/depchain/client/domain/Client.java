@@ -1,13 +1,16 @@
 package depchain.client.domain;
 
-import depchain.common.DCLogger;
-import depchain.common.PerfectLink;
+import depchain.common.*;
+import depchain.common.domain.Account;
+import depchain.common.domain.Block;
 import depchain.common.domain.Entity;
-import depchain.common.messaging.AppendMessage;
-import depchain.common.messaging.ClientReplyMessage;
-import depchain.common.messaging.Message;
-import depchain.common.Security;
+import depchain.common.domain.GenesisBlock;
+import depchain.common.messaging.*;
+import depchain.common.messaging.CoinType;
+import depchain.common.messaging.library.*;
 
+import javax.xml.transform.TransformerFactory;
+import java.math.BigInteger;
 import java.net.DatagramSocket;
 import java.security.KeyPair;
 import java.util.*;
@@ -16,8 +19,8 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 public class Client {
     private long nonce = 0;
-    private String baseDir = System.getProperty("user.dir");
-    private String clientName;
+    private final String baseDir = System.getProperty("user.dir");
+    private final String clientName;
     private final int port;
 	private final int leaderPort;
     private final List<Entity> members;
@@ -26,27 +29,37 @@ public class Client {
     protected final int byzantineQuorum;
     // {string: state with answers and if it was decided}
     private final Map<String, AppendState> memberResponses;
-
     private KeyPair clientKeys;
     private PerfectLink perfectLink;
     private BlockingQueue<Message> messageQueue;
     private final DCLogger dcLogger;
-    private final boolean debug;
     private volatile boolean running = true;
     private final boolean testEnvironment;
+    // 0x... address for client to send requests to the members
+    private String myAddress;
+    // {clientName: address} (other accounts addresses)
+    private Map<String, String> addresses;
 
-    public Client(String clientName, int port, List<Entity> members, boolean debug, boolean testEnvironment) {
+    private Map<ClientReplyMessage, Integer> memberReplyMessages;
+
+    public Client(String clientName,
+                  int port,
+                  List<Entity> members,
+                  boolean testEnvironment
+    ) {
         this.clientName = clientName;
-        this.debug = false;
 		this.port = port;
         this.members = members;
         this.faultyProcesses = Math.floorDiv(members.size() - 1, 3);
         this.byzantineQuorum = members.size() - faultyProcesses;
         this.memberResponses = new HashMap<>();
         // TODO hardcoded leader
-        this.leaderPort = members.get(0).getPort();
-        this.dcLogger = new DCLogger(Client.class, debug);
+        this.leaderPort = members.getFirst().getPort();
+        this.dcLogger = new DCLogger(Client.class, true);
         this.testEnvironment = testEnvironment;
+
+        this.memberReplyMessages = new HashMap<>();
+        this.myAddress = null;
     }
 
     public void start() throws Exception {
@@ -55,7 +68,7 @@ public class Client {
             dcLogger.log("Keys not loaded successfully.");
         }
         // init socket, messageQueue and the perfectLink abstraction
-        DatagramSocket socket = new DatagramSocket(port);;
+        DatagramSocket socket = new DatagramSocket(port);
         messageQueue = new LinkedBlockingQueue<>();
         // start sessions
         List<Entity> entities = new ArrayList<>(members);
@@ -65,14 +78,46 @@ public class Client {
         for (Entity member : members) {
             perfectLink.startSession(member.getPort());
         }
-        //perfectLink.startSession(this.leaderPort);
         // start a thread to deliver incoming messages
         Thread messageDeliveringThread = new Thread(() -> deliverMessage(messageQueue));
         messageDeliveringThread.start();
+        assignAddress();
         // start processing user input
         if (!testEnvironment) {
             processUserInput();
         }
+    }
+
+    public void assignAddress() {
+        // TODO -> fix this
+        // load the genesis file
+        GenesisBlock genesisBlock = CommonUtils.loadGenesisBlock();
+
+        // load account
+        try {
+            this.myAddress = KeyUtils.hashPublicKey(clientKeys.getPublic());
+        } catch (Exception e) {
+            dcLogger.error("Error hashing public key: " + e.getMessage());
+            throw new RuntimeException(e);
+        }
+        dcLogger.verbose("Client address: " + this.myAddress);
+        // sanity check, to see if it exists in the genesis block
+        if (genesisBlock != null &&
+                genesisBlock.getAccounts()
+                .stream()
+                .noneMatch(account -> account.getAddress().equals(this.myAddress))) {
+            dcLogger.alert("Account not found in genesis block.");
+            return;
+        }
+        // loads remaining addresses
+        this.addresses = new HashMap<>();
+        for (Account account : genesisBlock.getAccounts()) {
+            //if (!account.getAddress().equals(this.myAccount.getAddress())) {
+            // TODO -> this should be {address: account}, but it's simpler to type the client name
+                this.addresses.put(account.getName(), account.getAddress());
+            //}
+        }
+        dcLogger.verbose("All addresses: " + this.addresses);
     }
 
     public void stop() {
@@ -80,27 +125,292 @@ public class Client {
         running = false;
     }
 
-    private void processUserInput() throws Exception {
+    private void processUserInput() {
         Scanner input = new Scanner(System.in);
-        System.out.print("> ");
         while (running) {
-            String content = input.nextLine();
-            if (content.equals("QUIT")) {
+            System.out.print("> ");
+            String[] content = input.nextLine().split(" ");
+            if (content[0].equalsIgnoreCase("QUIT") || content[0].equalsIgnoreCase("EXIT")) {
                 input.close();
                 System.exit(0);
+            } else if (content[0].equalsIgnoreCase("HELP")) {
+                printHelpInfo();
+            } else if (content[0].equalsIgnoreCase("APPEND")) {
+                if (content.length < 2) {
+                    System.out.println("Invalid command. Usage: APPEND <string>");
+                    continue;
+                }
+                sendAppend(content[1]);
+            } else if (content[0].equalsIgnoreCase("ISTCoin")) {
+                if (content.length < 2) {
+                    System.out.println("Invalid command. Usage: ISTCoin <command> <args>");
+                    continue;
+                }
+                handleCoinCommand(Arrays.copyOfRange(content, 1, content.length), CoinType.ISTCOIN);
+            } else if (content[0].equalsIgnoreCase("DepCoin")) {
+                if (content.length < 2) {
+                    System.out.println("Invalid command. Usage: DepCoin <command> <args>");
+                    continue;
+                }
+                handleCoinCommand(Arrays.copyOfRange(content, 1, content.length), CoinType.DEPCOIN);
+            } else {
+                System.out.println("Invalid Command.");
+                printHelpInfo();
             }
-            sendAppend(content);
         }
+    }
+
+
+
+    private void handleCoinCommand(String[] content, CoinType coinType) {
+        switch(content[0].toUpperCase()) {
+            case "BALANCE":
+                handleBalanceCommand(content, coinType);
+                break;
+            case "TRANSFER":
+                handleTransferCommand(content, coinType);
+                break;
+            case "TRANSFER_FROM":
+                handleTransferFromCommand(content, coinType);
+                break;
+            case "APPROVE":
+                handleApproveCommand(content, coinType);
+                break;
+            case "ALLOWANCE":
+                handleAllowanceCommand(content, coinType);
+                break;
+            case "BLACKLIST":
+                handleBlacklist(content, coinType);
+                break;
+            case "UNBLACKLIST":
+                handleUnBlacklist(content, coinType);
+                break;
+            case "ISBLACKLISTED":
+                handleIsBlackListed(content, coinType);
+            default:
+                System.out.println("Invalid command.");
+        }
+    }
+
+    private void handleIsBlackListed(String[] content, CoinType coinType) {
+        if (content.length != 3) {
+            System.out.println("Invalid command. Usage: <CoinType> ISBLACKLISTED <owner> <account>");
+            return;
+        }
+        String owner = content[1];
+        String account = content[2];
+        if(!addresses.containsKey(owner) || !addresses.containsKey(account)) {
+            System.out.println("Invalid account address!");
+        }
+        String ownerAddr = addresses.get(owner);
+        String accountAddr = addresses.get(account);
+        IsBlackListedMessage msg = new IsBlackListedMessage(ownerAddr, accountAddr, this.port, coinType);
+        broadcastMessage(msg);
+    }
+
+    private void handleBlacklist(String[] content, CoinType coinType) {
+        if (content.length != 2) {
+            System.out.println("Invalid command. Usage: <CoinType> BLACKLIST <address>");
+            return;
+        }
+        String nameAddress = content[1];
+        if (!addresses.containsKey(nameAddress)) {
+            System.out.println("Invalid account address!");
+            return;
+        }
+        String addr = addresses.get(nameAddress);
+        TransferMessage msg = new TransferMessage(
+                this.myAddress,
+                null,
+                addr,
+                //  TODO have to send BigInteger.ZERO otherwise json can't convert null to BigInteger in parseBlock
+                BigInteger.ZERO, // change this in the future
+                coinType,
+                nonce,
+                TransactionType.BLACKLIST,
+                this.port
+        );
+        String dataToSign = msg.getDataToSign();
+        String signature = Security.makeDS(dataToSign, clientKeys.getPrivate());
+        msg.setSignature(signature);
+        sendMessageToLeader(msg);
+    }
+
+    private void handleUnBlacklist(String[] content, CoinType coinType) {
+        if (content.length != 2) {
+            System.out.println("Invalid command. Usage: <CoinType> UNBLACKLIST <address>");
+            return;
+        }
+        String nameAddress = content[1];
+        if (!addresses.containsKey(nameAddress)) {
+            System.out.println("Invalid account address!");
+            return;
+        }
+        String addr = addresses.get(nameAddress);
+        TransferMessage msg = new TransferMessage(
+                this.myAddress,
+                null,
+                addr,
+                //  TODO have to send BigInteger.ZERO otherwise json can't convert null to BigInteger in parseBlock
+                BigInteger.ZERO, // change this in the future
+                coinType,
+                nonce,
+                TransactionType.UNBLACKLIST,
+                this.port
+        );
+        String dataToSign = msg.getDataToSign();
+        String signature = Security.makeDS(dataToSign, clientKeys.getPrivate());
+        msg.setSignature(signature);
+        sendMessageToLeader(msg);
+    }
+
+    private void handleTransferFromCommand(String[] content, CoinType coinType) {
+        if (content.length != 4) {
+            System.out.println("Invalid command. Usage: <CoinType> TRANSFER_FROM <owner> <to> <amount>");
+            return;
+        }
+        String nameOfOwnerAddr = content[1];
+        String nameOfToAddr = content[2];
+        BigInteger amount = BigInteger.valueOf(Long.parseLong(content[3]));
+        if (!addresses.containsKey(nameOfOwnerAddr)) {
+            System.out.println("Invalid owner account address!");
+            return;
+        }
+        if (!addresses.containsKey(nameOfToAddr)) {
+            System.out.println("Invalid destination account address!");
+            return;
+        }
+        String ownerAddr = addresses.get(nameOfOwnerAddr);
+        String toAddr = addresses.get(nameOfToAddr);
+        // the invoker (myself, the client) is the spender
+        TransferMessage msg = new TransferMessage(
+                ownerAddr,
+                this.myAddress,
+                toAddr,
+                amount,
+                coinType,
+                nonce,
+                TransactionType.TRANSFER_FROM,
+                this.port
+        );
+        String dataToSign = msg.getDataToSign();
+        String signature = Security.makeDS(dataToSign, clientKeys.getPrivate());
+        msg.setSignature(signature);
+
+        sendMessageToLeader(msg);
+    }
+
+    private void handleAllowanceCommand(String[] content, CoinType coinType) {
+        if (content.length != 3) {
+            System.out.println("Invalid command. Usage: <CoinType> ALLOWANCE <owner> <spender>");
+            return;
+        }
+        String owner = content[1];
+        String spender = content[2];
+        if (!addresses.containsKey(spender)) {
+            System.out.println("Invalid account address!");
+            return;
+        }
+        String spenderAddr = addresses.get(spender);
+        String ownerAddr = addresses.get(owner);
+        AllowanceMessage msg = new AllowanceMessage(ownerAddr, spenderAddr, this.port, coinType);
+        broadcastMessage(msg);
+    }
+
+    private void handleApproveCommand(String[] content, CoinType coinType) {
+        if (content.length != 3) {
+            System.out.println("Invalid command. Usage: <CoinType> APPROVE <spender> <amount>");
+            return;
+        }
+        String spender = content[1];
+        BigInteger amount = BigInteger.valueOf(Long.parseLong(content[2]));
+        if (!addresses.containsKey(spender)) {
+            System.out.println("Invalid account address!");
+            return;
+        }
+        String spenderAddr = addresses.get(spender);
+        TransferMessage msg = new TransferMessage(
+                myAddress,
+                null,
+                spenderAddr,
+                amount,
+                coinType,
+                nonce,
+                TransactionType.APPROVE,
+                this.port
+        );
+        String dataToSign = msg.getDataToSign();
+        String signature = Security.makeDS(dataToSign, clientKeys.getPrivate());
+        msg.setSignature(signature);
+
+        sendMessageToLeader(msg);
+    }
+
+    private void handleTransferCommand(String[] content, CoinType coinType) {
+        if (content.length != 3) {
+            System.out.println("Invalid command. Usage: <CoinType> TRANSFER <address> <amount>");
+            return;
+        }
+        String nameOfToAddress = content[1];
+        if (!addresses.containsKey(nameOfToAddress)) {
+            System.out.println("Invalid account address!");
+            return;
+        }
+        String toAddress = addresses.get(nameOfToAddress);
+        BigInteger amount = BigInteger.valueOf(Long.parseLong(content[2]));
+        // TODO check if he has enough balance here and amount (?)
+        TransferMessage msg = new TransferMessage(
+                this.myAddress,
+                null,
+                toAddress,
+                amount,
+                coinType,
+                nonce,
+                TransactionType.TRANSFER,
+                this.port
+        );
+        String dataToSign = msg.getDataToSign();
+        String signature = Security.makeDS(dataToSign, clientKeys.getPrivate());
+        msg.setSignature(signature);
+        sendMessageToLeader(msg);
+    }
+
+    private void handleBalanceCommand(String[] content, CoinType coinType) {
+        if (content.length != 2) {
+            System.out.println("Invalid command. Usage: DepCoin BALANCE <address>");
+            return;
+        }
+        String accName = content[1];
+        if (!addresses.containsKey(accName)) {
+            System.out.println("Invalid account address!");
+            return;
+        }
+        String addr = addresses.get(accName);
+
+        // broadcast request to members
+        BalanceOfMessage msg = new BalanceOfMessage(addr, this.port, coinType);
+        broadcastMessage(msg);
+    }
+
+    private void broadcastMessage(Message message) {
+        for (Entity member : members) {
+            perfectLink.sendMessage(message, member.getPort());
+            dcLogger.log("Sent message: " + message);
+        }
+        incrementNonce();
+    }
+
+    private void sendMessageToLeader(Message message) {
+        perfectLink.sendMessage(message, leaderPort);
+        incrementNonce();
+        dcLogger.log("Sent message to leader: " + message);
     }
 
     public void sendAppend(String content) {
         AppendMessage msg = new AppendMessage(content, this.port, nonce);
         String signature = Security.makeDS(msg.getDataToSign(), clientKeys.getPrivate());
         msg.setSignature(signature);
-        perfectLink.sendMessage(msg, leaderPort);
-        dcLogger.log("Sent message: " + msg);
-        // increment nonce after sending
-        nonce++;
+        sendMessageToLeader(msg);
     }
 
     private void deliverMessage(BlockingQueue<Message> messageQueue) {
@@ -111,49 +421,129 @@ public class Client {
             } catch (InterruptedException e) {
                 continue;
             }
-            if (message instanceof ClientReplyMessage) {
-                ClientReplyMessage appendMessage = (ClientReplyMessage) message;
-                String value = appendMessage.getValue();
-                // if we didn't get an answer for the string we received yet create it in the map
-                if (!memberResponses.containsKey(value)) {
-                    memberResponses.put(value, new AppendState(this.faultyProcesses, this.byzantineQuorum));
-                }
-                AppendState appendState = memberResponses.get(value);
-                // if we already decided we're happy, move on
-                if (appendState.getAppended()) {
-                    continue;
-                }
-                // increment counters and check
-                int totalAnswersCounter = appendState.getTotalAnswersCounter();
-                totalAnswersCounter++;
-                System.out.println("Received " + totalAnswersCounter + " answers for value " + value);
-
-                Map<String, Integer> equalAnswersCounter = appendState.getEqualAnswersCounter();
-                int equalCount = equalAnswersCounter.getOrDefault(value, 0);
-                if (appendMessage.getSuccess()) {
-                    // increases the counter of equal answers
-                    equalCount++;
-                    equalAnswersCounter.put(value, equalCount);
-                    System.out.println("Answers map: " + equalAnswersCounter);
-                }
-                // if the number of equal answers is greater than the quorum, print the outcome
-                if (equalCount >= this.faultyProcesses+1 || totalAnswersCounter >= this.byzantineQuorum) {
-                    int consensusInstance = appendMessage.getInstanceOfDecision();
-                    boolean success = appendMessage.getSuccess();
-                    String outcome = success ? "successfully appended" : "not appended";
-
-                    System.out.println("String " + appendMessage.getValue() +
-                            " was " + outcome + " to the blockchain at timestamp " + consensusInstance);
-                    System.out.print("> ");
-                    appendState.setAppended(true);
-                } else {
-                    System.out.println("Not reached quorum yet.");
-                }
+            System.out.println("Delivering " + message.getType() + "...");
+            switch (message.getType()) {
+                case TRANSFER_REPLY:
+                    TransferReply transferReply = (TransferReply) message;
+                    handleTransferReply(transferReply);
+                    break;
+                case BALANCE_REPLY:
+                    BalanceReply balanceReply = (BalanceReply) message;
+                    handleBalanceReply(balanceReply);
+                    break;
+                case ALLOWANCE_REPLY:
+                    AllowanceReply allowanceReply = (AllowanceReply) message;
+                    handleAllowanceReply(allowanceReply);
+                    break;
+                case STRING_REPLY:
+                    ClientReplyMessage clientReplyMessage = (ClientReplyMessage) message;
+                    handleStringReply(clientReplyMessage);
+                    break;
+                case IS_BLACK_LISTED_REPLY:
+                    IsBlackListedReply isBlackListedReply = (IsBlackListedReply) message;
+                    handleIsBlackListedReply(isBlackListedReply);
+                default:
+                    System.out.println("Reply type does not exist");
             }
         }
     }
 
-    public PerfectLink getPerfectLink() {
-        return perfectLink;
+    private void handleIsBlackListedReply(IsBlackListedReply reply) {
+        memberReplyMessages.putIfAbsent(reply, 0);
+        memberReplyMessages.put(reply, memberReplyMessages.get(reply) + 1);
+        // reached quorum of f+1 equal messages
+        if (memberReplyMessages.get(reply) == this.faultyProcesses+1) {
+            System.out.println("IsBlacklisted: {");
+            System.out.println("owner "+ reply.getOwner());
+            System.out.println("account: " + reply.getAccount());
+            System.out.println("result: " + reply.isBlackListed());
+            System.out.println("}");
+        }
+        else {
+            System.out.println("Not reached quorum yet.");
+        }
+
+    }
+
+    private void handleStringReply(ClientReplyMessage reply) {
+        memberReplyMessages.putIfAbsent(reply, 0);
+        memberReplyMessages.put(reply, memberReplyMessages.get(reply) + 1);
+        // reached quorum of f+1 equal messages
+        if (memberReplyMessages.get(reply) == this.faultyProcesses+1) {
+            System.out.println("Server appended String: {");
+            System.out.println(reply.getValue());
+            System.out.println("}");
+        }
+        else {
+            System.out.println("Not reached quorum yet.");
+        }
+    }
+    private void handleTransferReply(TransferReply reply) {
+        memberReplyMessages.putIfAbsent(reply, 0);
+        memberReplyMessages.put(reply, memberReplyMessages.get(reply) + 1);
+        // reached quorum of f+1 equal messages
+        if (memberReplyMessages.get(reply) == this.faultyProcesses+1) {
+            System.out.println("Transfer: {");
+            System.out.println("From: " + reply.getSenderAddr());
+            System.out.println("To: " + reply.getRecipientAddr());
+            if (!reply.getSenderAddr().isEmpty()) System.out.println("Spender: " + reply.getSenderAddr());
+            System.out.println("Amount: " + reply.getAmount());
+            System.out.println("}");
+        }
+        else {
+            System.out.println("Not reached quorum yet.");
+        }
+    }
+    private void handleBalanceReply(BalanceReply reply) {
+        memberReplyMessages.putIfAbsent(reply, 0);
+        memberReplyMessages.put(reply, memberReplyMessages.get(reply) + 1);
+        // reached quorum of f+1 equal messages
+        if (memberReplyMessages.get(reply) == this.faultyProcesses+1) {
+            System.out.println("Balance: {");
+            System.out.println("address "+ reply.getAddress());
+            System.out.println("balance: " + reply.getBalance());
+            System.out.println("}");
+        }
+        else {
+            System.out.println("Not reached quorum yet.");
+        }
+
+    }
+    private void handleAllowanceReply(AllowanceReply reply) {
+        memberReplyMessages.putIfAbsent(reply, 0);
+        memberReplyMessages.put(reply, memberReplyMessages.get(reply) + 1);
+        // reached quorum of f+1 equal messages
+        if (memberReplyMessages.get(reply) == this.faultyProcesses+1) {
+            System.out.println("Allowance {");
+            System.out.println("owner: " + reply.getOwner());
+            System.out.println("spender: " + reply.getSpender());
+            System.out.println("amount: " + reply.getAllowance());
+            System.out.println("}");
+        }
+        else {
+            System.out.println("Not reached quorum yet.");
+        }
+    }
+
+    private void printHelpInfo() {
+        System.out.println("-- Available commands: --");
+        System.out.println("1. APPEND <string> (compatibility with Delivery 1)");
+        System.out.println("2. ISTCoin <command> <args>");
+        System.out.println("3. DepCoin <command> <args>");
+        System.out.println("4. QUIT | EXIT");
+        System.out.println("5. HELP");
+        System.out.println("-- Commands for ISTCoin and DepCoin (prefix with coin name): --");
+        System.out.println("- BALANCE <address>");
+        System.out.println("- TRANSFER <address> <amount>");
+        System.out.println("- TRANSFER_FROM <owner> <to> <amount>");
+        System.out.println("- APPROVE <spender> <amount>");
+        System.out.println("- ALLOWANCE <owner> <spender>");
+        System.out.println("- BLACKLIST <address>");
+        System.out.println("- UNBLACKLIST <address>");
+        System.out.println("- ISBLACKLISTED <owner> <account>");
+    }
+
+    private void incrementNonce() {
+        this.nonce++;
     }
 }

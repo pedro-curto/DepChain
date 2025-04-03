@@ -5,6 +5,10 @@ import depchain.common.PerfectLink;
 import depchain.common.domain.ConsensusState;
 import depchain.common.domain.ValueTimestampPair;
 import depchain.common.messaging.*;
+import depchain.common.messaging.consensus.AcceptMessage;
+import depchain.common.messaging.consensus.StateMessage;
+import depchain.common.messaging.consensus.WriteMessage;
+import depchain.common.messaging.library.AppendMessage;
 import depchain.member.domain.Config;
 import depchain.member.domain.Member;
 import depchain.member.state.StringChain;
@@ -30,7 +34,7 @@ public class WrongWriteAcceptByzantine extends Member {
             this.consensusState.nextEpoch();
             return false;
         }
-        String value = decideOnCollectedValues(collectedStates);
+        ValueTimestampPair value = decideOnCollectedValues(collectedStates);
         if (value == null) {
             // abort
             dcLogger.log("aborted after deciding null value");
@@ -50,7 +54,7 @@ public class WrongWriteAcceptByzantine extends Member {
     @Override
     public boolean writePhase() {
         dcLogger.log("Waiting for write quorum of size: " + config.getByzantineQuorum() + "...");
-        String writeValue = this.consensusState.waitForWriteQuorum(config.getByzantineQuorum());
+        ValueTimestampPair writeValue = this.consensusState.waitForWriteQuorum(config.getByzantineQuorum());
         if (writeValue == null) {
             // Abort
             dcLogger.log("ABORTED (WRITE)");
@@ -62,12 +66,13 @@ public class WrongWriteAcceptByzantine extends Member {
         this.consensusState.setCurrent(writeValts);
 
         // Broadcast ACCEPT and wait for quorum to DECIDE value
-        AcceptMessage acceptMessage = new AcceptMessage("Byzantine", config.getPort(), consensusState.getInstance());
+        ValueTimestampPair byzantinePair = new ValueTimestampPair(this.consensusState.getEpoch(), "Byzantine");
+        AcceptMessage acceptMessage = new AcceptMessage(byzantinePair, config.getPort(), consensusState.getInstance());
         dcLogger.log("Broadcasting: " + acceptMessage);
         broadCastMessage(acceptMessage);
 
         dcLogger.log("Waiting for accept quorum of size: " + config.getByzantineQuorum() + "...");
-        String accept = this.consensusState.waitForAcceptQuorum(config.getByzantineQuorum());
+        ValueTimestampPair accept = this.consensusState.waitForAcceptQuorum(config.getByzantineQuorum());
         if (accept == null) {
             // Abort
             dcLogger.log("ABORTED (ACCEPT)");
@@ -79,7 +84,12 @@ public class WrongWriteAcceptByzantine extends Member {
         // DECIDE value
         this.stringChain.appendString(consensusState.getCurrent().getValue());
         if (isLeader()) {
-            ClientReplyMessage clientReplyMessage = new ClientReplyMessage(accept,true, consensusState.getInstance());
+            ClientReplyMessage clientReplyMessage = new ClientReplyMessage(
+                    accept.getValue(),
+                    true,
+                    consensusState.getInstance(),
+                    MessageType.STRING_REPLY
+            );
             broadCastToClients(clientReplyMessage);
         }
         this.consensusState.nextInstance();
