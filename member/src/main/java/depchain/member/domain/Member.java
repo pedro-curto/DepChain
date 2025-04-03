@@ -571,10 +571,8 @@ public class Member {
             tx.setStatus(result);
             if (result) {
                 //ClientReplyMessage replay = new ClientReplyMessage(tx, true, this.consensusState.getInstance());
-                //sendToClient(replay, );
                 dcLogger.verbose("Transfer successful");
             } else {
-                ClientReplyMessage replay = new ClientReplyMessage(tx, false, this.consensusState.getInstance());
                 dcLogger.verbose("Transfer failed");
             }
         }

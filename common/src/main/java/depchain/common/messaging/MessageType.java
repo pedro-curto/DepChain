@@ -13,4 +13,6 @@ public enum MessageType {
 	CLIENT,
 	// blockchain operations
 	BALANCE_OF, TRANSFER, APPROVE, ALLOWANCE, TRANSFER_FROM,
+	// reply types
+	STRING_REPLY, TRANSFER_REPLY, BALANCE_REPLY, ALLOWANCE_REPLY,
 }

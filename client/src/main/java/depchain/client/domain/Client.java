@@ -8,6 +8,7 @@ import depchain.common.messaging.*;
 import depchain.common.messaging.CoinType;
 import depchain.common.messaging.library.*;
 
+import javax.xml.transform.TransformerFactory;
 import java.math.BigInteger;
 import java.net.DatagramSocket;
 import java.security.KeyPair;
@@ -41,6 +42,8 @@ public class Client {
     // {clientName: address}
     private Map<String, String> addresses;
 
+    private Map<ClientReplyMessage, Integer> memberReplyMessages;
+
     public Client(String clientName,
                   int port,
                   List<Entity> members,
@@ -58,6 +61,8 @@ public class Client {
         this.leaderPort = members.get(0).getPort();
         this.dcLogger = new DCLogger(Client.class, true);
         this.testEnvironment = testEnvironment;
+
+        this.memberReplyMessages = new HashMap<>();
     }
 
     public void start() throws Exception {
@@ -326,44 +331,74 @@ public class Client {
                 continue;
             }
             if (message instanceof ClientReplyMessage) {
-                ClientReplyMessage appendMessage = (ClientReplyMessage) message;
-                String value = appendMessage.getValue();
-                // if we didn't get an answer for the string we received yet create it in the map
-                if (!memberResponses.containsKey(value)) {
-                    memberResponses.put(value, new AppendState(this.faultyProcesses, this.byzantineQuorum));
-                }
-                AppendState appendState = memberResponses.get(value);
-                // if we already decided we're happy, move on
-                if (appendState.getAppended()) {
-                    continue;
-                }
-                // increment counters and check
-                int totalAnswersCounter = appendState.getTotalAnswersCounter();
-                totalAnswersCounter++;
-                System.out.println("Received " + totalAnswersCounter + " answers for value " + value);
-
-                Map<String, Integer> equalAnswersCounter = appendState.getEqualAnswersCounter();
-                int equalCount = equalAnswersCounter.getOrDefault(value, 0);
-                if (appendMessage.getSuccess()) {
-                    // increases the counter of equal answers
-                    equalCount++;
-                    equalAnswersCounter.put(value, equalCount);
-                    System.out.println("Answers map: " + equalAnswersCounter);
-                }
-                // if the number of equal answers is greater than the quorum, print the outcome
-                if (equalCount >= this.faultyProcesses+1 || totalAnswersCounter >= this.byzantineQuorum) {
-                    int consensusInstance = appendMessage.getInstanceOfDecision();
-                    boolean success = appendMessage.getSuccess();
-                    String outcome = success ? "successfully appended" : "not appended";
-
-                    System.out.println("String " + appendMessage.getValue() +
-                            " was " + outcome + " to the blockchain at timestamp " + consensusInstance);
-                    System.out.print("> ");
-                    appendState.setAppended(true);
-                } else {
-                    System.out.println("Not reached quorum yet.");
+                ClientReplyMessage replyMessage = (ClientReplyMessage) message;
+                switch (replyMessage.getReplyType()) {
+                    case TRANSFER_REPLY -> handleTransferReply((TransferReply) replyMessage);
+                    case BALANCE_REPLY -> handleBalanceReply((BalanceReply) replyMessage);
+                    case ALLOWANCE_REPLY -> handleAllowanceReply((AllowanceReply) replyMessage);
+                    default -> handleStringReply(replyMessage);
                 }
             }
+        }
+    }
+
+    private void handleStringReply(ClientReplyMessage reply) {
+        memberReplyMessages.putIfAbsent(reply, 0);
+        memberReplyMessages.put(reply, memberReplyMessages.get(reply) + 1);
+        // reached quorum of f+1 equal messages
+        if (memberReplyMessages.get(reply) == this.faultyProcesses+1) {
+            System.out.println("Server appended String: {");
+            System.out.println(reply.getValue());
+            System.out.println("}");
+        }
+        else {
+            System.out.println("Not reached quorum yet.");
+        }
+    }
+    private void handleTransferReply(TransferReply reply) {
+        memberReplyMessages.putIfAbsent(reply, 0);
+        memberReplyMessages.put(reply, memberReplyMessages.get(reply) + 1);
+        // reached quorum of f+1 equal messages
+        if (memberReplyMessages.get(reply) == this.faultyProcesses+1) {
+            System.out.println("Transfer: {");
+            System.out.println("From: " + reply.getSenderAddr());
+            System.out.println("To: " + reply.getRecipientAddr());
+            if (!reply.getSenderAddr().isEmpty()) System.out.println("Spender: " + reply.getSenderAddr());
+            System.out.println("Amount: " + reply.getAmount());
+            System.out.println("}");
+        }
+        else {
+            System.out.println("Not reached quorum yet.");
+        }
+    }
+    private void handleBalanceReply(BalanceReply reply) {
+        memberReplyMessages.putIfAbsent(reply, 0);
+        memberReplyMessages.put(reply, memberReplyMessages.get(reply) + 1);
+        // reached quorum of f+1 equal messages
+        if (memberReplyMessages.get(reply) == this.faultyProcesses+1) {
+            System.out.println("Balance: {");
+            System.out.println("address "+ reply.getAddress());
+            System.out.println("balance: " + reply.getBalance());
+            System.out.println("}");
+        }
+        else {
+            System.out.println("Not reached quorum yet.");
+        }
+
+    }
+    private void handleAllowanceReply(AllowanceReply reply) {
+        memberReplyMessages.putIfAbsent(reply, 0);
+        memberReplyMessages.put(reply, memberReplyMessages.get(reply) + 1);
+        // reached quorum of f+1 equal messages
+        if (memberReplyMessages.get(reply) == this.faultyProcesses+1) {
+            System.out.println("Allowance {");
+            System.out.println("owner: " + reply.getOwner());
+            System.out.println("spender: " + reply.getSpender());
+            System.out.println("amount: " + reply.getAllowance());
+            System.out.println("}");
+        }
+        else {
+            System.out.println("Not reached quorum yet.");
         }
     }
 
