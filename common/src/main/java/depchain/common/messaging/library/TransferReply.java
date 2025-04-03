@@ -3,6 +3,7 @@ package depchain.common.messaging.library;
 import depchain.common.messaging.ClientReplyMessage;
 import depchain.common.messaging.CoinType;
 import depchain.common.messaging.MessageType;
+import depchain.common.messaging.TransactionType;
 
 import java.math.BigInteger;
 import java.util.Objects;
@@ -12,6 +13,7 @@ public class TransferReply extends ClientReplyMessage {
     private String senderAddr;
     private String spenderAddr;
     private String recipientAddr;
+    private TransactionType transactionType;
 
     public TransferReply(
             boolean success,
@@ -21,6 +23,7 @@ public class TransferReply extends ClientReplyMessage {
             String spenderAddr,
             String recipienAddr,
             CoinType coinType,
+            TransactionType transactionType,
             long nonce,
             int memberPort
     ) {
@@ -31,6 +34,7 @@ public class TransferReply extends ClientReplyMessage {
                 nonce,
                 memberPort
         );
+        this.transactionType = transactionType;
         this.amount = amount;
         this.senderAddr = senderAddr;
         this.spenderAddr = spenderAddr;
@@ -48,6 +52,10 @@ public class TransferReply extends ClientReplyMessage {
     }
     public String getRecipientAddr() {
         return recipientAddr;
+    }
+
+    public TransactionType getTransactionType() {
+        return transactionType;
     }
 
     // for hashmap in client

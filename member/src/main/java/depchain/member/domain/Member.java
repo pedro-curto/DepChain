@@ -637,6 +637,30 @@ public class Member {
         }
     }
 
+    private void replyTransactions(List<Transaction> transactions) {
+        for(Transaction tx: transactions) {
+            // TODO could make a TransferReply constructor with a Transaction as argument
+            TransferReply transferReply = new TransferReply(
+                    tx.getSuccess(),
+                    this.consensusState.getInstance(),
+                    tx.getAmount(),
+                    tx.getSender(),
+                    tx.getSpender(),
+                    tx.getRecipient(),
+                    tx.getCoinType(),
+                    tx.getTransactionType(),
+                    // TODO check if this is the supposed nonce (idfk)
+                    // TODO I think it's either tx.getNonce() or the clientNonce, or maybe both
+                    clientNonces.get(tx.getClientPort()),
+                    //tx.getNonce(),
+                    config.getPort()
+            );
+            // TODO the reply needs to be signed by member (byzantine can pretend to be other member)
+
+            sendToClient(transferReply, tx.getClientPort());
+        }
+    }
+
     private void executeTransactions(String value) {
         // we receive a BLOCK:{jsonOfblock} message
         String blockStr = value.substring("BLOCK:".length()).trim();
@@ -647,6 +671,7 @@ public class Member {
         dcLogger.log("Executing transactions in block: " + block);
 
         handleTransactions(block.getTransactions());
+        replyTransactions(block.getTransactions());
         // update transaction results (if we use the previous ref of blockJson, all tx's status are false)
         blockJson = JsonAdapter.serializeBlock(block);
         boolean result = CommonUtils.saveJsonToFile(blockJson, config.getBlockDir() + "/block" + block.getBlockNumber() + ".json");
