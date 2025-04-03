@@ -1,5 +1,9 @@
 package depchain.contract;
 
+import depchain.common.CommonUtils;
+import depchain.common.DCLogger;
+import depchain.common.domain.ContractData;
+import depchain.common.domain.GenesisBlock;
 import org.hyperledger.besu.evm.fluent.EVMExecutor;
 import org.hyperledger.besu.evm.fluent.SimpleWorld;
 import org.hyperledger.besu.evm.tracing.StandardJsonTracer;
@@ -25,6 +29,8 @@ public class ContractTest {
     private ByteArrayOutputStream bos;
     private PrintStream printStream;
     private StandardJsonTracer tracer;
+    private String deploymentBytecode;
+    private String runtimeBytecode;
 
     @BeforeEach
     void setup() {
@@ -32,6 +38,10 @@ public class ContractTest {
         this.bos = new ByteArrayOutputStream();
         this.printStream = new PrintStream(bos);
         this.tracer = new StandardJsonTracer(printStream, true, true, true, true);
+        GenesisBlock genesisBlock = CommonUtils.loadGenesisBlock();
+        ContractData contractData = genesisBlock.getContractData();
+        this.deploymentBytecode = contractData.getDeploymentBytecode();
+        this.runtimeBytecode = contractData.getRuntimeBytecode();
     }
 
     @AfterEach
@@ -49,7 +59,8 @@ public class ContractTest {
          * (name, symbol, totalSupply, decimals)
          */
         SimpleWorld world = this.world;
-        EVMExecutor executor = ContractFunctions.deployContract(SENDER_STR, CONTRACT_STR, world, this.tracer);
+        EVMExecutor executor = ContractFunctions.deployContract(SENDER_STR, CONTRACT_STR, world, this.tracer,
+                this.deploymentBytecode, this.runtimeBytecode);
         String name = ContractFunctions.callName(executor, this.bos);
         String symbol = ContractFunctions.callSymbol(executor, this.bos);
         BigInteger totalSupply = ContractFunctions.callTotalSupply(executor, this.bos);
@@ -68,7 +79,8 @@ public class ContractTest {
         * Then, checks if the balances reflect this.
          */
         SimpleWorld world = this.world;
-        EVMExecutor executor = ContractFunctions.deployContract(SENDER_STR, CONTRACT_STR, world, this.tracer);
+        EVMExecutor executor = ContractFunctions.deployContract(SENDER_STR, CONTRACT_STR, world, this.tracer,
+                this.deploymentBytecode, this.runtimeBytecode);
 
         ContractFunctions.transferTokens(executor, bos, SENDER, RECIPIENT, BigInteger.valueOf(2000));
         BigInteger recpBalance = ContractFunctions.callBalanceOf(executor, this.bos, RECIPIENT);
@@ -84,7 +96,8 @@ public class ContractTest {
          * Blacklists a given user and tries a transfer to him, that should fail.
          * Then, removes the user from blacklist and retries the transfer.
          */
-        EVMExecutor executor = ContractFunctions.deployContract(SENDER_STR, CONTRACT_STR, world, tracer);
+        EVMExecutor executor = ContractFunctions.deployContract(SENDER_STR, CONTRACT_STR, world, tracer,
+                this.deploymentBytecode, this.runtimeBytecode);
 
         // blacklist and attempt transfer
         ContractFunctions.addToBlacklist(executor, SENDER, SENDER);
@@ -107,7 +120,8 @@ public class ContractTest {
          * Tries to perform a transferFrom transfer with no allowance (fails).
          * After, sets allowance, retries, and checks the new balances and allowance.
          */
-        EVMExecutor executor = ContractFunctions.deployContract(SENDER_STR, CONTRACT_STR, world, tracer);
+        EVMExecutor executor = ContractFunctions.deployContract(SENDER_STR, CONTRACT_STR, world, tracer,
+                this.deploymentBytecode, this.runtimeBytecode);
 
         // try to do a transfer from an account with no allowance
         boolean result = ContractFunctions.transferFrom(executor, bos, SPENDER, SENDER, RECIPIENT, BigInteger.valueOf(100));

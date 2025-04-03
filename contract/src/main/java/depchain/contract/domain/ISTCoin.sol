@@ -14,7 +14,7 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 //  ✔   3. total supply of 100 million units
 //      4. When performing a
 //      transfer or transferFrom, the ERC-20 contract shall call the access
-//      control contract (???) to check whether the client account address is allowed
+//      control contract to check whether the client account address is allowed
 //      to transfer
 
 contract ISTCoin is ERC20 {
@@ -49,18 +49,27 @@ contract ISTCoin is ERC20 {
         // acl check for message sender
         address owner = _msgSender();
         require (!isBlacklisted(owner), "ISTCoin: sender is blacklisted and cannot transfer");
-        // TODO -> add acl check to _to ??
+        require (!isBlacklisted(_to), "ISTCoin: receiver is blacklisted and cannot receive");
         _transfer(owner, _to, _value);
         return true;
     }
 
     function transferFrom(address _from, address _to, uint256 _value) public override returns (bool success) {
-        // acl check for _from
-        require (!isBlacklisted(_from), "ISTCoin: spender is blacklisted and cannot transfer");
-        // TODO -> add acl check to _to (spender) ??
         address spender = _msgSender();
+        // acl check for all addresses (spender, _from, _to)
+        require (!isBlacklisted(spender), "ISTCoin: spender is blacklisted and cannot transfer");
+        require (!isBlacklisted(_from), "ISTCoin: _from is blacklisted and cannot transfer");
+        require (!isBlacklisted(_to), "ISTCoin: _to is blacklisted and cannot transfer");
         _spendAllowance(_from, spender, _value);
         _transfer(_from, _to, _value);
+        return true;
+    }
+
+    function approve(address spender, uint256 value) public override returns (bool success) {
+        address owner = _msgSender();
+        require (!isBlacklisted(owner), "ISTCoin: owner is blacklisted and cannot transfer");
+        require (!isBlacklisted(spender), "ISTCoin: spender is blacklisted and cannot transfer");
+        _approve(owner, spender, value);
         return true;
     }
 

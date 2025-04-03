@@ -11,7 +11,7 @@ import java.util.stream.Collectors;
 
 public class JsonAdapter {
 
-    public static Block parseBlock(JsonObject json, boolean isGenesis) {
+    public static Block parseBlock(JsonObject json) {
        String hash = json.get("hash").getAsString();
        String previousHash = json.get("previous_hash").getAsString();
 
@@ -21,10 +21,6 @@ public class JsonAdapter {
                 .map(JsonAdapter::parseTransaction)
                 .collect(Collectors.toList());
 
-        if (isGenesis) {
-            BlockChainState blockChainState = parseBlockChainState(json.getAsJsonObject("state"));
-            return new Block(hash, previousHash, transactions, blockChainState);
-        }
         // String previousHash, List<Transaction> transactions, long blockNumber, long timestamp
         long blockNumber = json.get("block_number").getAsLong();
         long timestamp = json.get("timestamp").getAsLong();
@@ -42,7 +38,11 @@ public class JsonAdapter {
     }
 
     public static Account parseAccount(JsonObject json) {
-        return new Gson().fromJson(json, Account.class);
+        return new Account(
+            json.get("address").getAsString(),
+            json.get("name").getAsString(),
+            json.get("balance").getAsLong()
+        );
     }
 
     public static Transaction parseTransaction(JsonElement json) {
@@ -130,6 +130,42 @@ public class JsonAdapter {
         json.addProperty("success", transaction.getSuccess());
         json.addProperty("clientPort", transaction.getClientPort());
         return json;
+    }
+
+    public static ContractData parseContractData(JsonObject json) {
+        JsonObject obj = json.getAsJsonObject();
+        return new ContractData(
+                obj.get("address").getAsString(),
+                obj.get("deployment_bytecode").getAsString(),
+                obj.get("runtime_bytecode").getAsString(),
+                obj.get("owner").getAsString()
+        );
+    }
+
+    public static GenesisBlock parseGenesisBlock(JsonObject json) {
+        // hash, previous_hash
+        String hash = json.get("hash").getAsString();
+        String previousHash = json.get("previous_hash").getAsString();
+        // transactions
+        List<Transaction> transactions = json.getAsJsonArray("transactions")
+                .asList()
+                .stream()
+                .map(JsonAdapter::parseTransaction)
+                .collect(Collectors.toList());
+        JsonObject stateObject = json.getAsJsonObject("state");
+
+        // accounts (from state)
+        List<Account> accounts = stateObject.getAsJsonArray("accounts")
+                .asList()
+                .stream()
+                .map(JsonElement::getAsJsonObject)
+                .map(JsonAdapter::parseAccount)
+                .toList();
+
+        // contract data (from state)
+        ContractData contractData = parseContractData(stateObject.getAsJsonObject("contract"));
+
+        return new GenesisBlock(hash, previousHash, transactions, accounts, contractData);
     }
 
 }

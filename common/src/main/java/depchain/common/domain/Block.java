@@ -12,7 +12,7 @@ public class Block {
     long timestamp;
     List<Transaction> transactions = new ArrayList<>();
     // only for genesis block (for accounts)
-    BlockChainState state; // has to store the state it had when appended
+    BlockChainState state = null; // has to store the state it had when appended
 
     public Block(String hash, String previousHash, List<Transaction> transactions, BlockChainState state) {
         // for GENESIS BLOCK
@@ -21,6 +21,16 @@ public class Block {
         this.transactions = transactions;
         this.blockNumber = 0;
         this.state = state;
+        this.timestamp = System.currentTimeMillis();
+    }
+
+    public Block(String hash, String previousHash, List<Transaction> transactions) {
+        // for GENESIS BLOCK
+        this.hash = hash;
+        this.previousHash = previousHash;
+        this.transactions = transactions;
+        this.blockNumber = 0;
+        this.state = null;
         this.timestamp = System.currentTimeMillis();
     }
 

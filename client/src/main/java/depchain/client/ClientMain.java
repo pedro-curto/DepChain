@@ -20,7 +20,7 @@ public class ClientMain {
         System.out.println("Client " + clientName + " started at port " + clientPort);
         List<Entity> membershipInfo = CommonUtils.loadMembership(MEMBERSHIP_FILE);
         boolean debug = false;
-        Client client = new Client(clientName, clientPort, membershipInfo, debug, false);
+        Client client = new Client(clientName, clientPort, membershipInfo, false);
         client.start();
     }
 }

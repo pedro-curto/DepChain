@@ -5,8 +5,8 @@ import depchain.common.domain.Transaction;
 public class ClientReplyMessage extends Message {
 	private String value = null;
 	private Transaction transaction = null;
-	private boolean success;
-	private int instanceOfDecision;
+	private final boolean success;
+	private final int instanceOfDecision;
 
 	public ClientReplyMessage(String value, boolean success, int instanceOfDecision) {
 		super(MessageType.CLIENT_REPLY);

@@ -4,6 +4,7 @@ import depchain.common.*;
 import depchain.common.domain.Account;
 import depchain.common.domain.Block;
 import depchain.common.domain.Entity;
+import depchain.common.domain.GenesisBlock;
 import depchain.common.messaging.*;
 import depchain.common.messaging.CoinType;
 import depchain.common.messaging.library.*;
@@ -27,37 +28,33 @@ public class Client {
     protected final int byzantineQuorum;
     // {string: state with answers and if it was decided}
     private final Map<String, AppendState> memberResponses;
-
     private KeyPair clientKeys;
     private PerfectLink perfectLink;
     private BlockingQueue<Message> messageQueue;
     private final DCLogger dcLogger;
-    private final boolean debug;
     private volatile boolean running = true;
     private final boolean testEnvironment;
     // 0x... address for client to send requests to the members
-    //private Account myAccount;
     private String myAddress;
-    // {clientName: address}
+    // {clientName: address} (other accounts addresses)
     private Map<String, String> addresses;
 
     public Client(String clientName,
                   int port,
                   List<Entity> members,
-                  boolean debug,
                   boolean testEnvironment
     ) {
         this.clientName = clientName;
-        this.debug = false;
 		this.port = port;
         this.members = members;
         this.faultyProcesses = Math.floorDiv(members.size() - 1, 3);
         this.byzantineQuorum = members.size() - faultyProcesses;
         this.memberResponses = new HashMap<>();
         // TODO hardcoded leader
-        this.leaderPort = members.get(0).getPort();
+        this.leaderPort = members.getFirst().getPort();
         this.dcLogger = new DCLogger(Client.class, true);
         this.testEnvironment = testEnvironment;
+        this.myAddress = null;
     }
 
     public void start() throws Exception {
@@ -87,28 +84,29 @@ public class Client {
     }
 
     public void assignAddress() {
+        // TODO -> fix this
         // load the genesis file
-        Block genesisBlock = CommonUtils.loadGenesisBlock();
+        GenesisBlock genesisBlock = CommonUtils.loadGenesisBlock();
 
         // load account
-        String address = null;
         try {
-            address = KeyUtils.hashPublicKey(clientKeys.getPublic());
+            this.myAddress = KeyUtils.hashPublicKey(clientKeys.getPublic());
         } catch (Exception e) {
             dcLogger.error("Error hashing public key: " + e.getMessage());
             throw new RuntimeException(e);
         }
-        this.myAddress = address;
-        dcLogger.verbose("Client address: " + address);
+        dcLogger.verbose("Client address: " + this.myAddress);
         // sanity check, to see if it exists in the genesis block
-        if (genesisBlock.getState() != null &&
-            !genesisBlock.getState().getAccounts().containsKey(address)) {
+        if (genesisBlock != null &&
+                genesisBlock.getAccounts()
+                .stream()
+                .noneMatch(account -> account.getAddress().equals(this.myAddress))) {
             dcLogger.alert("Account not found in genesis block.");
             return;
         }
         // loads remaining addresses
         this.addresses = new HashMap<>();
-        for (Account account : genesisBlock.getState().getAccounts().values()) {
+        for (Account account : genesisBlock.getAccounts()) {
             //if (!account.getAddress().equals(this.myAccount.getAddress())) {
             // TODO -> this should be {address: account}, but it's simpler to type the client name
                 this.addresses.put(account.getName(), account.getAddress());
@@ -127,7 +125,6 @@ public class Client {
         while (running) {
             System.out.print("> ");
             String[] content = input.nextLine().split(" ");
-            //System.out.print("content: " + Arrays.toString(content) + "\n");
             if (content[0].equalsIgnoreCase("QUIT") || content[0].equalsIgnoreCase("EXIT")) {
                 input.close();
                 System.exit(0);
@@ -155,7 +152,6 @@ public class Client {
                 System.out.println("Invalid Command.");
                 printHelpInfo();
             }
-            //sendAppend(content);
         }
     }
 
@@ -163,7 +159,6 @@ public class Client {
 
     private void handleCoinCommand(String[] content, CoinType coinType) {
         switch(content[0].toUpperCase()) {
-            // this is just to help debug, not really important
             case "BALANCE":
                 handleBalanceCommand(content, coinType);
                 break;
@@ -179,22 +174,72 @@ public class Client {
             case "ALLOWANCE":
                 handleAllowanceCommand(content, coinType);
                 break;
+            case "BLACKLIST":
+                handleBlacklist(content, coinType);
+                break;
+            case "UNBLACKLIST":
+                handleUnBlacklist(content, coinType);
+                break;
+            case "ISBLACKLISTED":
+                handleIsBlackListed(content, coinType);
             default:
                 System.out.println("Invalid command.");
         }
     }
 
+    private void handleIsBlackListed(String[] content, CoinType coinType) {
+        if (content.length != 2) {
+            System.out.println("Invalid command. Usage: <CoinType> ISBLACKLISTED <owner> <account>");
+        }
+        String owner = content[1];
+        String account = content[2];
+        if(!addresses.containsKey(owner) || !addresses.containsKey(account)) {
+            System.out.println("Invalid account address!");
+        }
+        String ownerAddr = addresses.get(owner);
+        String accountAddr = addresses.get(account);
+        IsBlackListedMessage msg = new IsBlackListedMessage(ownerAddr, accountAddr, this.port, coinType);
+        broadcastMessage(msg);
+    }
+
+    private void handleBlacklist(String[] content, CoinType coinType) {
+        if (content.length != 2) {
+            System.out.println("Invalid command. Usage: <CoinType> BLACKLIST <address>");
+            return;
+        }
+        String nameAddress = content[1];
+        if (!addresses.containsKey(nameAddress)) {
+            System.out.println("Invalid account address!");
+            return;
+        }
+        String addr = addresses.get(nameAddress);
+        TransferMessage msg = new TransferMessage(this.myAddress, null, addr, null, coinType, nonce, TransactionType.BLACKLIST);
+        sendMessageToLeader(msg);
+    }
+
+    private void handleUnBlacklist(String[] content, CoinType coinType) {
+        if (content.length != 2) {
+            System.out.println("Invalid command. Usage: <CoinType> UNBLACKLIST <address>");
+            return;
+        }
+        String nameAddress = content[1];
+        if (!addresses.containsKey(nameAddress)) {
+            System.out.println("Invalid account address!");
+            return;
+        }
+        String addr = addresses.get(nameAddress);
+        TransferMessage msg = new TransferMessage(this.myAddress, null, addr, null, coinType, nonce, TransactionType.UNBLACKLIST);
+        sendMessageToLeader(msg);
+    }
+
     private void handleTransferFromCommand(String[] content, CoinType coinType) {
         if (content.length != 4) {
-            dcLogger.log("Invalid command. Usage: <CoinType> TRANSFER_FROM <owner> <to> <amount>");
+            System.out.println("Invalid command. Usage: <CoinType> TRANSFER_FROM <owner> <to> <amount>");
             return;
         }
         String nameOfOwnerAddr = content[1];
         String nameOfToAddr = content[2];
         BigInteger amount = BigInteger.valueOf(Long.parseLong(content[3]));
-        dcLogger.verbose("nameOfOwnerAddr: " + nameOfOwnerAddr);
-        dcLogger.verbose("nameOfToAddress: " + nameOfToAddr);
-        dcLogger.verbose("addresses: " + addresses);
         if (!addresses.containsKey(nameOfOwnerAddr)) {
             System.out.println("Invalid owner account address!");
             return;
@@ -205,38 +250,36 @@ public class Client {
         }
         String ownerAddr = addresses.get(nameOfOwnerAddr);
         String toAddr = addresses.get(nameOfToAddr);
-        String fromAddress = this.myAddress;
         // the invoker (myself, the client) is the spender
         TransferMessage msg = new TransferMessage(ownerAddr, this.myAddress, toAddr, amount, coinType, nonce, TransactionType.TRANSFER_FROM);
+
         String dataToSign = msg.getDataToSign();
-        dcLogger.verbose("dataToSign: " + dataToSign);
         String signature = Security.makeDS(dataToSign, clientKeys.getPrivate());
         msg.setSignature(signature);
-        // send the message to the leader
-        perfectLink.sendMessage(msg, leaderPort);
-        dcLogger.verbose("Sent message: " + msg);
-        incrementNonce();
+
+        sendMessageToLeader(msg);
     }
 
     private void handleAllowanceCommand(String[] content, CoinType coinType) {
-        if (content.length != 2) {
-            dcLogger.log("Invalid command. Usage: <CoinType> ALLOWANCE <spender>");
+        if (content.length != 3) {
+            System.out.println("Invalid command. Usage: <CoinType> ALLOWANCE <owner> <spender>");
             return;
         }
-        String spender = content[1];
+        String owner = content[1];
+        String spender = content[2];
         if (!addresses.containsKey(spender)) {
             System.out.println("Invalid account address!");
             return;
-        };
+        }
         String spenderAddr = addresses.get(spender);
-        // TODO -> acho que o spender address sou eu (?)
-        AllowanceMessage msg = new AllowanceMessage(this.myAddress, spenderAddr, this.port, coinType);
+        String ownerAddr = addresses.get(owner);
+        AllowanceMessage msg = new AllowanceMessage(ownerAddr, spenderAddr, this.port, coinType);
         broadcastMessage(msg);
     }
 
     private void handleApproveCommand(String[] content, CoinType coinType) {
         if (content.length != 3) {
-            dcLogger.log("Invalid command. Usage: <CoinType> APPROVE <spender> <amount>");
+            System.out.println("Invalid command. Usage: <CoinType> APPROVE <spender> <amount>");
             return;
         }
         String spender = content[1];
@@ -250,54 +293,44 @@ public class Client {
         String dataToSign = msg.getDataToSign();
         String signature = Security.makeDS(dataToSign, clientKeys.getPrivate());
         msg.setSignature(signature);
-        perfectLink.sendMessage(msg, leaderPort);
-        dcLogger.verbose("Sent message: " + msg);
-        incrementNonce();
+        sendMessageToLeader(msg);
     }
 
     private void handleTransferCommand(String[] content, CoinType coinType) {
-        if (content.length == 3) {
-            String nameOfToAddress = content[1];
-            dcLogger.verbose("nameOfToAddress: " + nameOfToAddress);
-            dcLogger.verbose("addresses: " + addresses);
-            if (!addresses.containsKey(nameOfToAddress)) {
-                System.out.println("Invalid account address!");
-                return;
-            }
-            String toAddress = addresses.get(nameOfToAddress);
-            BigInteger amount = BigInteger.valueOf(Long.parseLong(content[2]));
-            // TODO check if he has enough balance here and amount (?)
-            String fromAddress = this.myAddress;
-            TransferMessage msg = new TransferMessage(fromAddress, null, toAddress, amount, coinType, nonce, TransactionType.TRANSFER);
-            String dataToSign = msg.getDataToSign();
-            String signature = Security.makeDS(dataToSign, clientKeys.getPrivate());
-            msg.setSignature(signature);
-            // send the message to the leader
-            perfectLink.sendMessage(msg, leaderPort);
-            dcLogger.verbose("Sent message: " + msg);
-            incrementNonce();
-        } else {
-            dcLogger.log("Invalid command. Usage: <CoinType> TRANSFER <address> <amount>");
+        if (content.length != 3) {
+            System.out.println("Invalid command. Usage: <CoinType> TRANSFER <address> <amount>");
+            return;
         }
+        String nameOfToAddress = content[1];
+        if (!addresses.containsKey(nameOfToAddress)) {
+            System.out.println("Invalid account address!");
+            return;
+        }
+        String toAddress = addresses.get(nameOfToAddress);
+        BigInteger amount = BigInteger.valueOf(Long.parseLong(content[2]));
+        // TODO check if he has enough balance here and amount (?)
+        TransferMessage msg = new TransferMessage(this.myAddress, null, toAddress, amount, coinType, nonce, TransactionType.TRANSFER);
+        String dataToSign = msg.getDataToSign();
+        String signature = Security.makeDS(dataToSign, clientKeys.getPrivate());
+        msg.setSignature(signature);
+        sendMessageToLeader(msg);
     }
 
     private void handleBalanceCommand(String[] content, CoinType coinType) {
-        if (content.length == 2) {
-            String accName = content[1];
-            // TODO -> só podemos verificar o balance da nossa conta?
-            if (!addresses.containsKey(accName)) {
-                System.out.println("Invalid account address!");
-                return;
-            }
-            String addr = addresses.get(accName);
-            // broadcast request to members
-            BalanceOfMessage msg = new BalanceOfMessage(addr, this.port, coinType);
-            broadcastMessage(msg);
-
-
-        } else {
+        if (content.length != 2) {
             System.out.println("Invalid command. Usage: DepCoin BALANCE <address>");
+            return;
         }
+        String accName = content[1];
+        if (!addresses.containsKey(accName)) {
+            System.out.println("Invalid account address!");
+            return;
+        }
+        String addr = addresses.get(accName);
+
+        // broadcast request to members
+        BalanceOfMessage msg = new BalanceOfMessage(addr, this.port, coinType);
+        broadcastMessage(msg);
     }
 
     private void broadcastMessage(Message message) {
@@ -305,16 +338,20 @@ public class Client {
             perfectLink.sendMessage(message, member.getPort());
             dcLogger.log("Sent message: " + message);
         }
+        incrementNonce();
+    }
+
+    private void sendMessageToLeader(Message message) {
+        perfectLink.sendMessage(message, leaderPort);
+        incrementNonce();
+        dcLogger.log("Sent message to leader: " + message);
     }
 
     public void sendAppend(String content) {
         AppendMessage msg = new AppendMessage(content, this.port, nonce);
         String signature = Security.makeDS(msg.getDataToSign(), clientKeys.getPrivate());
         msg.setSignature(signature);
-        perfectLink.sendMessage(msg, leaderPort);
-        dcLogger.log("Sent message: " + msg);
-        // increment nonce after sending
-        nonce++;
+        sendMessageToLeader(msg);
     }
 
     private void deliverMessage(BlockingQueue<Message> messageQueue) {
@@ -379,7 +416,10 @@ public class Client {
         System.out.println("- TRANSFER <address> <amount>");
         System.out.println("- TRANSFER_FROM <owner> <to> <amount>");
         System.out.println("- APPROVE <spender> <amount>");
-        System.out.println("- ALLOWANCE <spender>");
+        System.out.println("- ALLOWANCE <owner> <spender>");
+        System.out.println("- BLACKLIST <address>");
+        System.out.println("- UNBLACKLIST <address>");
+        System.out.println("- ISBLACKLISTED <owner> <account>");
     }
 
     private void incrementNonce() {

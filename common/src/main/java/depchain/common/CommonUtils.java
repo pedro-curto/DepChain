@@ -1,11 +1,11 @@
 package depchain.common;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
+import com.google.gson.*;
+import depchain.common.domain.Account;
 import depchain.common.domain.Block;
 import depchain.common.domain.Entity;
+import depchain.common.domain.GenesisBlock;
+import depchain.common.domain.ContractData;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
@@ -101,22 +101,13 @@ public class CommonUtils {
 		return members;
 	}
 
-	public static Block loadGenesisBlock() {
-		Path currentDir = Paths.get(System.getProperty("user.dir"));
-		Path rootDir = currentDir.getParent();
-		Path genesisPath = rootDir.resolve("genesis-file.json");
-
-		// load the json file
-		String jsonString = null;
-		try {
-			jsonString = Files.readString(genesisPath);
-		} catch (IOException e) {
-			System.err.println("Error reading genesis file: " + e.getMessage());
+	public static GenesisBlock loadGenesisBlock() {
+		JsonObject rootJson = getGenesisJsonObject();
+		if (rootJson == null) {
+			System.err.println("Genesis block JSON is null");
 			return null;
 		}
-		JsonElement jsonElement = JsonParser.parseString(jsonString);
-		JsonObject jsonObject = jsonElement.getAsJsonObject();
-		return JsonAdapter.parseBlock(jsonObject, true);
+		return JsonAdapter.parseGenesisBlock(rootJson);
 	}
 
 	public static JsonObject getGenesisJsonObject() {

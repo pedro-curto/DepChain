@@ -6,7 +6,6 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import depchain.common.*;
 import depchain.common.domain.*;
-import depchain.common.messaging.TransactionType;
 import depchain.common.messaging.*;
 import depchain.common.messaging.consensus.*;
 import depchain.common.messaging.library.*;
@@ -50,6 +49,7 @@ public class Member {
     private SimpleWorld world;
     private ByteArrayOutputStream bos;
     // for transfer processing
+    private ContractFunctions contractFunctions;
     private final ScheduledExecutorService blockSched = Executors.newSingleThreadScheduledExecutor();
     private static final int BLOCK_TIMEOUT_SECONDS = 5;
 
@@ -97,56 +97,67 @@ public class Member {
         this.bos = new ByteArrayOutputStream();
         PrintStream ps = new PrintStream(bos);
         StandardJsonTracer tracer = new StandardJsonTracer(ps, true, true, true, true);
-        // load accounts
-        JsonObject rootJson = CommonUtils.getGenesisJsonObject();
-        JsonObject stateObject = CommonUtils.jsonGetter(rootJson, "state");
-        JsonArray accountsArray = stateObject.getAsJsonArray("accounts");
-        List<Account> accounts = new ArrayList<>();
-        boolean first = true;
-        for (JsonElement accountEl : accountsArray) {
-            JsonObject accountObj = accountEl.getAsJsonObject();
-            String accountAddrStr = accountObj.get("address").getAsString();
-            String name = accountObj.get("name").getAsString();
-            long balance = accountObj.get("balance").getAsLong();
-            // create address and balance to give to MutableAccount
-            Address accountAddr = Address.fromHexString(accountAddrStr);
-            Wei balanceWei = Wei.fromEth(balance);
-            dcLogger.log("Loading account with address: " + accountAddr + " and balance: " + balanceWei);
-            Account account = new Account(accountAddrStr, balance);
-            accounts.add(account);
-            // TODO -> get a better condition for the blacklist owner?
-            if (first) {
-                // deploys the contract with himself as sender
-                dcLogger.log("Deploying contract...");
-                JsonObject contractObj = CommonUtils.jsonGetter(stateObject, "contract");
-                String contractAddr = contractObj.get("address").getAsString();
-                dcLogger.log("Contract address: " + contractAddr);
-                this.evmExecutor = ContractFunctions.deployContract(accountAddrStr, contractAddr, this.world, tracer);
-                first = false;
-                continue; // avoids creating the account again
-            }
-            // TODO -> if I do this it's indifferent because every account starts at 0, am i doing it right?
-            // add account to world
-            //this.world.createAccount(accountAddr, 0, balanceWei);
-            // create account
+        GenesisBlock genesisBlock = CommonUtils.loadGenesisBlock();
+        if (genesisBlock == null) {
+            throw new RuntimeException("Failed to load genesis block");
         }
+        dcLogger.log("Genesis block: " + genesisBlock);
+        // deploy contract
+        ContractData contractData = genesisBlock.getContractData();
+        String contractAddr = contractData.getAddress();
+        String ownerAddr = contractData.getOwnerAddress();
+        dcLogger.verbose("Owner: " + ownerAddr);
+        this.evmExecutor = ContractFunctions.deployContract(ownerAddr, contractAddr, this.world, tracer, contractData.getDeploymentBytecode(), contractData.getRuntimeBytecode());
+
         // make some calls to basic info
         ContractFunctions.callName(this.evmExecutor, this.bos);
         ContractFunctions.callSymbol(this.evmExecutor, this.bos);
         ContractFunctions.callTotalSupply(this.evmExecutor, this.bos);
         ContractFunctions.callDecimals(this.evmExecutor, this.bos);
-        // construct initial blockchain state
-        Block genesisBlock = CommonUtils.loadGenesisBlock();
-        if (genesisBlock == null) {
-            throw new RuntimeException("Failed to load genesis block");
+
+        // prints all balances
+        for (Account account: genesisBlock.getAccounts()) {
+            Address addr = Address.fromHexString(account.getAddress());
+            ContractFunctions.callBalanceOf(this.evmExecutor, this.bos, addr);
         }
-        this.blockChainState = new BlockChainState(accounts, genesisBlock);
-        // prevHash (null), transactions (empty), blockNumber (1), timestamp (?)
-        //String hash = CommonUtils.jsonGetter(rootJson, "hash").getAsString();
-        //long timestamp = System.currentTimeMillis();
-        //// TODO -> get the timestamp from the genesis file
-        //Block genesisBlock = new Block(null, new ArrayList<>(), 1, timestamp);
-        //this.blockChainState = new BlockChainState(accounts, genesisBlock);
+
+        // construct initial blockchain state
+        this.blockChainState = new BlockChainState(genesisBlock.getAccounts(), genesisBlock);
+        // load accounts
+//        JsonObject rootJson = CommonUtils.getGenesisJsonObject();
+//        JsonObject stateObject = CommonUtils.jsonGetter(rootJson, "state");
+//        JsonArray accountsArray = stateObject.getAsJsonArray("accounts");
+//        List<Account> accounts = new ArrayList<>();
+//        //boolean first = true;
+//        JsonObject contractObj = CommonUtils.jsonGetter(stateObject, "contract");
+//        String owner = CommonUtils.jsonGetter(stateObject, "owner").getAsString();
+//        dcLogger.log("Owner: " + owner);
+//        for (JsonElement accountEl : accountsArray) {
+//            JsonObject accountObj = accountEl.getAsJsonObject();
+//            String accountAddrStr = accountObj.get("address").getAsString();
+//            String name = accountObj.get("name").getAsString();
+//            long balance = accountObj.get("balance").getAsLong();
+//            // create address and balance to give to MutableAccount
+//            Address accountAddr = Address.fromHexString(accountAddrStr);
+//            //Wei balanceWei = Wei.fromEth(balance);
+//            dcLogger.log("Loading account with address: " + accountAddr + " and balance: " + balance);
+//            Account account = new Account(accountAddrStr, balance);
+//            accounts.add(account);
+//            // TODO -> get a better condition for the blacklist owner?
+//            if (first) {
+//                // deploys the contract with himself as sender
+//                dcLogger.log("Deploying contract...");
+//                String contractAddr = contractObj.get("address").getAsString();
+//                dcLogger.log("Contract address: " + contractAddr);
+//                this.evmExecutor = ContractFunctions.deployContract(accountAddrStr, contractAddr, this.world, tracer);
+//                first = false;
+//                continue; // avoids creating the account again
+//            }
+//            // TODO -> if I do this it's indifferent because every account starts at 0, am i doing it right?
+//            // add account to world
+//            //this.world.createAccount(accountAddr, 0, balanceWei);
+//            // create account
+//        }
     }
 
     /***
@@ -211,6 +222,9 @@ public class Member {
                         AllowanceMessage allowanceMessage = (AllowanceMessage) message;
                         handleAllowanceMessage(allowanceMessage);
                         break;
+                    case IS_BLACK_LISTED:
+                        IsBlackListedMessage isBlackListedMessage = (IsBlackListedMessage) message;
+                        handleIsBlackListedMessage(isBlackListedMessage);
                     default:
                         dcLogger.log("Unknown message type");
                 }
@@ -338,6 +352,19 @@ public class Member {
             dcLogger.log("Unknown coin type");
         }
         dcLogger.log("[" + allowanceMessage.getCoinType() + "] Allowance of " + owner + " to " + spender + ": " + allowance);
+        // TODO responder a client
+    }
+
+    private void handleIsBlackListedMessage(IsBlackListedMessage isBlackListedMessage) {
+        dcLogger.verbose("Received: " + isBlackListedMessage);
+        Address owner = Address.fromHexString(isBlackListedMessage.getOwner());
+        Address spender = Address.fromHexString(isBlackListedMessage.getAccount());
+        boolean result = false;
+        if (isBlackListedMessage.getCoinType() == CoinType.ISTCOIN) {
+            result = ISTCoinHandler.handleIsBlackListed(owner, spender, this.evmExecutor, this.bos);
+        } else if (isBlackListedMessage.getCoinType() == CoinType.DEPCOIN) {
+            dcLogger.error("IsBlacklisted not implemented in DepCoin");
+        }
         // TODO responder a client
     }
 
@@ -586,7 +613,7 @@ public class Member {
         dcLogger.log("BlockStr: " + blockStr);
         JsonObject blockJson = JsonParser.parseString(blockStr).getAsJsonObject();
         dcLogger.log("BlockJson: " + blockJson.toString());
-        Block block = JsonAdapter.parseBlock(blockJson, false);
+        Block block = JsonAdapter.parseBlock(blockJson);
         dcLogger.log("Executing transactions in block: " + block);
 
         handleTransactions(block.getTransactions());

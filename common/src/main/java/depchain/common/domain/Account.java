@@ -15,6 +15,14 @@ public class Account {
         this.name = "";
         this.nonce = 0;
     }
+
+    public Account(String address, String name, long balance) {
+        this.address = address;
+        this.name = name;
+        this.balance = BigInteger.valueOf(balance);
+        this.nonce = 0;
+    }
+
     public Account(Account account) {
         this.address = account.address;
         this.balance = account.balance;
