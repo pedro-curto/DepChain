@@ -322,7 +322,7 @@ public class PerfectLink {
             case IS_BLACK_LISTED_REPLY:
                 return gson.fromJson(received, IsBlackListedReply.class);
             default:
-                dcLogger.log("(messageFromJson) Unknown message type");
+                dcLogger.log("(messageFromJson) Unknown message type: " + message.getType());
                 return message;
         }
     }

@@ -202,7 +202,7 @@ public class ContractFunctions {
         executor.execute();
     }
 
-    public static boolean callIsBlacklisted(EVMExecutor executor, ByteArrayOutputStream bos, Address owner, Address account) {
+    public static boolean callIsBlacklisted(EVMExecutor executor, ByteArrayOutputStream bos, Address account) {
         executor.callData(Bytes.fromHexString(ISBLACKLISTED_ID
                 + ContractUtils.padHexStringTo256Bit(account.toHexString())));
         executor.execute();

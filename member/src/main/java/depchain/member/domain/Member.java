@@ -97,7 +97,7 @@ public class Member {
         if (genesisBlock == null) {
             throw new RuntimeException("Failed to load genesis block");
         }
-        dcLogger.log("Genesis block: " + genesisBlock);
+        //dcLogger.log("Genesis block: " + genesisBlock);
         // deploy contract
         ContractData contractData = genesisBlock.getContractData();
         String contractAddr = contractData.getAddress();
@@ -119,41 +119,6 @@ public class Member {
 
         // construct initial blockchain state
         this.blockChainState = new BlockChainState(genesisBlock.getAccounts(), genesisBlock);
-        // load accounts
-//        JsonObject rootJson = CommonUtils.getGenesisJsonObject();
-//        JsonObject stateObject = CommonUtils.jsonGetter(rootJson, "state");
-//        JsonArray accountsArray = stateObject.getAsJsonArray("accounts");
-//        List<Account> accounts = new ArrayList<>();
-//        //boolean first = true;
-//        JsonObject contractObj = CommonUtils.jsonGetter(stateObject, "contract");
-//        String owner = CommonUtils.jsonGetter(stateObject, "owner").getAsString();
-//        dcLogger.log("Owner: " + owner);
-//        for (JsonElement accountEl : accountsArray) {
-//            JsonObject accountObj = accountEl.getAsJsonObject();
-//            String accountAddrStr = accountObj.get("address").getAsString();
-//            String name = accountObj.get("name").getAsString();
-//            long balance = accountObj.get("balance").getAsLong();
-//            // create address and balance to give to MutableAccount
-//            Address accountAddr = Address.fromHexString(accountAddrStr);
-//            //Wei balanceWei = Wei.fromEth(balance);
-//            dcLogger.log("Loading account with address: " + accountAddr + " and balance: " + balance);
-//            Account account = new Account(accountAddrStr, balance);
-//            accounts.add(account);
-//            // TODO -> get a better condition for the blacklist owner?
-//            if (first) {
-//                // deploys the contract with himself as sender
-//                dcLogger.log("Deploying contract...");
-//                String contractAddr = contractObj.get("address").getAsString();
-//                dcLogger.log("Contract address: " + contractAddr);
-//                this.evmExecutor = ContractFunctions.deployContract(accountAddrStr, contractAddr, this.world, tracer);
-//                first = false;
-//                continue; // avoids creating the account again
-//            }
-//            // TODO -> if I do this it's indifferent because every account starts at 0, am i doing it right?
-//            // add account to world
-//            //this.world.createAccount(accountAddr, 0, balanceWei);
-//            // create account
-//        }
     }
 
     /***
@@ -208,11 +173,18 @@ public class Member {
                         break;
                     case TRANSFER:
                         TransferMessage transferMessage = (TransferMessage) message;
+                        dcLogger.log("Received: " + transferMessage);
                         // TODO check signature before incrementing nonce??
-                        if(isValidClientNonce(transferMessage.getNonce(), transferMessage.getPort())) {
-                            // TODO can have concurrency bug between validation and nonce increment!
-                            setClientNonce(transferMessage.getNonce(), transferMessage.getPort());
-                            this.transferQueue.put(transferMessage);
+                        synchronized (this) {
+                            // synchronized for avoiding concurrent modification/checking
+                            if (isValidClientNonce(transferMessage.getNonce(), transferMessage.getClientPort())) {
+                                setClientNonce(transferMessage.getNonce(), transferMessage.getClientPort());
+                                this.transferQueue.put(transferMessage);
+                            } else {
+                                dcLogger.verbose("Got client( " + transferMessage.getClientPort() + ") nonce: " +
+                                        transferMessage.getNonce() + " but current: "
+                                        + getClientNonce(transferMessage.getClientPort()));
+                            }
                         }
                         break;
                     case BALANCE_OF:
@@ -226,6 +198,7 @@ public class Member {
                     case IS_BLACK_LISTED:
                         IsBlackListedMessage isBlackListedMessage = (IsBlackListedMessage) message;
                         handleIsBlackListedMessage(isBlackListedMessage);
+                        break;
                     default:
                         dcLogger.log("Unknown message type");
                 }
@@ -258,7 +231,7 @@ public class Member {
                     msg.getTo(),
                     msg.getValue(),
                     msg.getSignature(),
-                    msg.getNonce(),
+                    msg.getNonce(), // TODO here should be a transaction nonce and not a client nonce
                     msg.getTransactionType(),
                     msg.getCoinType(),
                     msg.getClientPort()
@@ -345,7 +318,7 @@ public class Member {
         dcLogger.log("Balance of " + addr + ": " + balance);
 
         BalanceReply balanceReply = new BalanceReply(
-                true, // TODO always send success to client, maybe balance could error...
+                true,
                 this.consensusState.getInstance(),
                 balanceOfMessage.getAddress(),
                 balance,
@@ -373,7 +346,7 @@ public class Member {
         dcLogger.log("[" + allowanceMessage.getCoinType() + "] Allowance of " + owner + " to " + spender + ": " + allowance);
 
         AllowanceReply allowanceReply = new AllowanceReply(
-                true, // TODO always send success to client, maybe allowance could error...
+                true,
                 this.consensusState.getInstance(),
                 allowanceMessage.getOwner(),
                 allowanceMessage.getSpender(),
@@ -388,18 +361,16 @@ public class Member {
 
     private void handleIsBlackListedMessage(IsBlackListedMessage isBlackListedMessage) {
         dcLogger.verbose("Received: " + isBlackListedMessage);
-        Address owner = Address.fromHexString(isBlackListedMessage.getOwner());
-        Address spender = Address.fromHexString(isBlackListedMessage.getAccount());
+        Address accountToCheck = Address.fromHexString(isBlackListedMessage.getAccount());
         boolean result = false;
         if (isBlackListedMessage.getCoinType() == CoinType.ISTCOIN) {
-            result = ISTCoinHandler.handleIsBlackListed(owner, spender, this.evmExecutor, this.bos);
+            result = ISTCoinHandler.handleIsBlackListed(accountToCheck, this.evmExecutor, this.bos);
         } else if (isBlackListedMessage.getCoinType() == CoinType.DEPCOIN) {
             dcLogger.error("IsBlacklisted not implemented in DepCoin");
         }
         IsBlackListedReply isBlackListedReply = new IsBlackListedReply(
-                true, // TODO always send success to client, maybe isBlackListed could error...
+                true,
                 this.consensusState.getInstance(),
-                isBlackListedMessage.getOwner(),
                 isBlackListedMessage.getAccount(),
                 result,
                 isBlackListedMessage.getCoinType(),

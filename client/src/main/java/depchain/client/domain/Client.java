@@ -160,8 +160,6 @@ public class Client {
         }
     }
 
-
-
     private void handleCoinCommand(String[] content, CoinType coinType) {
         switch(content[0].toUpperCase()) {
             case "BALANCE":
@@ -193,18 +191,16 @@ public class Client {
     }
 
     private void handleIsBlackListed(String[] content, CoinType coinType) {
-        if (content.length != 3) {
-            System.out.println("Invalid command. Usage: <CoinType> ISBLACKLISTED <owner> <account>");
+        if (content.length != 2) {
+            System.out.println("Invalid command. Usage: <CoinType> ISBLACKLISTED <address>");
             return;
         }
-        String owner = content[1];
-        String account = content[2];
-        if(!addresses.containsKey(owner) || !addresses.containsKey(account)) {
+        String account = content[1];
+        if(!addresses.containsKey(account)) {
             System.out.println("Invalid account address!");
         }
-        String ownerAddr = addresses.get(owner);
         String accountAddr = addresses.get(account);
-        IsBlackListedMessage msg = new IsBlackListedMessage(ownerAddr, accountAddr, this.port, coinType);
+        IsBlackListedMessage msg = new IsBlackListedMessage(accountAddr, this.port, coinType);
         broadcastMessage(msg);
     }
 
@@ -442,8 +438,9 @@ public class Client {
                 case IS_BLACK_LISTED_REPLY:
                     IsBlackListedReply isBlackListedReply = (IsBlackListedReply) message;
                     handleIsBlackListedReply(isBlackListedReply);
+                    break;
                 default:
-                    System.out.println("Reply type does not exist");
+                    System.out.println("Reply type does not exist: " + message.getType());
             }
         }
     }
@@ -454,9 +451,9 @@ public class Client {
         // reached quorum of f+1 equal messages
         if (memberReplyMessages.get(reply) == this.faultyProcesses+1) {
             System.out.println("IsBlacklisted: {");
-            System.out.println("owner "+ reply.getOwner());
             System.out.println("account: " + reply.getAccount());
             System.out.println("result: " + reply.isBlackListed());
+            System.out.println("success: " + reply.getSuccess());
             System.out.println("}");
         }
         else {
@@ -484,10 +481,12 @@ public class Client {
         // reached quorum of f+1 equal messages
         if (memberReplyMessages.get(reply) == this.faultyProcesses+1) {
             System.out.println("Transfer: {");
+            System.out.println("type: " + reply.getType());
             System.out.println("From: " + reply.getSenderAddr());
             System.out.println("To: " + reply.getRecipientAddr());
             if (!reply.getSenderAddr().isEmpty()) System.out.println("Spender: " + reply.getSenderAddr());
             System.out.println("Amount: " + reply.getAmount());
+            System.out.println("success: " + reply.getSuccess());
             System.out.println("}");
         }
         else {
@@ -502,6 +501,7 @@ public class Client {
             System.out.println("Balance: {");
             System.out.println("address "+ reply.getAddress());
             System.out.println("balance: " + reply.getBalance());
+            System.out.println("success: " + reply.getSuccess());
             System.out.println("}");
         }
         else {
@@ -518,6 +518,7 @@ public class Client {
             System.out.println("owner: " + reply.getOwner());
             System.out.println("spender: " + reply.getSpender());
             System.out.println("amount: " + reply.getAllowance());
+            System.out.println("success: " + reply.getSuccess());
             System.out.println("}");
         }
         else {
@@ -540,7 +541,7 @@ public class Client {
         System.out.println("- ALLOWANCE <owner> <spender>");
         System.out.println("- BLACKLIST <address>");
         System.out.println("- UNBLACKLIST <address>");
-        System.out.println("- ISBLACKLISTED <owner> <account>");
+        System.out.println("- ISBLACKLISTED <address>");
     }
 
     private void incrementNonce() {

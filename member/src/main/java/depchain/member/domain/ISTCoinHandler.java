@@ -19,27 +19,27 @@ public class ISTCoinHandler {
 			case APPROVE:
 				return handleApprove(tx, evmExecutor, bos);
 			case BLACKLIST:
-				return handleBlackList(tx, evmExecutor);
+				return handleBlackList(tx, evmExecutor, bos);
 			case UNBLACKLIST:
-				return handleUnBlackList(tx, evmExecutor);
+				return handleUnBlackList(tx, evmExecutor, bos);
 			default:
 				System.err.println("Unknown transaction type: " + tx.getTransactionType());
 				return false;
 		}
 	}
 
-	private static boolean handleBlackList(Transaction tx, EVMExecutor evmExecutor) {
+	private static boolean handleBlackList(Transaction tx, EVMExecutor evmExecutor, ByteArrayOutputStream bos) {
 		Address owner = Address.fromHexString(tx.getSender());
 		Address accountToBlackList = Address.fromHexString(tx.getRecipient());
 		ContractFunctions.addToBlacklist(evmExecutor, owner, accountToBlackList);
-		return true;
+		return ContractFunctions.callIsBlacklisted(evmExecutor, bos, accountToBlackList);
 	}
 
-	private static boolean handleUnBlackList(Transaction tx, EVMExecutor evmExecutor) {
+	private static boolean handleUnBlackList(Transaction tx, EVMExecutor evmExecutor, ByteArrayOutputStream bos) {
 		Address owner = Address.fromHexString(tx.getSender());
 		Address accountToBlackList = Address.fromHexString(tx.getRecipient());
 		ContractFunctions.removeFromBlacklist(evmExecutor, owner, accountToBlackList);
-		return true;
+		return !ContractFunctions.callIsBlacklisted(evmExecutor, bos, accountToBlackList);
 	}
 
 	private static boolean handleTransfer(Transaction tx, EVMExecutor evmExecutor, ByteArrayOutputStream bos) {
@@ -71,7 +71,7 @@ public class ISTCoinHandler {
 		return ContractFunctions.callAllowance(evmExecutor, bos, owner, spender);
 	}
 
-	public static boolean handleIsBlackListed(Address owner, Address accountToCheck, EVMExecutor evmExecutor, ByteArrayOutputStream bos) {
-		return ContractFunctions.callIsBlacklisted(evmExecutor, bos, owner, accountToCheck);
+	public static boolean handleIsBlackListed(Address accountToCheck, EVMExecutor evmExecutor, ByteArrayOutputStream bos) {
+		return ContractFunctions.callIsBlacklisted(evmExecutor, bos, accountToCheck);
 	}
 }

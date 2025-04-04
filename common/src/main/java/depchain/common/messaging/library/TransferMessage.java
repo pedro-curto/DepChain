@@ -90,6 +90,8 @@ public class TransferMessage extends Message {
 				", nonce=" + nonce +
 				", coinType=" + super.getCoinType() +
 				", transactionType=" + transactionType +
+				", clientPort=" + clientPort +
+				", port=" + super.getPort() +
 				'}';
 	}
 
