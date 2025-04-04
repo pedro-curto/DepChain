@@ -2,14 +2,13 @@ package depchain.client.domain;
 
 import depchain.common.*;
 import depchain.common.domain.Account;
-import depchain.common.domain.Block;
 import depchain.common.domain.Entity;
 import depchain.common.domain.GenesisBlock;
+import depchain.common.domain.Transaction;
 import depchain.common.messaging.*;
 import depchain.common.messaging.CoinType;
 import depchain.common.messaging.library.*;
 
-import javax.xml.transform.TransformerFactory;
 import java.math.BigInteger;
 import java.net.DatagramSocket;
 import java.security.KeyPair;
@@ -34,11 +33,15 @@ public class Client {
     private BlockingQueue<Message> messageQueue;
     private final DCLogger dcLogger;
     private volatile boolean running = true;
-    private final boolean testEnvironment;
     // 0x... address for client to send requests to the members
     private String myAddress;
     // {clientName: address} (other accounts addresses)
     private Map<String, String> addresses;
+    // for tests
+    private BigInteger lastBalance;
+    private final boolean testEnvironment;
+    private TransferReply lastTransferReply;
+    private Transaction lastExecutedTransaction;
 
     private Map<ClientReplyMessage, Integer> memberReplyMessages;
 
@@ -89,7 +92,6 @@ public class Client {
     }
 
     public void assignAddress() {
-        // TODO -> fix this
         // load the genesis file
         GenesisBlock genesisBlock = CommonUtils.loadGenesisBlock();
 
@@ -113,7 +115,7 @@ public class Client {
         this.addresses = new HashMap<>();
         for (Account account : genesisBlock.getAccounts()) {
             //if (!account.getAddress().equals(this.myAccount.getAddress())) {
-            // TODO -> this should be {address: account}, but it's simpler to type the client name
+            // this should be {address: account}, but it's simpler to type the client name
                 this.addresses.put(account.getName(), account.getAddress());
             //}
         }
@@ -348,27 +350,12 @@ public class Client {
             return;
         }
         String nameOfToAddress = content[1];
+        BigInteger amount = BigInteger.valueOf(Long.parseLong(content[2]));
         if (!addresses.containsKey(nameOfToAddress)) {
             System.out.println("Invalid account address!");
             return;
         }
-        String toAddress = addresses.get(nameOfToAddress);
-        BigInteger amount = BigInteger.valueOf(Long.parseLong(content[2]));
-        // TODO check if he has enough balance here and amount (?)
-        TransferMessage msg = new TransferMessage(
-                this.myAddress,
-                null,
-                toAddress,
-                amount,
-                coinType,
-                nonce,
-                TransactionType.TRANSFER,
-                this.port
-        );
-        String dataToSign = msg.getDataToSign();
-        String signature = Security.makeDS(dataToSign, clientKeys.getPrivate());
-        msg.setSignature(signature);
-        sendMessageToLeader(msg);
+        sendTransfer(nameOfToAddress, amount, coinType);
     }
 
     private void handleBalanceCommand(String[] content, CoinType coinType) {
@@ -381,12 +368,44 @@ public class Client {
             System.out.println("Invalid account address!");
             return;
         }
-        String addr = addresses.get(accName);
+        sendGetBalance(accName, coinType);
+    }
 
+    /*------------------------------------------------------------------------*/
+    /*--------------------------- SENDER FUNCTIONS ---------------------------*/
+    /*----- In order for the functions to be callable in test scenarios ------*/
+    /*------------------------------------------------------------------------*/
+
+    // nameOfToAddress, content, coinType
+    public void sendTransfer(String nameOfToAddress, BigInteger amount, CoinType coinType) {
+        String toAddress = addresses.get(nameOfToAddress);
+        TransferMessage msg = new TransferMessage(
+                this.myAddress,
+                "0x",
+                toAddress,
+                amount,
+                coinType,
+                nonce,
+                TransactionType.TRANSFER,
+                this.port
+        );
+        String signature = generateSignature(msg);
+        msg.setSignature(signature);
+        sendMessageToLeader(msg);
+    }
+
+    public void sendGetBalance(String accName, CoinType coinType) {
+        String addr = addresses.get(accName);
         // broadcast request to members
         BalanceOfMessage msg = new BalanceOfMessage(addr, this.port, coinType);
         broadcastMessage(msg);
     }
+
+
+
+    /*------------------------------------------------------------------------*/
+    /*--------------------------- HELPER FUNCTIONS ---------------------------*/
+    /*------------------------------------------------------------------------*/
 
     private void broadcastMessage(Message message) {
         for (Entity member : members) {
@@ -407,6 +426,11 @@ public class Client {
         String signature = Security.makeDS(msg.getDataToSign(), clientKeys.getPrivate());
         msg.setSignature(signature);
         sendMessageToLeader(msg);
+    }
+
+    public String generateSignature(TransferMessage msg) {
+        String dataToSign = msg.getDataToSign();
+        return Security.makeDS(dataToSign, clientKeys.getPrivate());
     }
 
     private void deliverMessage(BlockingQueue<Message> messageQueue) {
@@ -488,6 +512,7 @@ public class Client {
             System.out.println("Amount: " + reply.getAmount());
             System.out.println("success: " + reply.getSuccess());
             System.out.println("}");
+            this.lastTransferReply = reply;
         }
         else {
             System.out.println("Not reached quorum yet.");
@@ -503,6 +528,7 @@ public class Client {
             System.out.println("balance: " + reply.getBalance());
             System.out.println("success: " + reply.getSuccess());
             System.out.println("}");
+            this.lastBalance = reply.getBalance();
         }
         else {
             System.out.println("Not reached quorum yet.");
@@ -546,5 +572,17 @@ public class Client {
 
     private void incrementNonce() {
         this.nonce++;
+    }
+
+    public BigInteger getLastBalance() {
+        return lastBalance;
+    }
+
+    public TransferReply getLastTransferReply() {
+        return lastTransferReply;
+    }
+
+    public void setLastExecutedTransaction(Transaction tx) {
+        this.lastExecutedTransaction = tx;
     }
 }

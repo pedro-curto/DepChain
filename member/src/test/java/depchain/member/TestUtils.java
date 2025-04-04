@@ -1,5 +1,6 @@
 package depchain.member;
 
+import depchain.client.domain.ByzantineClient;
 import depchain.client.domain.Client;
 import depchain.common.domain.Entity;
 import depchain.member.byzantine.*;
@@ -8,6 +9,7 @@ import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Assertions;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -58,5 +60,27 @@ public class TestUtils {
 			}
 		});
 		return client;
+	}
+
+	public static Client startByzantineClient(String name, int port, List<Entity> members, int byzantineType, ExecutorService executor) throws Exception {
+		Client client = new ByzantineClient(name, port, new ArrayList<>(members), byzantineType, true);
+		executor.submit(() -> {
+			try {
+				client.start();
+			} catch (Exception e) {
+				throw new RuntimeException(e);
+			}
+		});
+		return client;
+	}
+
+	public static List<Member> startHonestMembers(int basePort, List<Entity> memberInfo,
+												  List<Entity> clientInfo, ExecutorService executor) throws Exception {
+		Member leader = startMember("pedroribeiro", basePort, memberInfo, clientInfo, executor);
+		Member honest1 = startMember("pedrocurto", basePort + 1, memberInfo, clientInfo, executor);
+		Member honest2 = startMember("rodrigogreedy", basePort + 2, memberInfo, clientInfo, executor);
+		Member honest3 = startMember("dybizantino", basePort + 3, memberInfo, clientInfo, executor);
+		Thread.sleep(5000);
+		return new ArrayList<>(Arrays.asList(leader, honest1, honest2, honest3));
 	}
 }

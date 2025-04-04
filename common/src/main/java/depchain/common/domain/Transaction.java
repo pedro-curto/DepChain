@@ -108,6 +108,21 @@ public class Transaction {
     }
 
     @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || o.getClass() != this.getClass()) return false;
+        Transaction other = (Transaction) o;
+        return this.senderAddr.equals(other.senderAddr) &&
+                this.spenderAddr.equals(other.spenderAddr) &&
+                this.recipientAddr.equals(other.recipientAddr) &&
+                this.amount.equals(other.amount) &&
+                this.nonce == other.nonce &&
+                this.transactionType == other.transactionType &&
+                this.success == other.success &&
+                this.coinType == other.coinType;
+    }
+
+    @Override
     public String toString() {
         return "Transaction{" +
                 "senderAddr='" + senderAddr + '\'' +

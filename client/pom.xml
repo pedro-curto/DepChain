@@ -45,6 +45,8 @@
                     <arguments>
                         <argument>2000</argument>
                         <argument>paulo</argument>
+                        <!--byzantine behaviour-->
+                        <argument>0</argument>
                     </arguments>
                 </configuration>
             </plugin>

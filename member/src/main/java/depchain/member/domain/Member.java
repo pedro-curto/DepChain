@@ -48,6 +48,7 @@ public class Member {
     // for transfer processing
     private final ScheduledExecutorService blockSched = Executors.newSingleThreadScheduledExecutor();
     private static final int BLOCK_TIMEOUT_SECONDS = 5;
+    private ConsensusHandler consensusHandler;
 
     public Member(Config config,
                   DCLogger dcLogger,
@@ -63,6 +64,7 @@ public class Member {
        this.stringChain = bcState;
        this.messageQueue = messageQueue;
        this.appendQueue = appendQueue;
+       this.consensusHandler = new ConsensusHandler(this, dcLogger, cState);
     }
 
     public void start() throws Exception {
@@ -209,11 +211,11 @@ public class Member {
     }
 
     private void processTransferMessages() {
-        // TODO -> order txs by nonce per client
         // aggregates transfers from queue
         List<TransferMessage> tmp = new ArrayList<>();
         List<Transaction> transactions = new ArrayList<>();
         transferQueue.drainTo(tmp);
+        // TODO -> order txs by nonce per client
         if (tmp.isEmpty()) {
             dcLogger.verbose("No transfer messages to process");
             return;
@@ -221,17 +223,17 @@ public class Member {
         // sort tmp based on nonces
         tmp.sort(Comparator.comparingLong(TransferMessage::getNonce));
         for (TransferMessage msg : tmp) {
-            if (!Security.validateTransferMessage(msg)) {
-                dcLogger.alert("Signature for transfer message is invalid: " + msg);
-                continue;
-            }
+//            if (!Security.validateTransferMessage(msg)) {
+//                dcLogger.alert("Signature for transfer message is invalid: " + msg);
+//                continue;
+//            }
             Transaction tx = new Transaction(
                     msg.getFrom(),
                     msg.getSpender(),
                     msg.getTo(),
                     msg.getValue(),
                     msg.getSignature(),
-                    msg.getNonce(), // TODO here should be a transaction nonce and not a client nonce
+                    msg.getNonce(), // TODO here should be a transaction nonce and not a client nonce?
                     msg.getTransactionType(),
                     msg.getCoinType(),
                     msg.getClientPort()
@@ -249,8 +251,8 @@ public class Member {
         JsonObject blockJson = JsonAdapter.serializeBlock(block);
         String blockStr = "BLOCK:" + blockJson;
         AppendMessage appendMessage = new AppendMessage(blockStr, config.getPort(), block.getBlockNumber());
-        dcLogger.verbose("Blockstr: " + blockStr);
-        dcLogger.verbose("Append Message: " + appendMessage);
+        //dcLogger.verbose("Blockstr: " + blockStr);
+        //dcLogger.verbose("Append Message: " + appendMessage);
         try {
             appendQueue.put(appendMessage);
         } catch (InterruptedException e) {
@@ -269,7 +271,7 @@ public class Member {
         dcLogger.log("Received: " + readMessage);
         // sign: current||writeset||instance||epoch
         String dataToSign = consensusState.getCurrent().toString() + consensusState.getWriteset() + consensusState.getInstance() + consensusState.getEpoch();
-        dcLogger.log("Signing data: " + dataToSign);
+        //dcLogger.log("Signing data: " + dataToSign);
         String mySignature = Security.makeDS(dataToSign, Security.getMyPrivateKey(config.getMyName()));
         // don't send own instance of consensus state to message, send a copy or else stack overflow error
         ConsensusState myState = new ConsensusState(config.getMyName(), consensusState.getCurrent(), consensusState.getWriteset());
@@ -409,6 +411,47 @@ public class Member {
         }
     }
 
+    public void doConsensus2() {
+        while (running) {
+            if (config.getLeader().getPort() != config.getPort()) {
+                // if not the leader, this thread will only be responsible for
+                if(!consensusHandler.startConsensusMember()) {
+                    // aborted
+                    consensusHandler.getConsensusState().nextEpoch();
+                }
+                continue;
+            }
+            try {
+                AppendMessage appendMessage = appendQueue.take();
+                // leader must keep the consensus going until a
+                // value is appended to the blockchain
+                boolean finished = false;
+                while (!finished) {
+                    // checks for replays
+                    // TODO -> check client signature here?
+                    // TODO maybe move some code to other function to make it smaller
+                    long lastClientNonce = getClientNonce(appendMessage.getPort());
+                    // if it doesn't start with BLOCK:, it's an append msg
+                    if (!appendMessage.getValue().startsWith("BLOCK:") && appendMessage.getNonce() <= lastClientNonce) {
+                        dcLogger.alert("Received replayed message");
+                        return;
+                    }
+                    ConsensusLeaderState leaderState = (ConsensusLeaderState) consensusState;
+                    if (consensusState.getCurrent().getValue().isEmpty()) {
+                        ValueTimestampPair newValue = new ValueTimestampPair(0, appendMessage.getValue(),
+                                appendMessage.getPort(), appendMessage.getNonce());
+                        newValue.setClientSignature(appendMessage.getSignature());
+                        leaderState.setCurrent(newValue);
+                    }
+                    finished = consensusHandler.startConsenusLeader(leaderState);
+                }
+            } catch (InterruptedException e) {
+                dcLogger.log("Consensus thread was interrupted while waiting for append messages");
+            }
+        }
+    }
+
+
     /***
      * Conditional Collect part of the algorithm
      * @param appendMessage - message with value to be proposed if epoch 0
@@ -422,7 +465,7 @@ public class Member {
             dcLogger.alert("Received replayed message");
             return;
         }
-        dcLogger.log("Received: " + appendMessage);
+        //dcLogger.log("Received: " + appendMessage);
         dcLogger.log("-- STARTING CONSENSUS FOR '" + appendMessage.getValue() + "' --");
 
         // if I am the leader and this is the first epoch I should propose the value
@@ -596,28 +639,39 @@ public class Member {
             return null;
         }
         // TODO -> how to check client signatures for blocks? check for each field?
-        if (leaderValue.getValue().startsWith("BLOCK:")) {
-            // check if each tx in block is valid
-            List<Transaction> txs = JsonAdapter.parseTransactions(leaderValue.getValue());
-            for (Transaction tx : txs) {
-                if (!Security.validateTransaction(tx)) {
-                    dcLogger.error("Signature for transaction is invalid: " + tx);
-                    return null;
-                }
-            }
-
-        } else {
-            // append request (stringchain)
+        if (!leaderValue.getValue().startsWith("BLOCK:")) {
             if (!checkClientSignature(leaderValue)) {
                 dcLogger.error("Leader forged new value");
                 return null;
             }
+            // check if each tx in block is valid
+//            List<Transaction> txs = JsonAdapter.parseTransactions(leaderValue.getValue());
+//            for (Transaction tx : txs) {
+//                if (!Security.validateTransaction(tx)) {
+//                    dcLogger.error("Signature for transaction is invalid: " + tx);
+//                    return null;
+//                }
+//            }
+
         }
+//        else {
+//            // append request (stringchain)
+//            if (!checkClientSignature(leaderValue)) {
+//                dcLogger.error("Leader forged new value");
+//                return null;
+//            }
+//        }
         return leaderValue;
     }
 
     private void handleTransactions(List<Transaction> transactions) {
         for (Transaction tx : transactions) {
+            // start by validating tx, setting success as false if not valid
+            if (!Security.validateTransaction(tx)) {
+                tx.setStatus(false);
+                dcLogger.error("Signature for transaction is invalid: " + tx);
+                continue;
+            }
             boolean result = false;
             if (tx.getCoinType() == CoinType.ISTCOIN) {
                 result = ISTCoinHandler.handleTransaction(tx, this.evmExecutor, this.bos);
@@ -656,7 +710,7 @@ public class Member {
         }
     }
 
-    private void executeTransactions(String value) {
+    public void executeTransactions(String value) {
         // we receive a BLOCK:{jsonOfblock} message
         String blockStr = value.substring("BLOCK:".length()).trim();
         dcLogger.log("BlockStr: " + blockStr);
@@ -808,10 +862,22 @@ public class Member {
     }
 
     public boolean caughtInvalidSignature() {
-        return this.caughtInvalidSignature;
+        return caughtInvalidSignature;
+    }
+
+    public void setCaughtInvalidSignature() {
+        this.caughtInvalidSignature = true;
     }
 
     public String getName() {
         return config.getMyName();
+    }
+
+    public Config getConfig() {
+        return config;
+    }
+
+    public StringChain getStringChain() {
+        return stringChain;
     }
 }
