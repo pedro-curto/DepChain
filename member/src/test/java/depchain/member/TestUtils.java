@@ -3,7 +3,6 @@ package depchain.member;
 import depchain.client.domain.ByzantineClient;
 import depchain.client.domain.Client;
 import depchain.common.domain.Entity;
-import depchain.member.byzantine.*;
 import depchain.member.domain.Member;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Assertions;
@@ -20,7 +19,7 @@ public class TestUtils {
 		client.sendAppend(value);
 		Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
 			for (Member member : members) {
-				Assertions.assertTrue(member.getBlockchainState().contains(value),
+				Assertions.assertTrue(member.getStringChain().contains(value),
 						member.getName() + " should have the value");
 			}
 		});
@@ -62,8 +61,8 @@ public class TestUtils {
 		return client;
 	}
 
-	public static Client startByzantineClient(String name, int port, List<Entity> members, int byzantineType, ExecutorService executor) throws Exception {
-		Client client = new ByzantineClient(name, port, new ArrayList<>(members), byzantineType, true);
+	public static ByzantineClient startByzantineClient(String name, int port, List<Entity> members, int byzantineType, ExecutorService executor) throws Exception {
+		ByzantineClient client = new ByzantineClient(name, port, new ArrayList<>(members), byzantineType, true);
 		executor.submit(() -> {
 			try {
 				client.start();

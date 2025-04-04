@@ -415,7 +415,8 @@ public class Client {
         incrementNonce();
     }
 
-    private void sendMessageToLeader(Message message) {
+    protected void sendMessageToLeader(Message message) {
+        dcLogger.log("Message: " + message);
         perfectLink.sendMessage(message, leaderPort);
         incrementNonce();
         dcLogger.log("Sent message to leader: " + message);
@@ -456,9 +457,15 @@ public class Client {
                     handleAllowanceReply(allowanceReply);
                     break;
                 case STRING_REPLY:
-                    ClientReplyMessage clientReplyMessage = (ClientReplyMessage) message;
-                    handleStringReply(clientReplyMessage);
+                    if (message instanceof ClientReplyMessage clientReplyMessage) {
+                        handleStringReply(clientReplyMessage);
+                    } else {
+                        System.out.println("Received STRING_REPLY but message is not a ClientReplyMessage instance: " + message);
+                    }
                     break;
+                    //ClientReplyMessage clientReplyMessage = (ClientReplyMessage) message;
+                    //handleStringReply(clientReplyMessage);
+                    //break;
                 case IS_BLACK_LISTED_REPLY:
                     IsBlackListedReply isBlackListedReply = (IsBlackListedReply) message;
                     handleIsBlackListedReply(isBlackListedReply);
@@ -584,5 +591,11 @@ public class Client {
 
     public void setLastExecutedTransaction(Transaction tx) {
         this.lastExecutedTransaction = tx;
+        dcLogger.log("Last executed transaction: " + tx);
+        dcLogger.log("tx signature: " + tx.getSignature());
+    }
+
+    public Transaction getLastExecutedTransaction() {
+        return lastExecutedTransaction;
     }
 }

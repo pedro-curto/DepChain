@@ -26,6 +26,15 @@ public class ByzantineClient extends Client {
         return super.generateSignature(msg);
     }
 
+    public void sendTransfer(TransferMessage msg) {
+        if (byzantineType == 2) {
+            super.sendMessageToLeader(msg);
+        } else {
+            // not supposed to use this method
+            throw new UnsupportedOperationException("Not supposed to be used, just for byzantine test");
+        }
+    }
+
     private String generateFakeSignature() {
         byte[] fakeBytes = new byte[256];
         random.nextBytes(fakeBytes);

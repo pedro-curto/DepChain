@@ -58,6 +58,22 @@ public class TransferReply extends ClientReplyMessage {
         return transactionType;
     }
 
+    @Override
+    public String toString() {
+        return "TransferReply{" +
+                "amount=" + amount +
+                ", senderAddr='" + senderAddr + '\'' +
+                ", spenderAddr='" + spenderAddr + '\'' +
+                ", recipientAddr='" + recipientAddr + '\'' +
+                ", transactionType=" + transactionType +
+                ", success=" + super.getSuccess() +
+                ", instanceOfDecision=" + super.getInstanceOfDecision() +
+                ", coinType=" + coinType +
+                ", nonce=" + super.getNonce() +
+                ", memberPort=" + super.getPort() +
+                '}';
+    }
+
     // for hashmap in client
     @Override
     public boolean equals(Object obj) {

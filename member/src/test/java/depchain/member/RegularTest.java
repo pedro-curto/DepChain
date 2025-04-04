@@ -3,6 +3,7 @@ package depchain.member;
 import depchain.client.domain.Client;
 import depchain.common.CommonUtils;
 import depchain.common.domain.Entity;
+import depchain.common.messaging.CoinType;
 import depchain.member.domain.Member;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
@@ -10,6 +11,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -26,7 +28,7 @@ public class RegularTest {
 	private List<Entity> memberInfo;
 	private List<Entity> clientInfo;
 	private ExecutorService executor;
-	private Client client;
+	private List<Client> clients;
 	private List<Member> members;
 
 	@BeforeEach
@@ -41,7 +43,9 @@ public class RegularTest {
 
 	@AfterEach
 	void tearDown() throws InterruptedException {
-		client.stop();
+		for (Client client : clients) {
+			client.stop();
+		}
 		// kills member threads
 		for (Member member : members) {
 			member.stop();
@@ -52,14 +56,32 @@ public class RegularTest {
 			System.err.println("Executor did not shut down in time!");
 		}
 	}
+
+
+	void testBlockChainNormalBehaviour() throws Exception {
+		// start client and members
+		ExecutorService ex = Executors.newCachedThreadPool();
+		this.executor = ex;
+		Client paulo = startClient("paulo", CLIENT_PORT, memberInfo, executor);
+		Client joao = startClient("joao", CLIENT_PORT + 1, memberInfo, executor);
+		Client pedro = startClient("pedro", CLIENT_PORT + 2, memberInfo, executor);
+		this.clients = new ArrayList<>(Arrays.asList(paulo, joao, pedro));
+		this.members = TestUtils.startHonestMembers(BASE_MEMBER_PORT, memberInfo, clientInfo, executor);
+
+		paulo.sendTransfer("joao", BigInteger.TEN, CoinType.ISTCOIN);
+		// TODO -> continue
+	}
+
+
+
 	@Test
-	void testNormalBehaviour() throws Exception {
+	void testStringChainNormalBehaviour() throws Exception {
 		// start client
 		ExecutorService ex = Executors.newCachedThreadPool();
 		this.executor = ex;
 		//TestUtils testUtils = new TestUtils(ex);
 		Client client = startClient("paulo", CLIENT_PORT, memberInfo, executor);
-		this.client = client;
+		this.clients = new ArrayList<>(Arrays.asList(client));
 
 		// starts members and byzantine process
 		Member leader = startMember("pedroribeiro", BASE_MEMBER_PORT, memberInfo, clientInfo, executor);

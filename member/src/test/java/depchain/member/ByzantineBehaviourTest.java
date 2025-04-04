@@ -3,7 +3,6 @@ package depchain.member;
 import depchain.client.domain.Client;
 import depchain.common.CommonUtils;
 import depchain.common.domain.Entity;
-import depchain.member.byzantine.*;
 import depchain.member.domain.Member;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.*;
@@ -92,11 +91,11 @@ public class ByzantineBehaviourTest {
 
         // check consensus is reached among honest nodes
         Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
-            Assertions.assertTrue(leader.getBlockchainState().contains("test-value"),
+            Assertions.assertTrue(leader.getStringChain().contains("test-value"),
                     "Leader should have the value");
-            Assertions.assertTrue(honest1.getBlockchainState().contains("test-value"),
+            Assertions.assertTrue(honest1.getStringChain().contains("test-value"),
                     "Honest1 should have the value");
-            Assertions.assertTrue(honest2.getBlockchainState().contains("test-value"),
+            Assertions.assertTrue(honest2.getStringChain().contains("test-value"),
                     "Honest2 should have the value");
         });
 
@@ -124,11 +123,11 @@ public class ByzantineBehaviourTest {
 
         // check consensus is reached among honest nodes
         Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
-            Assertions.assertTrue(leader.getBlockchainState().contains("test-value"),
+            Assertions.assertTrue(leader.getStringChain().contains("test-value"),
                     "Leader should have the value");
-            Assertions.assertTrue(honest1.getBlockchainState().contains("test-value"),
+            Assertions.assertTrue(honest1.getStringChain().contains("test-value"),
                     "Honest1 should have the value");
-            Assertions.assertTrue(honest2.getBlockchainState().contains("test-value"),
+            Assertions.assertTrue(honest2.getStringChain().contains("test-value"),
                     "Honest2 should have the value");
         });
 
@@ -159,11 +158,11 @@ public class ByzantineBehaviourTest {
 
         // check consensus is reached among honest nodes
         Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
-            Assertions.assertTrue(leader.getBlockchainState().contains("test-value"),
+            Assertions.assertTrue(leader.getStringChain().contains("test-value"),
                     "Leader should have the value");
-            Assertions.assertTrue(honest1.getBlockchainState().contains("test-value"),
+            Assertions.assertTrue(honest1.getStringChain().contains("test-value"),
                     "Honest1 should have the value");
-            Assertions.assertTrue(honest2.getBlockchainState().contains("test-value"),
+            Assertions.assertTrue(honest2.getStringChain().contains("test-value"),
                     "Honest2 should have the value");
         });
 
@@ -174,11 +173,11 @@ public class ByzantineBehaviourTest {
         // value ("test-value" in this case) and a bigger timestamp, and start echoing writes and accepts.
         // we want to check if consensus still works in this scenario
         Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
-            Assertions.assertTrue(leader.getBlockchainState().contains("test-value2"),
+            Assertions.assertTrue(leader.getStringChain().contains("test-value2"),
                     "Leader should have the value");
-            Assertions.assertTrue(honest1.getBlockchainState().contains("test-value2"),
+            Assertions.assertTrue(honest1.getStringChain().contains("test-value2"),
                     "Honest1 should have the value");
-            Assertions.assertTrue(honest2.getBlockchainState().contains("test-value2"),
+            Assertions.assertTrue(honest2.getStringChain().contains("test-value2"),
                     "Honest2 should have the value");
         });
 
@@ -205,11 +204,11 @@ public class ByzantineBehaviourTest {
 
         // check consensus is reached among honest nodes
         Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
-            Assertions.assertTrue(leader.getBlockchainState().contains("test-value"),
+            Assertions.assertTrue(leader.getStringChain().contains("test-value"),
                     "Leader should have the value");
-            Assertions.assertTrue(honest1.getBlockchainState().contains("test-value"),
+            Assertions.assertTrue(honest1.getStringChain().contains("test-value"),
                     "Honest1 should have the value");
-            Assertions.assertTrue(honest2.getBlockchainState().contains("test-value"),
+            Assertions.assertTrue(honest2.getStringChain().contains("test-value"),
                     "Honest2 should have the value");
         });
 

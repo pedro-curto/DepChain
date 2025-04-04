@@ -110,11 +110,11 @@ public class ConsensusState {
     }
 
     private boolean reachedQuorum(int quorum, Collection<Integer> counters) {
-        System.out.print("Quorum I want is " + quorum + " and I have " + counters + " ");
-        System.out.println("Write counters: " + writeCounters);
+        //System.out.print("Quorum I want is " + quorum + " and I have " + counters + " ");
+        //System.out.println("Write counters: " + writeCounters);
         //printValues(writeCounters);
         //printValues(acceptCounters);
-        System.out.println();
+        //System.out.println();
         for (Integer counter : counters) {
             if (counter >= quorum) {
                 return true;

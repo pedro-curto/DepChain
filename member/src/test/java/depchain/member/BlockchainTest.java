@@ -1,11 +1,14 @@
 package depchain.member;
 
+import depchain.client.domain.ByzantineClient;
 import depchain.client.domain.Client;
 import depchain.common.CommonUtils;
 import depchain.common.domain.ContractData;
 import depchain.common.domain.Entity;
 import depchain.common.domain.GenesisBlock;
+import depchain.common.domain.Transaction;
 import depchain.common.messaging.CoinType;
+import depchain.common.messaging.library.TransferMessage;
 import depchain.member.domain.Member;
 import org.awaitility.Awaitility;
 import org.hyperledger.besu.datatypes.Address;
@@ -30,26 +33,6 @@ import java.util.concurrent.TimeUnit;
 import static depchain.member.TestUtils.*;
 
 public class BlockchainTest {
-    // contract stuff
-    private static final String SENDER_STR = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
-    private static final String CONTRACT_STR = "1234567891234567891234567891234567891234";
-    private static final String RECIPIENT_STR = "1111111111111111111111111111111111111111";
-    private static final String SPENDER_STR = "2222222222222222222222222222222222222222";
-    private static final String OWNER_STR = "3333333333333333333333333333333333333333";
-    private static final Address SENDER = Address.fromHexString(SENDER_STR);
-    private static final Address CONTRACT = Address.fromHexString(CONTRACT_STR);
-    private static final Address RECIPIENT = Address.fromHexString(RECIPIENT_STR);
-    private static final Address SPENDER = Address.fromHexString(SPENDER_STR);
-    private static final Address OWNER = Address.fromHexString(OWNER_STR);
-
-    private SimpleWorld world;
-    private EVMExecutor evm;
-    private ByteArrayOutputStream bos;
-    private PrintStream printStream;
-    private StandardJsonTracer tracer;
-    private String deploymentBytecode;
-    private String runtimeBytecode;
-
     // remaining things
     private static final int BASE_MEMBER_PORT = 5001;
     private static final int BASE_CLIENT_PORT = 2000;
@@ -67,16 +50,6 @@ public class BlockchainTest {
         clientInfo = CommonUtils.loadMembership(userDir + "/membership/client.txt");
         // executor that runs member and client threads
         executor = Executors.newCachedThreadPool();
-
-        // contract stuff
-        this.world = new SimpleWorld();
-        this.bos = new ByteArrayOutputStream();
-        this.printStream = new PrintStream(bos);
-        this.tracer = new StandardJsonTracer(printStream, true, true, true, true);
-        GenesisBlock genesisBlock = CommonUtils.loadGenesisBlock();
-        ContractData contractData = genesisBlock.getContractData();
-        this.deploymentBytecode = contractData.getDeploymentBytecode();
-        this.runtimeBytecode = contractData.getRuntimeBytecode();
     }
 
     @AfterEach
@@ -95,10 +68,8 @@ public class BlockchainTest {
         }
     }
 
-
     // TODO:
     // - wrong signature member
-    // - replay attack
 
     @Test
     void testWithWrongSignatureClient() throws Exception {
@@ -144,57 +115,54 @@ public class BlockchainTest {
     }
 
 
-//    @Test
-//    void testWithReplayAttackClient() throws Exception {
-//        // start client and members
-//        Client regularClient = startClient("paulo", BASE_CLIENT_PORT, memberInfo, executor);
-//        Client byzantineClient = startByzantineClient("joao", BASE_CLIENT_PORT+1, memberInfo, 2, executor);
-//        this.clients = new ArrayList<>(Arrays.asList(regularClient, byzantineClient));
-//        this.members = TestUtils.startHonestMembers(BASE_MEMBER_PORT, memberInfo, clientInfo, executor);
-//
-//        // honest client sends transfer
-//        BigInteger amount = BigInteger.valueOf(1000);
-//        regularClient.sendTransfer("pedro", amount, CoinType.ISTCOIN);
-//        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
-//            // wait until the client gets a transfer reply
-//            Assertions.assertNotNull(regularClient.getLastTransferReply(),
-//                    "Client should have received a reply");
-//        });
-//
-//
-//        // byzantine member stores the correctly executed transfer to attempt replay
-//
-//
-//        // attempts replay
-//
-//
-//        // checks result
-//
-//        // starts by asserting that the client has enough funds for the transfer
-//        byzantineClient.sendGetBalance("paulo", CoinType.ISTCOIN);
-//        BigInteger transferValue = BigInteger.valueOf(1000);
-//
-//        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
-//            // waits until the value is different from null
-//            Assertions.assertNotNull(byzantineClient.getLastBalance(),
-//                    "Client should have received a balance");
-//        });
-//        BigInteger balance = byzantineClient.getLastBalance();
-//        System.out.println("(Test) Balance: " + balance);
-//        Assertions.assertTrue(balance.compareTo(transferValue) > 0);
-//
-//        // client sends transfer request and we assert that the response back to client is negative
-//        byzantineClient.sendTransfer(SENDER_STR, transferValue, CoinType.ISTCOIN);
-//
-//        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
-//            // wait until we get a transfer reply and check if its result is false
-//            Assertions.assertNotNull(byzantineClient.getLastTransferReply(),
-//                    "Client should have received a reply");
-//
-//            Assertions.assertFalse(byzantineClient.getLastTransferReply().getSuccess(),
-//                    "Client should have received a negative reply");
-//        });
-//    }
+    @Test
+    void testWithReplayAttackClient() throws Exception {
+        // start client and members
+        Client regularClient = startClient("paulo", BASE_CLIENT_PORT, memberInfo, executor);
+        ByzantineClient byzantineClient = startByzantineClient("joao", BASE_CLIENT_PORT+1, memberInfo, 2, executor);
+        this.clients = new ArrayList<>(Arrays.asList(regularClient, byzantineClient));
+        this.members = TestUtils.startHonestMembers(BASE_MEMBER_PORT, memberInfo, clientInfo, executor);
+        BigInteger byzCredit = BigInteger.valueOf(2000);
+        BigInteger txAmount = BigInteger.valueOf(1000);
+
+        // honest client sends transfer
+        regularClient.sendTransfer("pedro", txAmount, CoinType.ISTCOIN);
+        // sleeps for 5s
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
+            // wait until the transactions list in blockchain state's last block is not empty
+            Assertions.assertFalse(members.getFirst().getBlockChainState().getLastBlock()
+                            .getTransactions().isEmpty(),
+                    "Member's BlockchainState's last block should have the executed txs");
+        });
+
+        // byzantine member stores the correctly executed transfer to attempt replay
+        byzantineClient.setLastExecutedTransaction(members.getFirst().getBlockChainState().getLastBlock()
+                .getTransactions().getFirst());
+        Transaction tx = byzantineClient.getLastExecutedTransaction();
+        System.out.println("(Test) tx: " + tx.toString());
+
+        // attempts replay
+        TransferMessage transferMessage = new TransferMessage(
+                tx.getSender(),
+                tx.getSpender(),
+                tx.getRecipient(),
+                tx.getAmount(),
+                tx.getCoinType(),
+                tx.getNonce(),
+                tx.getTransactionType(),
+                tx.getClientPort()
+        );
+        transferMessage.setSignature(tx.getSignature());
+        System.out.println("(Test) TransferMessage: " + transferMessage);
+        System.out.println("(Test) TransferMessage signature: " + transferMessage.getSignature());
+
+        byzantineClient.sendTransfer(transferMessage);
+        // asserts that replay attack flag was raised
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
+            Assertions.assertTrue(members.getFirst().getReplayAttack(),
+                    "Member should have raised replay attack flag");
+        });
+    }
 
 
 //    @Test

@@ -38,16 +38,14 @@ public class ConsensusHandler {
         statePhase(leaderState);
         if(!collectedPhase()) {
             // aborted
-            this.consensusState.nextEpoch();
             return false;
         }
         if (!writePhase()) {
             // aborted
-            this.consensusState.nextEpoch();
             return false;
         }
         if(!acceptPhase()) {
-            this.consensusState.nextEpoch();
+            // aborted
             return false;
         }
         decide();

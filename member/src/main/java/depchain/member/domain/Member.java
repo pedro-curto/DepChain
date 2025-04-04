@@ -41,6 +41,7 @@ public class Member {
     private long serverNonce = 0L;
     private volatile boolean running;
     private boolean caughtInvalidSignature = false;
+    private boolean replayAttack = false;
     // smart contract fields
     private EVMExecutor evmExecutor;
     private SimpleWorld world;
@@ -186,6 +187,21 @@ public class Member {
                                 dcLogger.verbose("Got client( " + transferMessage.getClientPort() + ") nonce: " +
                                         transferMessage.getNonce() + " but current: "
                                         + getClientNonce(transferMessage.getClientPort()));
+                                // sends an answer back saying it was rejected
+                                TransferReply txReply = new TransferReply(
+                                        false,
+                                        -1,
+                                        transferMessage.getValue(),
+                                        transferMessage.getFrom(),
+                                        transferMessage.getSpender(),
+                                        transferMessage.getTo(),
+                                        transferMessage.getCoinType(),
+                                        transferMessage.getTransactionType(),
+                                        this.serverNonce,
+                                        config.getPort()
+                                );
+                                sendToClient(txReply, transferMessage.getClientPort());
+                                this.replayAttack = true;
                             }
                         }
                         break;
@@ -268,7 +284,7 @@ public class Member {
     }
 
     public void handleRead(ReadMessage readMessage) {
-        dcLogger.log("Received: " + readMessage);
+        //dcLogger.log("Received: " + readMessage);
         // sign: current||writeset||instance||epoch
         String dataToSign = consensusState.getCurrent().toString() + consensusState.getWriteset() + consensusState.getInstance() + consensusState.getEpoch();
         //dcLogger.log("Signing data: " + dataToSign);
@@ -282,7 +298,7 @@ public class Member {
     }
 
     public void handleState(StateMessage stateMessage) {
-        dcLogger.log("Received: " + stateMessage);
+        //dcLogger.log("Received: " + stateMessage);
         if (isLeader()) {
             ConsensusLeaderState leaderState = (ConsensusLeaderState) consensusState;
             leaderState.addMemberState(stateMessage);
@@ -292,7 +308,7 @@ public class Member {
     }
 
     public void handleCollected(CollectedMessage collectedMessage) {
-        dcLogger.log("Received: " + collectedMessage);
+        //dcLogger.log("Received: " + collectedMessage);
         if (collectedMessage.getPort() != config.getLeader().getPort()) {
             return;
         }
@@ -300,12 +316,12 @@ public class Member {
     }
 
     public void handleWrite(WriteMessage writeMessage) {
-        dcLogger.log("Received: " + writeMessage);
+        //dcLogger.log("Received: " + writeMessage);
         consensusState.addWriteMessage(writeMessage);
     }
 
     public void handleAccept(AcceptMessage acceptMessage) {
-        dcLogger.log("Received: " + acceptMessage);
+        //dcLogger.log("Received: " + acceptMessage);
         consensusState.addAcceptMessage(acceptMessage);
     }
 
@@ -444,6 +460,9 @@ public class Member {
                         leaderState.setCurrent(newValue);
                     }
                     finished = consensusHandler.startConsenusLeader(leaderState);
+                    if(!finished) {
+                        consensusHandler.getConsensusState().nextEpoch();
+                    }
                 }
             } catch (InterruptedException e) {
                 dcLogger.log("Consensus thread was interrupted while waiting for append messages");
@@ -833,10 +852,6 @@ public class Member {
         return config.getLeader().getEntityName().equalsIgnoreCase(config.getMyName());
     }
 
-    public StringChain getBlockchainState() {
-        return stringChain;
-    }
-
     public void stop() {
         running = false;
         perfectLink.stop();
@@ -854,6 +869,7 @@ public class Member {
     }
 
     private boolean isValidClientNonce(long nonce, int port) {
+        // TODO -> check: não devia ser >, e sim ==. O maior vai deixar haver gaps entre transações oq nao e suposto
         return nonce > getClientNonce(port);
     }
 
@@ -879,5 +895,13 @@ public class Member {
 
     public StringChain getStringChain() {
         return stringChain;
+    }
+
+    public BlockChainState getBlockChainState() {
+        return blockChainState;
+    }
+
+    public boolean getReplayAttack() {
+        return replayAttack;
     }
 }
