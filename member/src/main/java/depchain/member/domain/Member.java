@@ -596,9 +596,22 @@ public class Member {
             return null;
         }
         // TODO -> how to check client signatures for blocks? check for each field?
-        if (!leaderValue.getValue().startsWith("BLOCK:") && !checkClientSignature(leaderValue)) {
-            dcLogger.error("Leader forged new value");
-            return null;
+        if (leaderValue.getValue().startsWith("BLOCK:")) {
+            // check if each tx in block is valid
+            List<Transaction> txs = JsonAdapter.parseTransactions(leaderValue.getValue());
+            for (Transaction tx : txs) {
+                if (!Security.validateTransaction(tx)) {
+                    dcLogger.error("Signature for transaction is invalid: " + tx);
+                    return null;
+                }
+            }
+
+        } else {
+            // append request (stringchain)
+            if (!checkClientSignature(leaderValue)) {
+                dcLogger.error("Leader forged new value");
+                return null;
+            }
         }
         return leaderValue;
     }

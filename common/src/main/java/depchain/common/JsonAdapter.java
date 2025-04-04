@@ -6,6 +6,7 @@ import depchain.common.messaging.CoinType;
 import depchain.common.messaging.TransactionType;
 
 import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -168,4 +169,14 @@ public class JsonAdapter {
         return new GenesisBlock(hash, previousHash, transactions, accounts, contractData);
     }
 
+    // parses a list of transactions from a string (that represents a block, starting with BLOCK:)
+	public static List<Transaction> parseTransactions(String value) {
+        String blockStr = value.substring("BLOCK:".length()).trim();
+        JsonObject blockJson = JsonParser.parseString(blockStr).getAsJsonObject();
+        return blockJson.getAsJsonArray("transactions")
+                .asList()
+                .stream()
+                .map(JsonAdapter::parseTransaction)
+                .toList();
+	}
 }

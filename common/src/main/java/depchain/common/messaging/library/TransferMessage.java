@@ -75,9 +75,9 @@ public class TransferMessage extends Message {
 
 	public String getDataToSign() {
 		if (transactionType == TransactionType.TRANSFER_FROM) {
-			return from + spender + to + value + nonce + transactionType;
+			return from + spender + to + value + nonce + transactionType + clientPort;
 		}
-		return from + to + value + nonce + transactionType;
+		return from + to + value + nonce + transactionType + clientPort;
 	}
 
 	@Override

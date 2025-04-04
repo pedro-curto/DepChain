@@ -120,5 +120,19 @@ public class Transaction {
                 ", coinType=" + coinType +
                 '}';
     }
-
+    /*
+    from TransferMessage
+    public String getDataToSign() {
+		if (transactionType == TransactionType.TRANSFER_FROM) {
+			return from + spender + to + value + nonce + transactionType + clientPort;
+		}
+		return from + to + value + nonce + transactionType + clientPort;
+	}
+     */
+	public String getDataToSign() {
+        if (transactionType == TransactionType.TRANSFER_FROM) {
+            return senderAddr + spenderAddr + recipientAddr + amount + nonce + transactionType + clientPort;
+        }
+        return senderAddr + recipientAddr + amount + nonce + transactionType + clientPort;
+    }
 }
