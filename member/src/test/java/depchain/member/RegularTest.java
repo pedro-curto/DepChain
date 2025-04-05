@@ -67,42 +67,77 @@ public class RegularTest {
 		Client pedro = startClient("pedro", CLIENT_PORT + 2, memberInfo, executor);
 		this.clients = new ArrayList<>(Arrays.asList(paulo, joao, pedro));
 		this.members = TestUtils.startHonestMembers(BASE_MEMBER_PORT, memberInfo, clientInfo, executor);
-		// from, to, amount, expectedFromBalance, expectedToBalance, coinType
+
+		// -- ISTCOIN TRANSFERS -- //
+		// all clients transfer some coins to each other
 		TestUtils.testTransfer(paulo, joao, BigInteger.valueOf(1000), new BigInteger("9999999000"),
 				BigInteger.valueOf(1000), CoinType.ISTCOIN);
 		TestUtils.testTransfer(joao, pedro, BigInteger.valueOf(200),
 				BigInteger.valueOf(800), BigInteger.valueOf(200), CoinType.ISTCOIN);
 		TestUtils.testTransfer(pedro, paulo, BigInteger.valueOf(100),
 				BigInteger.valueOf(100), new BigInteger("9999999100"), CoinType.ISTCOIN);
-		// TODO -> approve and transfer_from for the other clients
 
+		// current balances: paulo: 9999999100, joao: 800, pedro: 100
+		// paulo approves pedro to spend 1000 ISTCOIN (and check op. success)
+		paulo.sendApprove(pedro.getClientName(), BigInteger.valueOf(1000), CoinType.ISTCOIN);
+		Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
+			Assertions.assertNotNull(paulo.getLastTransferReply());
+		});
+		Assertions.assertTrue(paulo.getLastTransferReply().getSuccess());
+		System.out.println("(TEST) paulo approved pedro to spend 1000 ISTCOIN");
+		paulo.setLastTransferReply(null);
+
+		// we check pedro's allowance
+		pedro.sendGetAllowance(paulo.getClientName(), pedro.getClientName(), CoinType.ISTCOIN);
+		Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
+			Assertions.assertNotNull(pedro.getLastAllowance());
+		});
+		Assertions.assertEquals(pedro.getLastAllowance(), BigInteger.valueOf(1000));
+		System.out.println("(TEST) pedro's allowance is 1000 ISTCOIN from paulo");
+
+		// now pedro will try to execute a transferFrom tx from paulo's account to joao
+		pedro.sendTransferFrom(paulo.getClientName(), joao.getClientName(), BigInteger.valueOf(1000), CoinType.ISTCOIN);
+		Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
+			Assertions.assertNotNull(pedro.getLastTransferReply());
+		});
+		// finally, check if it went well
+		Assertions.assertTrue(pedro.getLastTransferReply().getSuccess());
+		System.out.println("(TEST) pedro transfered 1000 ISTCOIN from paulo to joao");
+
+		// -- DEPCOIN TRANSFERS -- //
+		// paulo: 100, joao: 100, pedro: 100
+		TestUtils.testTransfer(paulo, joao, BigInteger.valueOf(50), BigInteger.valueOf(50),
+				BigInteger.valueOf(150), CoinType.DEPCOIN);
+		// paulo: 50, joao: 150, pedro: 100
+		TestUtils.testTransfer(joao, pedro, BigInteger.valueOf(100),
+				BigInteger.valueOf(50), BigInteger.valueOf(200), CoinType.DEPCOIN);
+		// paulo: 50, joao: 50, pedro: 200
+		TestUtils.testTransfer(pedro, paulo, BigInteger.valueOf(50),
+				BigInteger.valueOf(150), BigInteger.valueOf(200), CoinType.DEPCOIN);
 	}
 
+	@Test
+	void testDepCoinTransfers() throws Exception {
+		// start client and members
+		ExecutorService ex = Executors.newCachedThreadPool();
+		this.executor = ex;
+		Client paulo = startClient("paulo", CLIENT_PORT, memberInfo, executor);
+		Client joao = startClient("joao", CLIENT_PORT + 1, memberInfo, executor);
+		Client pedro = startClient("pedro", CLIENT_PORT + 2, memberInfo, executor);
+		this.clients = new ArrayList<>(Arrays.asList(paulo, joao, pedro));
+		this.members = TestUtils.startHonestMembers(BASE_MEMBER_PORT, memberInfo, clientInfo, executor);
 
-
-//	@Test
-//	void testStringChainNormalBehaviour() throws Exception {
-//		// start client
-//		ExecutorService ex = Executors.newCachedThreadPool();
-//		this.executor = ex;
-//		//TestUtils testUtils = new TestUtils(ex);
-//		Client client = startClient("paulo", CLIENT_PORT, memberInfo, executor);
-//		this.clients = new ArrayList<>(Arrays.asList(client));
-//
-//		// starts members and byzantine process
-//		Member leader = startMember("pedroribeiro", BASE_MEMBER_PORT, memberInfo, clientInfo, executor);
-//		Member honest1 = startMember("pedrocurto", BASE_MEMBER_PORT + 1, memberInfo, clientInfo, executor);
-//		Member honest2 = startMember("rodrigogreedy", BASE_MEMBER_PORT + 2, memberInfo, clientInfo, executor);
-//		Member honest3 = startMember("dybizantino", BASE_MEMBER_PORT + 3, memberInfo, clientInfo, executor);
-//		members = new ArrayList<>(Arrays.asList(leader, honest1, honest2, honest3));
-//		// wait a bit for the system to boot, sessions established, etc
-//		Thread.sleep(5000);
-//		// client sends some appends and checks if the blockchain of all members contains the value
-//		sendAppendAndCheck(client, "a", members);
-//		sendAppendAndCheck(client, "b", members);
-//		sendAppendAndCheck(client, "c", members);
-//		sendAppendAndCheck(client, "d", members);
-//		sendAppendAndCheck(client, "e", members);
-//	}
+		// paulo: 100, joao: 100, pedro: 100
+		TestUtils.testTransfer(paulo, joao, BigInteger.valueOf(50), BigInteger.valueOf(50),
+				BigInteger.valueOf(150), CoinType.DEPCOIN);
+		// paulo: 50, joao: 150, pedro: 100
+		TestUtils.testTransfer(joao, pedro, BigInteger.valueOf(100),
+				BigInteger.valueOf(50), BigInteger.valueOf(200), CoinType.DEPCOIN);
+		// paulo: 50, joao: 50, pedro: 200
+		TestUtils.testTransfer(pedro, paulo, BigInteger.valueOf(50),
+				BigInteger.valueOf(150), BigInteger.valueOf(100), CoinType.DEPCOIN);
+		// pedro --50-> paulo:
+		// paulo: 100, joao: 50, pedro: 150
+	}
 
 }

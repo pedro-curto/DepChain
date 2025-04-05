@@ -42,6 +42,7 @@ public class Client {
     private final boolean testEnvironment;
     private TransferReply lastTransferReply;
     private Transaction lastExecutedTransaction;
+    private BigInteger lastAllowance;
 
     private Map<ClientReplyMessage, Integer> memberReplyMessages;
 
@@ -91,7 +92,7 @@ public class Client {
         }
     }
 
-    public void assignAddress() {
+    public void  assignAddress() {
         // load the genesis file
         GenesisBlock genesisBlock = CommonUtils.loadGenesisBlock();
 
@@ -278,24 +279,7 @@ public class Client {
             System.out.println("Invalid destination account address!");
             return;
         }
-        String ownerAddr = addresses.get(nameOfOwnerAddr);
-        String toAddr = addresses.get(nameOfToAddr);
-        // the invoker (myself, the client) is the spender
-        TransferMessage msg = new TransferMessage(
-                ownerAddr,
-                this.myAddress,
-                toAddr,
-                amount,
-                coinType,
-                nonce,
-                TransactionType.TRANSFER_FROM,
-                this.port
-        );
-        String dataToSign = msg.getDataToSign();
-        String signature = Security.makeDS(dataToSign, clientKeys.getPrivate());
-        msg.setSignature(signature);
-
-        sendMessageToLeader(msg);
+        sendTransferFrom(nameOfOwnerAddr, nameOfToAddr, amount, coinType);
     }
 
     private void handleAllowanceCommand(String[] content, CoinType coinType) {
@@ -309,10 +293,7 @@ public class Client {
             System.out.println("Invalid account address!");
             return;
         }
-        String spenderAddr = addresses.get(spender);
-        String ownerAddr = addresses.get(owner);
-        AllowanceMessage msg = new AllowanceMessage(ownerAddr, spenderAddr, this.port, coinType);
-        broadcastMessage(msg);
+        sendGetAllowance(owner, spender, coinType);
     }
 
     private void handleApproveCommand(String[] content, CoinType coinType) {
@@ -326,22 +307,7 @@ public class Client {
             System.out.println("Invalid account address!");
             return;
         }
-        String spenderAddr = addresses.get(spender);
-        TransferMessage msg = new TransferMessage(
-                myAddress,
-                null,
-                spenderAddr,
-                amount,
-                coinType,
-                nonce,
-                TransactionType.APPROVE,
-                this.port
-        );
-        String dataToSign = msg.getDataToSign();
-        String signature = Security.makeDS(dataToSign, clientKeys.getPrivate());
-        msg.setSignature(signature);
-
-        sendMessageToLeader(msg);
+        sendApprove(spender, amount, coinType);
     }
 
     private void handleTransferCommand(String[] content, CoinType coinType) {
@@ -401,7 +367,52 @@ public class Client {
         broadcastMessage(msg);
     }
 
+    public void sendTransferFrom(String nameOfOwnerAddr, String nameOfToAddr, BigInteger amount, CoinType coinType) {
+        String ownerAddr = addresses.get(nameOfOwnerAddr);
+        String toAddr = addresses.get(nameOfToAddr);
+        // the invoker (myself, the client) is the spender
+        TransferMessage msg = new TransferMessage(
+                ownerAddr,
+                this.myAddress,
+                toAddr,
+                amount,
+                coinType,
+                nonce,
+                TransactionType.TRANSFER_FROM,
+                this.port
+        );
+        String dataToSign = msg.getDataToSign();
+        String signature = Security.makeDS(dataToSign, clientKeys.getPrivate());
+        msg.setSignature(signature);
 
+        sendMessageToLeader(msg);
+    }
+
+    public void sendApprove(String spender, BigInteger amount, CoinType coinType) {
+        String spenderAddr = addresses.get(spender);
+        TransferMessage msg = new TransferMessage(
+                myAddress,
+                null,
+                spenderAddr,
+                amount,
+                coinType,
+                nonce,
+                TransactionType.APPROVE,
+                this.port
+        );
+        String dataToSign = msg.getDataToSign();
+        String signature = Security.makeDS(dataToSign, clientKeys.getPrivate());
+        msg.setSignature(signature);
+
+        sendMessageToLeader(msg);
+    }
+
+    public void sendGetAllowance(String owner, String spender, CoinType coinType) {
+        String ownerAddr = addresses.get(owner);
+        String spenderAddr = addresses.get(spender);
+        AllowanceMessage msg = new AllowanceMessage(ownerAddr, spenderAddr, this.port, coinType);
+        broadcastMessage(msg);
+    }
 
     /*------------------------------------------------------------------------*/
     /*--------------------------- HELPER FUNCTIONS ---------------------------*/
@@ -554,6 +565,7 @@ public class Client {
             System.out.println("amount: " + reply.getAllowance());
             System.out.println("success: " + reply.getSuccess());
             System.out.println("}");
+            this.lastAllowance = reply.getAllowance();
         }
         else {
             System.out.println("Not reached quorum yet.");
@@ -610,5 +622,13 @@ public class Client {
 
     public void setLastBalance(BigInteger lastBalance) {
         this.lastBalance = lastBalance;
+    }
+
+    public BigInteger getLastAllowance() {
+        return lastAllowance;
+    }
+
+    public void setLastAllowance(BigInteger lastAllowance) {
+        this.lastAllowance = lastAllowance;
     }
 }

@@ -23,7 +23,7 @@ public class AllowanceReply extends ClientReplyMessage {
             long nonce,
             int memberPort
     ) {
-        super(MessageType.BALANCE_REPLY,
+        super(MessageType.ALLOWANCE_REPLY,
                 success,
                 instanceOfDecision,
                 coinType,
