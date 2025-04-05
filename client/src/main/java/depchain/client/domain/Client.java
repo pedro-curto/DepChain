@@ -536,6 +536,7 @@ public class Client {
             System.out.println("success: " + reply.getSuccess());
             System.out.println("}");
             this.lastBalance = reply.getBalance();
+            dcLogger.log("Instance of decision: " + reply.getInstanceOfDecision());
         }
         else {
             System.out.println("Not reached quorum yet.");
@@ -597,5 +598,17 @@ public class Client {
 
     public Transaction getLastExecutedTransaction() {
         return lastExecutedTransaction;
+    }
+
+    public void setLastTransferReply(TransferReply lastTransferReply) {
+        this.lastTransferReply = lastTransferReply;
+    }
+
+    public String getClientName() {
+        return clientName;
+    }
+
+    public void setLastBalance(BigInteger lastBalance) {
+        this.lastBalance = lastBalance;
     }
 }
