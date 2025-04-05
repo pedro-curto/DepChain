@@ -193,7 +193,12 @@ public final class Security {
 		String dataToSign = tx.getDataToSign();
 		System.out.println("Data to sign: " + dataToSign);
 		String signature = tx.getSignature();
-		PublicKey publicKey = getMembershipPublicKey(tx.getSender());
+		PublicKey publicKey;
+		if (tx.getTransactionType() == TransactionType.TRANSFER_FROM) {
+			publicKey = getMembershipPublicKey(tx.getSpender());
+		} else {
+			publicKey = getMembershipPublicKey(tx.getSender());
+		}
 		boolean isValid = verifyDS(signature, dataToSign, publicKey);
 		if (!isValid) {
 			System.err.println("Error: Signature is not valid");
