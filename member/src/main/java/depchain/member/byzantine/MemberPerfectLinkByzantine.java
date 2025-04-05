@@ -12,7 +12,7 @@ import depchain.member.state.StringChain;
 import java.util.concurrent.BlockingQueue;
 
 public class MemberPerfectLinkByzantine extends Member {
-	public MemberPerfectLinkByzantine(Config config, DCLogger dcLogger, PerfectLink pf, ConsensusState cState, StringChain bcState, BlockingQueue<Message> messageQueue, BlockingQueue<AppendMessage> appendQueue) {
-		super(config, dcLogger, pf, cState, bcState, messageQueue, appendQueue);
+	public MemberPerfectLinkByzantine(Config config, DCLogger dcLogger, PerfectLink pf, ConsensusState cState, StringChain bcState, BlockingQueue<Message> messageQueue) {
+		super(config, dcLogger, pf, cState, bcState, messageQueue);
 	}
 }

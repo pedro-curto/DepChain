@@ -77,16 +77,18 @@ public class TransferReply extends ClientReplyMessage {
     // for hashmap in client
     @Override
     public boolean equals(Object obj) {
+        if (this == obj) return true;
         if (!super.equals(obj)) return false;
         if (!(obj instanceof TransferReply)) return false;
+
         TransferReply other = (TransferReply) obj;
-        return (
-                other.getAmount().equals(amount) &&
-                other.getSenderAddr().equals(senderAddr) &&
-                other.getSpenderAddr().equals(spenderAddr) &&
-                other.getRecipientAddr().equals(recipientAddr)
-        );
+
+        return Objects.equals(this.amount, other.getAmount()) &&
+                Objects.equals(this.senderAddr, other.getSenderAddr()) &&
+                Objects.equals(this.spenderAddr, other.getSpenderAddr()) &&
+                Objects.equals(this.recipientAddr, other.getRecipientAddr());
     }
+
 
     @Override
     public int hashCode() {

@@ -5,21 +5,27 @@ import java.util.Objects;
 public class ValueTimestampPair {
 
 	private int timestamp;
-	private String value;
+	private final Block value;
 	private String clientSignature;
 	private int clientPort;
 	private long nonce;
 
-	public ValueTimestampPair(int timestamp, String value, int clientPort, long nonce) {
+
+	public ValueTimestampPair(int timestamp, Block value, int clientPort, long nonce) {
 		this.value = value;
 		this.timestamp = timestamp;
 		this.clientPort = clientPort;
 		this.nonce = nonce;
 	}
 
-	public ValueTimestampPair(int epoch, String value) {
+	public ValueTimestampPair(int epoch, Block value) {
 		this.timestamp = epoch;
 		this.value = value;
+	}
+
+	public ValueTimestampPair(int epoch) {
+		this.timestamp = epoch;
+		this.value = null;
 	}
 
 	public int getClientPort() {
@@ -30,10 +36,6 @@ public class ValueTimestampPair {
 		return nonce;
 	}
 
-	//public void setClientName(String clientName) {
-	//	this.clientName = clientName;
-	//}
-
 	public int getTimestamp() {
 		return timestamp;
 	}
@@ -41,7 +43,11 @@ public class ValueTimestampPair {
 		this.timestamp = timestamp;
 	}
 
-	public String getValue() {
+	public boolean isEmpty() {
+		return value == null;
+	}
+
+	public Block getValue() {
 		return value;
 	}
 

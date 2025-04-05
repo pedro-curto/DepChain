@@ -35,7 +35,6 @@ public class AppendMessage extends Message {
 	* */
 	public String getDataToSign() {
 		return value + nonce;
-		//return value;
 	}
 
 	@Override

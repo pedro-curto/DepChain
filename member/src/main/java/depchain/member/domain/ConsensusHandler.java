@@ -1,5 +1,6 @@
 package depchain.member.domain;
 
+import com.google.gson.JsonObject;
 import depchain.common.DCLogger;
 import depchain.common.domain.*;
 import depchain.common.messaging.ClientReplyMessage;
@@ -8,14 +9,15 @@ import depchain.common.messaging.consensus.*;
 import depchain.common.messaging.library.AppendMessage;
 
 import java.util.List;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public class ConsensusHandler {
 
     private Member member;
     private DCLogger dcLogger;
     private ConsensusState consensusState;
-    private ValueTimestampPair acceptedValue = null; // TODO maybe refactor into consensusState
-
+    private BlockingQueue<ValueTimestampPair> consensusQueue = new LinkedBlockingQueue<>();
 
     public ConsensusHandler(Member member, DCLogger dcLogger, ConsensusState consensusState) {
         this.member = member;
@@ -28,28 +30,14 @@ public class ConsensusHandler {
     }
 
     // only leader runs starts consensus
-    // literalmente dei ctrl+c ctrl+v das funções do membro, só mudei como começa
-    // vou fazer um DoConsensus2 para experimentar
     public boolean startConsenusLeader(ConsensusLeaderState leaderState) {
         // TODO on member, dont forget the things before read phase (noncecheck)
         // TODO leaderState.setCurrent(valts); set new value of consensus
         dcLogger.log("-- STARTING CONSENSUS FOR '" + leaderState.getCurrent() + "' --");
         readPhase(leaderState);
         statePhase(leaderState);
-        if(!collectedPhase()) {
-            // aborted
-            return false;
-        }
-        if (!writePhase()) {
-            // aborted
-            return false;
-        }
-        if(!acceptPhase()) {
-            // aborted
-            return false;
-        }
-        decide();
-        return true;
+        // the rest of the consensus is the same for member and leader
+        return startConsensusMember();
     }
 
     public boolean startConsensusMember() {
@@ -61,11 +49,33 @@ public class ConsensusHandler {
             // aborted
             return false;
         }
-        if(!acceptPhase()) {
+        Block acceptedValue = acceptPhase();
+        if(acceptedValue == null) {
+            // aborted
             return false;
         }
-        decide();
+        decide(acceptedValue);
         return true;
+    }
+
+    public void addValtsForConsensus(ValueTimestampPair valts) {
+        try {
+            consensusQueue.put(valts);
+        } catch (InterruptedException e) {
+            dcLogger.error("Error while adding object to consensusQueue: " + e.getMessage());
+        }
+    }
+
+    public ValueTimestampPair getNextValtsForConsensus() {
+        try {
+            dcLogger.log("[ME] Waiting to take...");
+            ValueTimestampPair valt = consensusQueue.take();
+            dcLogger.log("[ME] Took");
+            return valt;
+        }  catch (InterruptedException e) {
+            dcLogger.error("Error while taking object from consensusQueue: " + e.getMessage());
+        }
+        return null;
     }
 
     public void readPhase(ConsensusLeaderState leaderState) {
@@ -129,44 +139,27 @@ public class ConsensusHandler {
         return true;
     }
 
-    public boolean acceptPhase() {
-        // Broadcast ACCEPT and wait for quorum to DECIDE value
+    public Block acceptPhase() {
         AcceptMessage acceptMessage = new AcceptMessage(consensusState.getCurrent(), member.getConfig().getPort(), consensusState.getInstance());
         dcLogger.log("Broadcasting: " + acceptMessage);
         member.broadCastMessage(acceptMessage);
 
         dcLogger.log("Waiting for accept quorum of size: " + member.getConfig().getByzantineQuorum() + "...");
-        acceptedValue = this.consensusState.waitForAcceptQuorum(member.getConfig().getByzantineQuorum());
+        Block acceptedValue = this.consensusState.waitForAcceptQuorum(member.getConfig().getByzantineQuorum());
         if (acceptedValue == null) {
             // Abort
             dcLogger.log("ABORTED (ACCEPT)");
-            return false;
+            return null;
         }
         dcLogger.log("Quorum of accept reached");
-        return true;
+        return acceptedValue;
     }
 
-    public boolean decide() {
-        String value = consensusState.getCurrent().getValue();
-        // TODO change to valts2
-        if (value.startsWith("BLOCK:")) {
-            // block decided in consensus, handle appropriately
-            dcLogger.verbose("Block decided: " + value);
-            member.executeTransactions(value);
-            this.consensusState.nextInstance();
-            return true;
-        }
-        // else, it was an APPEND request -> append to stringchain
-        member.getStringChain().appendString(consensusState.getCurrent().getValue());
-        ClientReplyMessage clientReplyMessage = new ClientReplyMessage(
-                acceptedValue.getValue(),
-                true,
-                consensusState.getInstance(),
-                MessageType.STRING_REPLY
-        );
-        member.sendToClient(clientReplyMessage, acceptedValue.getClientPort());
-        this.consensusState.nextInstance();
-        return true;
+    public void decide(Block acceptedBlock) {
+        dcLogger.verbose("Block decided: " + acceptedBlock);
+        member.executeTransactions(acceptedBlock);
+        member.setLastBlock(acceptedBlock);
+        member.replyTransactions(acceptedBlock.getTransactions());
     }
 
     public ValueTimestampPair decideOnCollectedValues(List<StateMessage> collectedStates) {
@@ -174,6 +167,7 @@ public class ConsensusHandler {
         ValueTimestampPair highest = new ValueTimestampPair(-1, null, -1, -1);
 
         for (StateMessage thisState : collectedStates) {
+            // TODO uncomment
             if (!member.verifyMemberStateAuthenticity(thisState)) {
                 dcLogger.error("Signature is invalid for " + thisState.getState().getMemberName());
                 // TODO -> hardcoded for the test (fix)
@@ -223,11 +217,10 @@ public class ConsensusHandler {
             return null;
         }
         // TODO -> how to check client signatures for blocks? check for each field?
-        if (!leaderValue.getValue().startsWith("BLOCK:")) {
-            if (!member.checkClientSignature(leaderValue)) {
-                dcLogger.error("Leader forged new value");
-                return null;
-            }
+//        if (!member.checkClientSignature(leaderValue)) {
+//            dcLogger.error("Leader forged new value");
+//            return null;
+//        }
             // check if each tx in block is valid
 //            List<Transaction> txs = JsonAdapter.parseTransactions(leaderValue.getValue());
 //            for (Transaction tx : txs) {
@@ -237,7 +230,6 @@ public class ConsensusHandler {
 //                }
 //            }
 
-        }
 //        else {
 //            // append request (stringchain)
 //            if (!checkClientSignature(leaderValue)) {

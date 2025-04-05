@@ -27,7 +27,7 @@ public class ConsensusState {
     public ConsensusState(String memberName, int currentConsensusInstance) {
         // Initial State
         this.memberName = memberName;
-        this.current = new ValueTimestampPair(0, "");
+        this.current = new ValueTimestampPair(0);
         this.writeset = new ArrayList<>();
         this.currentConsensusInstance = currentConsensusInstance;
         this.writeMessages = new HashMap<>();
@@ -179,13 +179,13 @@ public class ConsensusState {
         return null;
     }
 
-    public ValueTimestampPair waitForAcceptQuorum(int byzantineQuorum) {
+    public Block waitForAcceptQuorum(int byzantineQuorum) {
         if(waitForQuorum(byzantineQuorum, acceptCounters, TIMEOUT)) {
             // Quorum reached
             System.out.print("[ConsensusState] Accepted values: ");
             printValues(acceptCounters);
             System.out.println();
-            return decideValue(acceptCounters);
+            return decideValue(acceptCounters).getValue();
         }
         // Timeout
         return null;
@@ -221,7 +221,7 @@ public class ConsensusState {
     }
 
     public void nextInstance() {
-        this.current = new ValueTimestampPair(0, "");
+        this.current = new ValueTimestampPair(0);
         this.writeset = new ArrayList<>();
         this.currentConsensusInstance = this.currentConsensusInstance +1;
         this.writeMessages = new HashMap<>();

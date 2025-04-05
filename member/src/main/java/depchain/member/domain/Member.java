@@ -30,12 +30,10 @@ public class Member {
     protected final DCLogger dcLogger;
     protected PerfectLink perfectLink;
     // state info
-    protected ConsensusState consensusState;
     protected final StringChain stringChain;
     protected BlockChainState blockChainState;
     // queues for message processing
     protected BlockingQueue<Message> messageQueue;
-    protected BlockingQueue<AppendMessage> appendQueue;
     protected BlockingQueue<TransferMessage> transferQueue = new LinkedBlockingQueue<>();
     private final Map<Integer, Long> clientNonces = new ConcurrentHashMap<>();
     private long serverNonce = 0L;
@@ -49,22 +47,19 @@ public class Member {
     // for transfer processing
     private final ScheduledExecutorService blockSched = Executors.newSingleThreadScheduledExecutor();
     private static final int BLOCK_TIMEOUT_SECONDS = 5;
-    private ConsensusHandler consensusHandler;
+    protected ConsensusHandler consensusHandler;
 
     public Member(Config config,
                   DCLogger dcLogger,
                   PerfectLink pf,
                   ConsensusState cState,
                   StringChain bcState,
-                  BlockingQueue<Message> messageQueue,
-                  BlockingQueue<AppendMessage> appendQueue) {
+                  BlockingQueue<Message> messageQueue) {
        this.config = config;
        this.dcLogger = dcLogger;
        this.perfectLink = pf;
-       this.consensusState = cState;
        this.stringChain = bcState;
        this.messageQueue = messageQueue;
-       this.appendQueue = appendQueue;
        this.consensusHandler = new ConsensusHandler(this, dcLogger, cState);
     }
 
@@ -146,32 +141,31 @@ public class Member {
                 Message message = messageQueue.take();
                 switch (message.getType()) {
                     case APPEND:
-                        AppendMessage appendMessage = (AppendMessage) message;
-                        this.appendQueue.put(appendMessage);
+                        // does nothing
                         break;
                     case READ:
                         ReadMessage readMessage = (ReadMessage) message;
-                        if (readMessage.getConsensusInstance() == this.consensusState.getInstance())
+                        if (readMessage.getConsensusInstance() == consensusHandler.getConsensusState().getInstance())
                             handleRead(readMessage);
                         break;
                     case STATE:
                         StateMessage stateMessage = (StateMessage) message;
-                        if (stateMessage.getConsensusInstance() == this.consensusState.getInstance())
+                        if (stateMessage.getConsensusInstance() == consensusHandler.getConsensusState().getInstance())
                             handleState(stateMessage);
                         break;
                     case COLLECTED:
                         CollectedMessage collectedMessage = (CollectedMessage) message;
-                        if (collectedMessage.getConsensusInstance() == this.consensusState.getInstance())
+                        if (collectedMessage.getConsensusInstance() == consensusHandler.getConsensusState().getInstance())
                             handleCollected(collectedMessage);
                         break;
                     case WRITE:
                         WriteMessage writeMessage = (WriteMessage) message;
-                        if (writeMessage.getConsensusInstance() == this.consensusState.getInstance())
+                        if (writeMessage.getConsensusInstance() == consensusHandler.getConsensusState().getInstance())
                             handleWrite(writeMessage);
                         break;
                     case ACCEPT:
                         AcceptMessage acceptMessage = (AcceptMessage) message;
-                        if (acceptMessage.getConsensusInstance() == this.consensusState.getInstance())
+                        if (acceptMessage.getConsensusInstance() == consensusHandler.getConsensusState().getInstance())
                             handleAccept(acceptMessage);
                         break;
                     case TRANSFER:
@@ -262,45 +256,45 @@ public class Member {
         String prevHash = lastBlock.getHash();
         long timestamp = System.currentTimeMillis();
         Block block = new Block(prevHash, transactions, lastBlock.getBlockNumber()+1, timestamp);
-        this.blockChainState.setLastBlock(block);
-        // serialize it
-        JsonObject blockJson = JsonAdapter.serializeBlock(block);
-        String blockStr = "BLOCK:" + blockJson;
-        AppendMessage appendMessage = new AppendMessage(blockStr, config.getPort(), block.getBlockNumber());
-        //dcLogger.verbose("Blockstr: " + blockStr);
-        //dcLogger.verbose("Append Message: " + appendMessage);
-        try {
-            appendQueue.put(appendMessage);
-        } catch (InterruptedException e) {
-            dcLogger.error("Error while processing append message: " + e.getMessage());
-        }
-
-        //boolean result = CommonUtils.saveJsonToFile(blockJson, config.getBlockDir() + "/block" + block.getBlockNumber() + ".json");
-        //if (result) {
-        //    dcLogger.log("Block " + block.getBlockNumber() + " saved successfully");
-        //} else {
-        //    dcLogger.log("Failed to save block " + block.getBlockNumber());
-        //}
+        // add valts to consensus
+        ValueTimestampPair newValts = new ValueTimestampPair(0, block);
+        consensusHandler.addValtsForConsensus(newValts);
     }
+
+//    public void handleAppend(AppendMessage appendMessage) {
+//        long lastClientNonce = getClientNonce(appendMessage.getPort());
+//        if (appendMessage.getNonce() <= lastClientNonce) {
+//            dcLogger.alert("Received replayed message");
+//            return;
+//        }
+//        ValueTimestampPair newValue = new ValueTimestampPair(
+//                0,
+//                new ConsensusString(appendMessage.getValue()),
+//                appendMessage.getPort(),
+//                appendMessage.getNonce()
+//        );
+//        newValue.setClientSignature(appendMessage.getSignature());
+//        consensusHandler.addValtsForConsensus(newValue);
+//    }
 
     public void handleRead(ReadMessage readMessage) {
         //dcLogger.log("Received: " + readMessage);
+        ConsensusState state = consensusHandler.getConsensusState();
         // sign: current||writeset||instance||epoch
-        String dataToSign = consensusState.getCurrent().toString() + consensusState.getWriteset() + consensusState.getInstance() + consensusState.getEpoch();
-        //dcLogger.log("Signing data: " + dataToSign);
+        String dataToSign = state.getCurrent().toString() + state.getWriteset() + state.getInstance() + state.getEpoch();
         String mySignature = Security.makeDS(dataToSign, Security.getMyPrivateKey(config.getMyName()));
         // don't send own instance of consensus state to message, send a copy or else stack overflow error
-        ConsensusState myState = new ConsensusState(config.getMyName(), consensusState.getCurrent(), consensusState.getWriteset());
+        ConsensusState myState = new ConsensusState(config.getMyName(), state.getCurrent(), state.getWriteset());
         // TODO -> i used the setter here to not change the constructor, use the constructor later
-        myState.setInstance(consensusState.getInstance());
-        StateMessage stateMessage = new StateMessage(myState, mySignature, consensusState.getInstance(), config.getPort());
+        myState.setInstance(state.getInstance());
+        StateMessage stateMessage = new StateMessage(myState, mySignature, state.getInstance(), config.getPort());
         sendToLeader(stateMessage);
     }
 
     public void handleState(StateMessage stateMessage) {
         //dcLogger.log("Received: " + stateMessage);
         if (isLeader()) {
-            ConsensusLeaderState leaderState = (ConsensusLeaderState) consensusState;
+            ConsensusLeaderState leaderState = (ConsensusLeaderState) consensusHandler.getConsensusState();
             leaderState.addMemberState(stateMessage);
         } else {
             dcLogger.log("[ERROR] Received state message but not the leader");
@@ -312,17 +306,17 @@ public class Member {
         if (collectedMessage.getPort() != config.getLeader().getPort()) {
             return;
         }
-        consensusState.addCollectedMessage(collectedMessage);
+        consensusHandler.getConsensusState().addCollectedMessage(collectedMessage);
     }
 
     public void handleWrite(WriteMessage writeMessage) {
         //dcLogger.log("Received: " + writeMessage);
-        consensusState.addWriteMessage(writeMessage);
+        consensusHandler.getConsensusState().addWriteMessage(writeMessage);
     }
 
     public void handleAccept(AcceptMessage acceptMessage) {
         //dcLogger.log("Received: " + acceptMessage);
-        consensusState.addAcceptMessage(acceptMessage);
+        consensusHandler.getConsensusState().addAcceptMessage(acceptMessage);
     }
 
     private void handleBalanceMessage(BalanceOfMessage balanceOfMessage) {
@@ -337,7 +331,7 @@ public class Member {
 
         BalanceReply balanceReply = new BalanceReply(
                 true,
-                this.consensusState.getInstance(),
+                consensusHandler.getConsensusState().getInstance(),
                 balanceOfMessage.getAddress(),
                 balance,
                 balanceOfMessage.getCoinType(),
@@ -365,7 +359,7 @@ public class Member {
 
         AllowanceReply allowanceReply = new AllowanceReply(
                 true,
-                this.consensusState.getInstance(),
+                consensusHandler.getConsensusState().getInstance(),
                 allowanceMessage.getOwner(),
                 allowanceMessage.getSpender(),
                 allowance,
@@ -388,7 +382,7 @@ public class Member {
         }
         IsBlackListedReply isBlackListedReply = new IsBlackListedReply(
                 true,
-                this.consensusState.getInstance(),
+                consensusHandler.getConsensusState().getInstance(),
                 isBlackListedMessage.getAccount(),
                 result,
                 isBlackListedMessage.getCoinType(),
@@ -399,35 +393,7 @@ public class Member {
         sendToClient(isBlackListedReply, isBlackListedMessage.getPort());
     }
 
-
-    /***
-     * Waits for new append requests and starts consensus to add them in the blockchain
-     */
     public void doConsensus() {
-        while (running) {
-            if (config.getLeader().getPort() != config.getPort()) {
-                // if not the leader, this thread will only be responsible for
-                // deciding values to write as it receives COLLECT messages
-                // from the main thread
-                decideValue();
-                continue;
-            }
-            try {
-                AppendMessage appendMessage = appendQueue.take();
-                // leader must keep the consensus going until a
-                // value is appended to the blockchain
-                boolean finished = false;
-                while (!finished) {
-                    startConsensus(appendMessage);
-                    finished = decideValue();
-                }
-            } catch (InterruptedException e) {
-                dcLogger.log("Consensus thread was interrupted while waiting for append messages");
-            }
-        }
-    }
-
-    public void doConsensus2() {
         while (running) {
             if (config.getLeader().getPort() != config.getPort()) {
                 // if not the leader, this thread will only be responsible for
@@ -435,10 +401,8 @@ public class Member {
                     // aborted
                     consensusHandler.getConsensusState().nextEpoch();
                 }
-                continue;
-            }
-            try {
-                AppendMessage appendMessage = appendQueue.take();
+            } else {
+                ValueTimestampPair newValts = consensusHandler.getNextValtsForConsensus();
                 // leader must keep the consensus going until a
                 // value is appended to the blockchain
                 boolean finished = false;
@@ -446,241 +410,18 @@ public class Member {
                     // checks for replays
                     // TODO -> check client signature here?
                     // TODO maybe move some code to other function to make it smaller
-                    long lastClientNonce = getClientNonce(appendMessage.getPort());
-                    // if it doesn't start with BLOCK:, it's an append msg
-                    if (!appendMessage.getValue().startsWith("BLOCK:") && appendMessage.getNonce() <= lastClientNonce) {
-                        dcLogger.alert("Received replayed message");
-                        return;
-                    }
-                    ConsensusLeaderState leaderState = (ConsensusLeaderState) consensusState;
-                    if (consensusState.getCurrent().getValue().isEmpty()) {
-                        ValueTimestampPair newValue = new ValueTimestampPair(0, appendMessage.getValue(),
-                                appendMessage.getPort(), appendMessage.getNonce());
-                        newValue.setClientSignature(appendMessage.getSignature());
-                        leaderState.setCurrent(newValue);
+                    ConsensusLeaderState leaderState = (ConsensusLeaderState) consensusHandler.getConsensusState();
+                    if (leaderState.getCurrent().isEmpty()) {
+                        leaderState.setCurrent(newValts);
                     }
                     finished = consensusHandler.startConsenusLeader(leaderState);
-                    if(!finished) {
+                    if (!finished) {
                         consensusHandler.getConsensusState().nextEpoch();
                     }
                 }
-            } catch (InterruptedException e) {
-                dcLogger.log("Consensus thread was interrupted while waiting for append messages");
             }
+            consensusHandler.getConsensusState().nextInstance();
         }
-    }
-
-
-    /***
-     * Conditional Collect part of the algorithm
-     * @param appendMessage - message with value to be proposed if epoch 0
-     */
-    public void startConsensus(AppendMessage appendMessage) {
-        // checks for replays
-        // TODO -> check client signature here?
-        long lastClientNonce = getClientNonce(appendMessage.getPort());
-        // if it doesn't start with BLOCK:, it's an append msg
-        if (!appendMessage.getValue().startsWith("BLOCK:") && appendMessage.getNonce() <= lastClientNonce) {
-            dcLogger.alert("Received replayed message");
-            return;
-        }
-        //dcLogger.log("Received: " + appendMessage);
-        dcLogger.log("-- STARTING CONSENSUS FOR '" + appendMessage.getValue() + "' --");
-
-        // if I am the leader and this is the first epoch I should propose the value
-        // of the message
-        ConsensusLeaderState leaderState = (ConsensusLeaderState) consensusState;
-        if (consensusState.getCurrent().getValue().isEmpty()) {
-            ValueTimestampPair newValue = new ValueTimestampPair(0, appendMessage.getValue(),
-                    appendMessage.getPort(), appendMessage.getNonce());
-            newValue.setClientSignature(appendMessage.getSignature());
-            leaderState.setCurrent(newValue);
-        }
-
-        // sends a READ message to all members to collect their states
-        ReadMessage readMessage = new ReadMessage(leaderState.getInstance());
-        dcLogger.log("Broadcasting: " + readMessage);
-        broadCastMessage(readMessage);
-        dcLogger.log("Waiting for state quorum of size: " + config.getByzantineQuorum() + "...");
-        List<StateMessage> states = leaderState.waitForStateQuorum();
-        if (leaderState.getCaughtInvalidSignature()) {
-            dcLogger.log("Caught invalid signature in state quorum");
-            this.caughtInvalidSignature = true;
-        }
-        dcLogger.log("Quorum of STATE reached");
-
-        // Send the collection of states to all the members
-        CollectedMessage collectedMessage = new CollectedMessage(states, config.getPort(), leaderState.getInstance());
-        dcLogger.log("Broadcasting: " + collectedMessage);
-        broadCastMessage(collectedMessage);
-    }
-
-    /***
-     * Chooses a value from collection of states and begins write phase
-     * @return false if it aborted, else true
-     */
-    public boolean decideValue() {
-        dcLogger.log("Waiting for states to decide value");
-        List<StateMessage> collectedStates = this.consensusState.waitForCollectedMessage();
-        if (collectedStates == null || collectedStates.size() < config.getByzantineQuorum()) {
-            // abort
-            dcLogger.log("aborted after collecting states");
-            this.consensusState.nextEpoch();
-            return false;
-        }
-        ValueTimestampPair decidedVTP = decideOnCollectedValues(collectedStates);
-        if (decidedVTP == null) {
-            // abort
-            dcLogger.log("aborted after deciding null value");
-            this.consensusState.nextEpoch();
-            return false;
-        }
-        //ValueTimestampPair decidePair = new ValueTimestampPair(this.consensusState.getEpoch(), value);
-        this.consensusState.updateWriteSet(decidedVTP);
-        WriteMessage writeMessage = new WriteMessage(decidedVTP, config.getPort(), consensusState.getInstance());
-        dcLogger.log("Broadcasting: " + writeMessage);
-        broadCastMessage(writeMessage);
-        return writePhase();
-    }
-
-    /***
-     * Write phase of Consensus algorithm
-     * @return false if aborted, true if a value was DECIDED and appended to blockchain
-     */
-    public boolean writePhase() {
-        dcLogger.log("Waiting for write quorum of size: " + config.getByzantineQuorum() + "...");
-        ValueTimestampPair writeValts = this.consensusState.waitForWriteQuorum(config.getByzantineQuorum());
-        if (writeValts == null) {
-            // Abort
-            dcLogger.log("ABORTED (WRITE)");
-            this.consensusState.nextEpoch();
-            return false;
-        }
-        dcLogger.log("Quorum of WRITE reached");
-        //ValueTimestampPair writeValts = new ValueTimestampPair(this.consensusState.getEpoch(), writeValue);
-        this.consensusState.setCurrent(writeValts);
-
-        // Broadcast ACCEPT and wait for quorum to DECIDE value
-        AcceptMessage acceptMessage = new AcceptMessage(consensusState.getCurrent(), config.getPort(), consensusState.getInstance());
-        dcLogger.log("Broadcasting: " + acceptMessage);
-        broadCastMessage(acceptMessage);
-
-        dcLogger.log("Waiting for accept quorum of size: " + config.getByzantineQuorum() + "...");
-        ValueTimestampPair accept = this.consensusState.waitForAcceptQuorum(config.getByzantineQuorum());
-        if (accept == null) {
-            // Abort
-            dcLogger.log("ABORTED (ACCEPT)");
-            this.consensusState.nextEpoch();
-            return false;
-        }
-        dcLogger.log("Quorum of accept reached");
-
-        // DECIDE value
-        String value = consensusState.getCurrent().getValue();
-        if (value.startsWith("BLOCK:")) {
-            // block decided in consensus, handle appropriately
-            dcLogger.verbose("Block decided: " + value);
-            executeTransactions(value);
-            this.consensusState.nextInstance();
-            return true;
-        }
-        // else, it was an APPEND request -> append to stringchain
-        this.stringChain.appendString(consensusState.getCurrent().getValue());
-        ClientReplyMessage clientReplyMessage = new ClientReplyMessage(
-                accept.getValue(),
-                true,
-                consensusState.getInstance(),
-                MessageType.STRING_REPLY
-        );
-        sendToClient(clientReplyMessage, accept.getClientPort());
-        this.consensusState.nextInstance();
-        return true;
-    }
-
-
-    /***
-     * Decide on a value to write based on the collection of
-     * States received from the other processes
-     * @param collectedStates collection of all the members states
-     * @return the value to write during this epoch, null if did not find any
-     */
-    public ValueTimestampPair decideOnCollectedValues(List<StateMessage> collectedStates) {
-        ValueTimestampPair leaderValue = null;
-        ValueTimestampPair highest = new ValueTimestampPair(-1, null, -1, -1);
-
-        for (StateMessage thisState : collectedStates) {
-            if (!verifyMemberStateAuthenticity(thisState)) {
-                dcLogger.error("Signature is invalid for " + thisState.getState().getMemberName());
-                // TODO -> hardcoded for the test (fix)
-                this.caughtInvalidSignature = true;
-                continue;
-            } else {
-                dcLogger.log("Signature is valid for " + thisState.getState().getMemberName());
-            }
-            if (thisState.getConsensusInstance() != this.consensusState.getInstance()) {
-                dcLogger.error("State message of different instance among COLLECTED");
-                continue;
-            }
-
-            ValueTimestampPair vts = thisState.getState().getCurrent();
-            // sets vts clientName to name that comes in the consensus state inside state message
-            //vts.setClientName(thisState.getState().getMemberName());
-            if (highest.getTimestamp() > vts.getTimestamp()) {
-                continue;
-            }
-            if (thisState.getState().getMemberName().equalsIgnoreCase(config.getLeader().getEntityName())) {
-                leaderValue = vts;
-            }
-
-            // count in how many writesets it appears
-            // must be at least 2f +1
-            int count = 0;
-            for (StateMessage otherState : collectedStates) {
-                for (ValueTimestampPair pair : otherState.getState().getWriteset()) {
-                    if (pair.getValue().equals(vts.getValue()) && pair.getTimestamp() >= vts.getTimestamp()) {
-                        count++;
-                        break;
-                    }
-                }
-                if (count >= config.getByzantineQuorum()) {
-                    highest = vts;
-                    break;
-                }
-            }
-        }
-
-        if (highest.getValue() != null) {
-            return highest;
-        }
-        // default to leader value
-        if (leaderValue == null || leaderValue.getValue() == null) {
-            dcLogger.error("Did not get leader value in COLLECTED message");
-            return null;
-        }
-        // TODO -> how to check client signatures for blocks? check for each field?
-        if (!leaderValue.getValue().startsWith("BLOCK:")) {
-            if (!checkClientSignature(leaderValue)) {
-                dcLogger.error("Leader forged new value");
-                return null;
-            }
-            // check if each tx in block is valid
-//            List<Transaction> txs = JsonAdapter.parseTransactions(leaderValue.getValue());
-//            for (Transaction tx : txs) {
-//                if (!Security.validateTransaction(tx)) {
-//                    dcLogger.error("Signature for transaction is invalid: " + tx);
-//                    return null;
-//                }
-//            }
-
-        }
-//        else {
-//            // append request (stringchain)
-//            if (!checkClientSignature(leaderValue)) {
-//                dcLogger.error("Leader forged new value");
-//                return null;
-//            }
-//        }
-        return leaderValue;
     }
 
     private void handleTransactions(List<Transaction> transactions) {
@@ -708,12 +449,12 @@ public class Member {
         }
     }
 
-    private void replyTransactions(List<Transaction> transactions) {
+    public void replyTransactions(List<Transaction> transactions) {
         for(Transaction tx: transactions) {
             // TODO could make a TransferReply constructor with a Transaction as argument
             TransferReply transferReply = new TransferReply(
                     tx.getSuccess(),
-                    this.consensusState.getInstance(),
+                    consensusHandler.getConsensusState().getInstance(),
                     tx.getAmount(),
                     tx.getSender(),
                     tx.getSpender(),
@@ -729,19 +470,15 @@ public class Member {
         }
     }
 
-    public void executeTransactions(String value) {
-        // we receive a BLOCK:{jsonOfblock} message
-        String blockStr = value.substring("BLOCK:".length()).trim();
-        dcLogger.log("BlockStr: " + blockStr);
-        JsonObject blockJson = JsonParser.parseString(blockStr).getAsJsonObject();
-        dcLogger.log("BlockJson: " + blockJson.toString());
-        Block block = JsonAdapter.parseBlock(blockJson);
+    public void executeTransactions(Block block) {
         dcLogger.log("Executing transactions in block: " + block);
-
-        handleTransactions(block.getTransactions());
-        replyTransactions(block.getTransactions());
         // update transaction results (if we use the previous ref of blockJson, all tx's status are false)
-        blockJson = JsonAdapter.serializeBlock(block);
+        handleTransactions(block.getTransactions());
+        saveBlock(block);
+    }
+
+    private void saveBlock(Block block) {
+        JsonObject blockJson = JsonAdapter.serializeBlock(block);
         boolean result = CommonUtils.saveJsonToFile(blockJson, config.getBlockDir() + "/block" + block.getBlockNumber() + ".json");
         if (result) {
             dcLogger.log("Block " + block.getBlockNumber() + " saved successfully");
@@ -754,7 +491,7 @@ public class Member {
         ConsensusState consensusSt = stateMessage.getState();
         String memberName = consensusSt.getMemberName();
         PublicKey memberPubKey = Security.getMembershipPublicKey(memberName);
-        String reconstructSignatureData = consensusSt.getCurrent().toString() + consensusSt.getWriteset().toString() + consensusSt.getInstance() + consensusSt.getEpoch();
+        String reconstructSignatureData = consensusSt.getCurrent().toString() + consensusSt.getWriteset() + consensusSt.getInstance() + consensusSt.getEpoch();
         return Security.verifyDS(stateMessage.getSignature(), reconstructSignatureData, memberPubKey);
     }
 
@@ -763,14 +500,13 @@ public class Member {
         if (clientSignature == null) return false;
         // TODO -> fix this hardcoded for 1 client (FIX GETFIRST())
         dcLogger.log("Leader Vts: " + leaderVts);
-        String reconstructSignatureData = leaderVts.getValue() + leaderVts.getNonce();
-        // gets client with same port as the one in the vts
+        String reconstructSignatureData = leaderVts.getValue().toString() + leaderVts.getNonce();
         Entity client = config.getClients().stream()
                 .filter(c -> c.getPort() == leaderVts.getClientPort())
                 .findFirst()
                 .orElse(null);
         if (client == null) {
-            dcLogger.log("Client not found");
+            dcLogger.error("Client not found");
             return false;
         }
         PublicKey clientPubKey = Security.getMembershipPublicKey(client.getEntityName());
@@ -903,5 +639,9 @@ public class Member {
 
     public boolean getReplayAttack() {
         return replayAttack;
+    }
+
+    public void setLastBlock(Block block){
+        blockChainState.setLastBlock(block);
     }
 }

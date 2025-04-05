@@ -9,6 +9,7 @@ import depchain.common.messaging.TransactionType;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.math.BigInteger;
+import java.util.Objects;
 
 public class Transaction {
     // based on: https://ethereum.org/en/developers/docs/transactions/
@@ -112,10 +113,11 @@ public class Transaction {
         if (this == o) return true;
         if (o == null || o.getClass() != this.getClass()) return false;
         Transaction other = (Transaction) o;
-        return this.senderAddr.equals(other.senderAddr) &&
-                this.spenderAddr.equals(other.spenderAddr) &&
-                this.recipientAddr.equals(other.recipientAddr) &&
-                this.amount.equals(other.amount) &&
+
+        return Objects.equals(this.senderAddr, other.senderAddr) &&
+                Objects.equals(this.spenderAddr, other.spenderAddr) &&
+                Objects.equals(this.recipientAddr, other.recipientAddr) &&
+                Objects.equals(this.amount, other.amount) &&
                 this.nonce == other.nonce &&
                 this.transactionType == other.transactionType &&
                 this.success == other.success &&
@@ -135,6 +137,21 @@ public class Transaction {
                 ", coinType=" + coinType +
                 '}';
     }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(
+                senderAddr,
+                spenderAddr,
+                recipientAddr,
+                amount,
+                nonce,
+                transactionType,
+                success,
+                coinType
+        );
+    }
+
     /*
     from TransferMessage
     public String getDataToSign() {
