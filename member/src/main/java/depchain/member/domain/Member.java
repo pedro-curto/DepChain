@@ -145,27 +145,27 @@ public class Member {
                         break;
                     case READ:
                         ReadMessage readMessage = (ReadMessage) message;
-                        if (readMessage.getConsensusInstance() >= this.consensusState.getInstance())
+                        if (readMessage.getConsensusInstance() >= consensusHandler.getConsensusState().getInstance())
                             handleRead(readMessage);
                         break;
                     case STATE:
                         StateMessage stateMessage = (StateMessage) message;
-                        if (stateMessage.getConsensusInstance() >= this.consensusState.getInstance())
+                        if (stateMessage.getConsensusInstance() >= consensusHandler.getConsensusState().getInstance())
                             handleState(stateMessage);
                         break;
                     case COLLECTED:
                         CollectedMessage collectedMessage = (CollectedMessage) message;
-                        if (collectedMessage.getConsensusInstance() >= this.consensusState.getInstance())
+                        if (collectedMessage.getConsensusInstance() >= consensusHandler.getConsensusState().getInstance())
                             handleCollected(collectedMessage);
                         break;
                     case WRITE:
                         WriteMessage writeMessage = (WriteMessage) message;
-                        if (writeMessage.getConsensusInstance() >= this.consensusState.getInstance())
+                        if (writeMessage.getConsensusInstance() >= consensusHandler.getConsensusState().getInstance())
                             handleWrite(writeMessage);
                         break;
                     case ACCEPT:
                         AcceptMessage acceptMessage = (AcceptMessage) message;
-                        if (acceptMessage.getConsensusInstance() >= this.consensusState.getInstance())
+                        if (acceptMessage.getConsensusInstance() >= consensusHandler.getConsensusState().getInstance())
                             handleAccept(acceptMessage);
                         break;
                     case TRANSFER:
