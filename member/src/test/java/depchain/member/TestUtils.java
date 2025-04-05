@@ -122,4 +122,58 @@ public class TestUtils {
 		fromClient.setLastBalance(null);
 		toClient.setLastBalance(null);
 	}
+
+	public static void testAllowanceMechanism(
+			Client ownerClient,
+			Client spenderClient,
+			Client toClient,
+			BigInteger amount,
+			BigInteger expectedOwnerBalance,
+			BigInteger expectedToBalance,
+			CoinType coinType
+	) {
+		String toName = toClient.getClientName();
+		String spenderName = spenderClient.getClientName();
+		String ownerName = ownerClient.getClientName();
+
+		// owner approves spender to spend <amount> ISTCOIN
+		ownerClient.sendApprove(spenderName, amount, coinType);
+		// checks op success
+		Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
+			Assertions.assertNotNull(ownerClient.getLastTransferReply());
+		});
+		Assertions.assertTrue(ownerClient.getLastTransferReply().getSuccess());
+		System.out.println("(TEST) owner approved sender to spend <amount> ISTCOIN");
+		ownerClient.setLastTransferReply(null);
+		// we check spender's allowance
+		spenderClient.sendGetAllowance(ownerName, spenderName, CoinType.ISTCOIN);
+		Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
+			Assertions.assertNotNull(spenderClient.getLastAllowance());
+		});
+		Assertions.assertEquals(spenderClient.getLastAllowance(), amount);
+		System.out.println("(TEST) spender's allowance is <amount> ISTCOIN from paulo");
+
+		// now pedro will try to execute a transferFrom tx from paulo's account to joao
+		spenderClient.sendTransferFrom(ownerName, toName, amount, CoinType.ISTCOIN);
+		Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
+			Assertions.assertNotNull(spenderClient.getLastTransferReply());
+		});
+		// finally, check if it went well
+		Assertions.assertTrue(spenderClient.getLastTransferReply().getSuccess());
+		System.out.println("(TEST) spender transfered <amount> ISTCOIN from owner to recipient");
+		// check updated balances
+		ownerClient.sendGetBalance(ownerName, coinType);
+		toClient.sendGetBalance(toName, coinType);
+		Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
+			Assertions.assertNotNull(ownerClient.getLastBalance());
+			Assertions.assertNotNull(toClient.getLastBalance());
+		});
+
+		// compare expected balances
+		Assertions.assertEquals(expectedOwnerBalance, ownerClient.getLastBalance());
+		Assertions.assertEquals(expectedToBalance, toClient.getLastBalance());
+		// reset last balance
+		ownerClient.setLastBalance(null);
+		toClient.setLastBalance(null);
+	}
 }

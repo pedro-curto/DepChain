@@ -14,10 +14,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.math.BigInteger;
 import java.security.PublicKey;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.*;
 
 import org.hyperledger.besu.evm.fluent.EVMExecutor;
@@ -47,6 +44,8 @@ public class Member {
     // for transfer processing
     private final ScheduledExecutorService blockSched = Executors.newSingleThreadScheduledExecutor();
     private static final int BLOCK_TIMEOUT_SECONDS = 5;
+    private static final int MAX_TX_PER_BLOCK = 15;
+    private static final int MAX_TX_PER_CLIENT = 5;
     protected ConsensusHandler consensusHandler;
 
     public Member(Config config,
@@ -225,14 +224,39 @@ public class Member {
         List<TransferMessage> tmp = new ArrayList<>();
         List<Transaction> transactions = new ArrayList<>();
         transferQueue.drainTo(tmp);
-        // TODO -> order txs by nonce per client
         if (tmp.isEmpty()) {
             dcLogger.verbose("No transfer messages to process");
             return;
         }
-        // sort tmp based on nonces
-        tmp.sort(Comparator.comparingLong(TransferMessage::getNonce));
+        // pre-select transactions, making sure there's a max per block and per client
+        Map<String, Integer> clientTxs = new HashMap<>();
+        List<TransferMessage> acceptedTxs = new ArrayList<>();
         for (TransferMessage msg : tmp) {
+            int currentCount = clientTxs.getOrDefault(msg.getFrom(), 0);
+            if (acceptedTxs.size() < MAX_TX_PER_BLOCK
+                    && currentCount < MAX_TX_PER_CLIENT) {
+                acceptedTxs.add(msg);
+                clientTxs.put(msg.getFrom(), currentCount + 1);
+            } else {
+                // builds a reply rejecting the transaction
+                TransferReply txReply = new TransferReply(
+                        false,
+                        -1,
+                        msg.getValue(),
+                        msg.getFrom(),
+                        msg.getSpender(),
+                        msg.getTo(),
+                        msg.getCoinType(),
+                        msg.getTransactionType(),
+                        this.serverNonce,
+                        config.getPort()
+                );
+                sendToClient(txReply, msg.getClientPort());
+            }
+        }
+        // sort the accepted txs based on nonces
+        acceptedTxs.sort(Comparator.comparingLong(TransferMessage::getNonce));
+        for (TransferMessage msg : acceptedTxs) {
 //            if (!Security.validateTransferMessage(msg)) {
 //                dcLogger.alert("Signature for transfer message is invalid: " + msg);
 //                continue;
@@ -251,7 +275,6 @@ public class Member {
             transactions.add(tx);
         }
         // constructs block: prevHash, txs, blockNum, ts (he calculates hash on constructor)
-        // TODO -> how to compute hash of new block?
         Block lastBlock = this.blockChainState.getLastBlock();
         String prevHash = lastBlock.getHash();
         long timestamp = System.currentTimeMillis();
@@ -281,8 +304,10 @@ public class Member {
         //dcLogger.log("Received: " + readMessage);
         ConsensusState state = consensusHandler.getConsensusState();
         // sign: current||writeset||instance||epoch
-        String dataToSign = state.getCurrent().toString() + state.getWriteset() + state.getInstance() + state.getEpoch();
+        String dataToSign = state.getDataToSign();
+        //String dataToSign = state.getCurrent().toString() + state.getWriteset() + state.getInstance() + state.getEpoch();
         String mySignature = Security.makeDS(dataToSign, Security.getMyPrivateKey(config.getMyName()));
+        dcLogger.log("dataToSign: " + dataToSign);
         // don't send own instance of consensus state to message, send a copy or else stack overflow error
         ConsensusState myState = new ConsensusState(config.getMyName(), state.getCurrent(), state.getWriteset());
         // TODO -> i used the setter here to not change the constructor, use the constructor later
@@ -491,7 +516,9 @@ public class Member {
         ConsensusState consensusSt = stateMessage.getState();
         String memberName = consensusSt.getMemberName();
         PublicKey memberPubKey = Security.getMembershipPublicKey(memberName);
-        String reconstructSignatureData = consensusSt.getCurrent().toString() + consensusSt.getWriteset() + consensusSt.getInstance() + consensusSt.getEpoch();
+        String reconstructSignatureData = consensusSt.getDataToSign();
+        dcLogger.log("Reconstructed signature data: " + reconstructSignatureData);
+        //String reconstructSignatureData = consensusSt.getCurrent().toString() + consensusSt.getWriteset() + consensusSt.getInstance() + consensusSt.getEpoch();
         return Security.verifyDS(stateMessage.getSignature(), reconstructSignatureData, memberPubKey);
     }
 

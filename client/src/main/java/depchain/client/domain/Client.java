@@ -45,6 +45,7 @@ public class Client {
     private BigInteger lastAllowance;
 
     private Map<ClientReplyMessage, Integer> memberReplyMessages;
+    private boolean amHappy = false;
 
     public Client(String clientName,
                   int port,
@@ -92,7 +93,7 @@ public class Client {
         }
     }
 
-    public void  assignAddress() {
+    public void assignAddress() {
         // load the genesis file
         GenesisBlock genesisBlock = CommonUtils.loadGenesisBlock();
 
@@ -138,6 +139,7 @@ public class Client {
                 System.exit(0);
             } else if (content[0].equalsIgnoreCase("HELP")) {
                 printHelpInfo();
+                amHappy = true;
             } else if (content[0].equalsIgnoreCase("APPEND")) {
                 if (content.length < 2) {
                     System.out.println("Invalid command. Usage: APPEND <string>");
@@ -159,6 +161,23 @@ public class Client {
             } else {
                 System.out.println("Invalid Command.");
                 printHelpInfo();
+                amHappy = true;
+            }
+            //waitForResponse();
+            // reset amHappy for the next command
+            amHappy = false;
+        }
+    }
+
+    private void waitForResponse() {
+        synchronized (this) {
+            while (!amHappy) {
+                try {
+                    wait();
+                } catch (InterruptedException e) {
+                    System.out.println("Thread interrupted: " + e.getMessage());
+                    Thread.currentThread().interrupt();
+                }
             }
         }
     }
@@ -421,7 +440,7 @@ public class Client {
     private void broadcastMessage(Message message) {
         for (Entity member : members) {
             perfectLink.sendMessage(message, member.getPort());
-            dcLogger.log("Sent message: " + message);
+            //dcLogger.log("Sent message: " + message);
         }
         incrementNonce();
     }
@@ -430,7 +449,7 @@ public class Client {
         dcLogger.log("Message: " + message);
         perfectLink.sendMessage(message, leaderPort);
         incrementNonce();
-        dcLogger.log("Sent message to leader: " + message);
+        //dcLogger.log("Sent message to leader: " + message);
     }
 
     public void sendAppend(String content) {
@@ -453,7 +472,7 @@ public class Client {
             } catch (InterruptedException e) {
                 continue;
             }
-            System.out.println("Delivering " + message.getType() + "...");
+            //System.out.println("Delivering " + message.getType() + "...");
             switch (message.getType()) {
                 case TRANSFER_REPLY:
                     TransferReply transferReply = (TransferReply) message;
@@ -487,7 +506,11 @@ public class Client {
         }
     }
 
-    private void handleIsBlackListedReply(IsBlackListedReply reply) {
+    /*------------------------------------------------------------------------*/
+    /*---------------------------- REPLY HANDLERS ----------------------------*/
+    /*------------------------------------------------------------------------*/
+
+    private synchronized void handleIsBlackListedReply(IsBlackListedReply reply) {
         memberReplyMessages.putIfAbsent(reply, 0);
         memberReplyMessages.put(reply, memberReplyMessages.get(reply) + 1);
         // reached quorum of f+1 equal messages
@@ -497,14 +520,15 @@ public class Client {
             System.out.println("result: " + reply.isBlackListed());
             System.out.println("success: " + reply.getSuccess());
             System.out.println("}");
+            this.amHappy = true;
+            notifyAll();
         }
         else {
-            System.out.println("Not reached quorum yet.");
+            //System.out.println("Not reached quorum yet.");
         }
-
     }
 
-    private void handleStringReply(ClientReplyMessage reply) {
+    private synchronized void handleStringReply(ClientReplyMessage reply) {
         memberReplyMessages.putIfAbsent(reply, 0);
         memberReplyMessages.put(reply, memberReplyMessages.get(reply) + 1);
         // reached quorum of f+1 equal messages
@@ -512,12 +536,15 @@ public class Client {
             System.out.println("Server appended String: {");
             System.out.println(reply.getValue());
             System.out.println("}");
+            this.amHappy = true;
+            notifyAll();
         }
         else {
-            System.out.println("Not reached quorum yet.");
+            //System.out.println("Not reached quorum yet.");
         }
     }
-    private void handleTransferReply(TransferReply reply) {
+
+    private synchronized void handleTransferReply(TransferReply reply) {
         memberReplyMessages.putIfAbsent(reply, 0);
         memberReplyMessages.put(reply, memberReplyMessages.get(reply) + 1);
         // reached quorum of f+1 equal messages
@@ -531,12 +558,15 @@ public class Client {
             System.out.println("success: " + reply.getSuccess());
             System.out.println("}");
             this.lastTransferReply = reply;
+            this.amHappy = true;
+            notifyAll();
         }
         else {
-            System.out.println("Not reached quorum yet.");
+            //System.out.println("Not reached quorum yet.");
         }
     }
-    private void handleBalanceReply(BalanceReply reply) {
+
+    private synchronized void handleBalanceReply(BalanceReply reply) {
         memberReplyMessages.putIfAbsent(reply, 0);
         memberReplyMessages.put(reply, memberReplyMessages.get(reply) + 1);
         // reached quorum of f+1 equal messages
@@ -547,14 +577,17 @@ public class Client {
             System.out.println("success: " + reply.getSuccess());
             System.out.println("}");
             this.lastBalance = reply.getBalance();
-            dcLogger.log("Instance of decision: " + reply.getInstanceOfDecision());
+            this.amHappy = true;
+            notifyAll();
+            //dcLogger.log("Instance of decision: " + reply.getInstanceOfDecision());
         }
         else {
-            System.out.println("Not reached quorum yet.");
+            //System.out.println("Not reached quorum yet.");
         }
 
     }
-    private void handleAllowanceReply(AllowanceReply reply) {
+
+    private synchronized void handleAllowanceReply(AllowanceReply reply) {
         memberReplyMessages.putIfAbsent(reply, 0);
         memberReplyMessages.put(reply, memberReplyMessages.get(reply) + 1);
         // reached quorum of f+1 equal messages
@@ -566,9 +599,11 @@ public class Client {
             System.out.println("success: " + reply.getSuccess());
             System.out.println("}");
             this.lastAllowance = reply.getAllowance();
+            this.amHappy = true;
+            notifyAll();
         }
         else {
-            System.out.println("Not reached quorum yet.");
+            //System.out.println("Not reached quorum yet.");
         }
     }
 

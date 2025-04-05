@@ -220,6 +220,10 @@ public class ConsensusState {
         return true;
     }
 
+    public String getDataToSign() {
+        return current.toString() + writeset;
+    }
+
     public void nextInstance() {
         this.current = new ValueTimestampPair(0);
         this.writeset = new ArrayList<>();

@@ -23,38 +23,39 @@ public class FakeSignatureByzantine extends Member {
     public FakeSignatureByzantine(Config config, DCLogger dcLogger, PerfectLink pf, ConsensusState cState, StringChain bcState, BlockingQueue<Message> messageQueue) {
         super(config, dcLogger, pf, cState, bcState, messageQueue);
     }
-//
-//
-//    public String getRandomMemberName() {
-//        String memberName;
-//        do {
-//            memberName = config.getMembers().get(random.nextInt(config.getMembers().size())).getEntityName();
-//        } while(memberName.equals(config.getMyName()));
-//
-//        return memberName;
-//    }
-//
-//    public int getMemberPort(String name) {
-//        for (Entity entity : config.getMembers()) {
-//            if (entity.getEntityName().equals(name)) {
-//                return entity.getPort();
-//            }
-//        }
-//        dcLogger.error("COULDN'T FIND MEMBER");
-//        return -1;
-//    }
-//
-//    @Override
-//    public void handleRead(ReadMessage readMessage) {
-//        dcLogger.log("Received: " + readMessage);
-//        String dataToSign = consensusState.getCurrent().toString() + consensusState.getWriteset();
-//        String mySignature = Security.makeDS(dataToSign, Security.getMyPrivateKey(config.getMyName()));
-//
-//        String randomMemberName = getRandomMemberName();
-//        // Send as a another member name
-//        ConsensusState myState = new ConsensusState(randomMemberName, consensusState.getCurrent(), consensusState.getWriteset());
-//        StateMessage stateMessage = new StateMessage(myState, mySignature, consensusState.getInstance(), getMemberPort(randomMemberName));
-//        dcLogger.log("Sending fake state message... : " + stateMessage);
-//        sendToLeader(stateMessage);
-//    }
+
+
+    public String getRandomMemberName() {
+        String memberName;
+        do {
+            memberName = config.getMembers().get(random.nextInt(config.getMembers().size())).getEntityName();
+        } while(memberName.equals(config.getMyName()));
+
+        return memberName;
+    }
+
+    public int getMemberPort(String name) {
+        for (Entity entity : config.getMembers()) {
+            if (entity.getEntityName().equals(name)) {
+                return entity.getPort();
+            }
+        }
+        dcLogger.error("COULDN'T FIND MEMBER");
+        return -1;
+    }
+
+    @Override
+    public void handleRead(ReadMessage readMessage) {
+        dcLogger.log("Received: " + readMessage);
+        ConsensusState consensusState = consensusHandler.getConsensusState();
+        String dataToSign = consensusState.getCurrent().toString() + consensusState.getWriteset();
+        String mySignature = Security.makeDS(dataToSign, Security.getMyPrivateKey(config.getMyName()));
+
+        String randomMemberName = getRandomMemberName();
+        // Send as a another member name
+        ConsensusState myState = new ConsensusState(randomMemberName, consensusState.getCurrent(), consensusState.getWriteset());
+        StateMessage stateMessage = new StateMessage(myState, mySignature, consensusState.getInstance(), getMemberPort(randomMemberName));
+        dcLogger.log("Sending fake state message... : " + stateMessage);
+        sendToLeader(stateMessage);
+    }
 }

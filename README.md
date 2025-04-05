@@ -1,17 +1,12 @@
 # DepChain
 
 ## TODO
-**Urgente**
-- Permitir receber mensagens de épocas e instâncias no futuro (pode estar relacionado com o issue abaixo)
-- Perceber o que se passa quando se dá spam a transações (começa a dar signature fail check e erros no log)
-- Implementar testes bizantinos (Step 5)
 
-**Se acabarmos o que está acima**
 - Implement approve
   - Beware that: "changing an allowance with this method (approve) brings the risk that someone may use both the old and the new allowance by unfortunate transaction ordering. One possible solution to mitigate this race condition is to first reduce the spender’s allowance to 0 and set the desired value afterwards: https://github.com/ethereum/EIPs/issues/20#issuecomment-263524729"
 - Fazer pré-seleção das transações (retornar se o balance for insuficiente)
-- Limitar nº de mensagens que um cliente pode ter num bloco
-- Limitar nº de mensagens que podem existir num bloco
+- Coordinated wrong state test
+- Coordinated
 
 ## Configuration
 

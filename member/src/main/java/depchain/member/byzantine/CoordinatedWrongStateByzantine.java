@@ -29,81 +29,83 @@ public class CoordinatedWrongStateByzantine extends Member {
         this.firstEpoch = true;
     }
 
-//    @Override
-//    public void handleRead(ReadMessage readMessage) {
-//        if (firstEpoch) {
-//            firstEpoch = false;
-//            super.handleRead(readMessage);
-//            return;
-//        }
-//        dcLogger.log("Received: " + readMessage);
-//
-//        if(valts == null) {
-//            dcLogger.error("VALTS CANNOT BE NULL");
-//        }
-//
-//        // Retrieves last value used, so it's signed by the client
-//        ValueTimestampPair fakeCurrent = new ValueTimestampPair(consensusState.getEpoch() + 1, valts.getValue());
-//        fakeCurrent.setClientSignature(valts.getClientSignature());
-//
-//        // <"ola", 1> [<"ola", 0>]
-//        // Create new fake valts pair for writeset
-//        ValueTimestampPair fakeOld = new ValueTimestampPair(fakeCurrent.getTimestamp() - 1, fakeCurrent.getValue());
-//        fakeOld.setClientSignature(fakeCurrent.getClientSignature());
-//        ArrayList<ValueTimestampPair> fakeWriteset = new ArrayList<>();
-//        fakeWriteset.add(fakeOld);
-//
-//        ConsensusState myState = new ConsensusState(config.getMyName(), fakeCurrent, fakeWriteset);
-//        String dataToSign = fakeCurrent.toString() + fakeWriteset;
-//        String mySignature = Security.makeDS(dataToSign, Security.getMyPrivateKey(config.getMyName()));
-//
-//        myState.setInstance(consensusState.getInstance());
-//        StateMessage stateMessage = new StateMessage(myState, mySignature, consensusState.getInstance(), config.getPort());
-//        dcLogger.log("Faking state message... -> " + stateMessage);
-//        sendToLeader(stateMessage);
-//    }
-//
-//    @Override
-//    public void handleCollected(CollectedMessage collectedMessage) {
-//        dcLogger.log("Received: " + collectedMessage);
-//        if (collectedMessage.getPort() != config.getLeader().getPort()) {
-//            return;
-//        }
-//        valts = collectedMessage.getStates().get(0).getState().getCurrent();
-//        consensusState.addCollectedMessage(collectedMessage);
-//    }
-//
-//    @Override
-//    public void handleWrite(WriteMessage writeMessage) {
-//        dcLogger.log("Received: " + writeMessage);
-//
-//        // Resending echo message to member
-//        WriteMessage echo = new WriteMessage(writeMessage.getValts(), config.getPort(), writeMessage.getConsensusInstance());
-//        sendToMember(echo, writeMessage.getPort());
-//        dcLogger.log("Sending fake echo WRITE message to " + writeMessage.getPort() + "... ");
-//
-//        consensusState.addWriteMessage(writeMessage);
-//
-//    }
-//
-//    @Override
-//    public void handleAccept(AcceptMessage acceptMessage) {
-//        dcLogger.log("Received: " + acceptMessage);
-//
-//        // Resending echo message to member
-//        AcceptMessage echo = new AcceptMessage(acceptMessage.getValts(), config.getPort(), acceptMessage.getConsensusInstance());
-//        sendToMember(echo, acceptMessage.getPort());
-//        dcLogger.log("Sending fake echo ACCEPT message to " + acceptMessage.getPort() + "... ");
-//
-//        consensusState.addAcceptMessage(acceptMessage);
-//    }
-//
-//
-//    @Override
-//    public void broadCastMessage(Message message) {
-//        // Only send to me when broadcasting,
-//        // because it's echoing messages when receives from other members
-//        sendToMe(message);
-//    }
+    @Override
+    public void handleRead(ReadMessage readMessage) {
+        if (firstEpoch) {
+            firstEpoch = false;
+            super.handleRead(readMessage);
+            return;
+        }
+        dcLogger.log("Received: " + readMessage);
+
+        if(valts == null) {
+            dcLogger.error("VALTS CANNOT BE NULL");
+        }
+
+        // Retrieves last value used, so it's signed by the client
+        ConsensusState consensusState = consensusHandler.getConsensusState();
+        ValueTimestampPair fakeCurrent = new ValueTimestampPair(consensusState.getEpoch() + 1, valts.getValue());
+        fakeCurrent.setClientSignature(valts.getClientSignature());
+
+        // <"ola", 1> [<"ola", 0>]
+        // Create new fake valts pair for writeset
+        ValueTimestampPair fakeOld = new ValueTimestampPair(fakeCurrent.getTimestamp() - 1, fakeCurrent.getValue());
+        fakeOld.setClientSignature(fakeCurrent.getClientSignature());
+        ArrayList<ValueTimestampPair> fakeWriteset = new ArrayList<>();
+        fakeWriteset.add(fakeOld);
+
+        ConsensusState myState = new ConsensusState(config.getMyName(), fakeCurrent, fakeWriteset);
+        String dataToSign = fakeCurrent.toString() + fakeWriteset;
+        String mySignature = Security.makeDS(dataToSign, Security.getMyPrivateKey(config.getMyName()));
+
+        myState.setInstance(consensusState.getInstance());
+        StateMessage stateMessage = new StateMessage(myState, mySignature, consensusState.getInstance(), config.getPort());
+        dcLogger.log("Faking state message... -> " + stateMessage);
+        sendToLeader(stateMessage);
+    }
+
+    @Override
+    public void handleCollected(CollectedMessage collectedMessage) {
+        dcLogger.log("Received: " + collectedMessage);
+        if (collectedMessage.getPort() != config.getLeader().getPort()) {
+            return;
+        }
+        valts = collectedMessage.getStates().get(0).getState().getCurrent();
+        ConsensusState consensusState = consensusHandler.getConsensusState();
+        consensusState.addCollectedMessage(collectedMessage);
+    }
+
+    @Override
+    public void handleWrite(WriteMessage writeMessage) {
+        dcLogger.log("Received: " + writeMessage);
+
+        // Resending echo message to member
+        WriteMessage echo = new WriteMessage(writeMessage.getValts(), config.getPort(), writeMessage.getConsensusInstance());
+        sendToMember(echo, writeMessage.getPort());
+        dcLogger.log("Sending fake echo WRITE message to " + writeMessage.getPort() + "... ");
+        ConsensusState consensusState = consensusHandler.getConsensusState();
+        consensusState.addWriteMessage(writeMessage);
+
+    }
+
+    @Override
+    public void handleAccept(AcceptMessage acceptMessage) {
+        dcLogger.log("Received: " + acceptMessage);
+
+        // Resending echo message to member
+        AcceptMessage echo = new AcceptMessage(acceptMessage.getValts(), config.getPort(), acceptMessage.getConsensusInstance());
+        sendToMember(echo, acceptMessage.getPort());
+        dcLogger.log("Sending fake echo ACCEPT message to " + acceptMessage.getPort() + "... ");
+        ConsensusState consensusState = consensusHandler.getConsensusState();
+        consensusState.addAcceptMessage(acceptMessage);
+    }
+
+
+    @Override
+    public void broadCastMessage(Message message) {
+        // Only send to me when broadcasting,
+        // because it's echoing messages when receives from other members
+        sendToMe(message);
+    }
 
 }
