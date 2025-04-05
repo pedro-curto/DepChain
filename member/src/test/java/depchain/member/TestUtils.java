@@ -3,10 +3,12 @@ package depchain.member;
 import depchain.client.domain.ByzantineClient;
 import depchain.client.domain.Client;
 import depchain.common.domain.Entity;
+import depchain.common.messaging.CoinType;
 import depchain.member.domain.Member;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Assertions;
 
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -81,5 +83,43 @@ public class TestUtils {
 		Member honest3 = startMember("dybizantino", basePort + 3, memberInfo, clientInfo, executor);
 		Thread.sleep(5000);
 		return new ArrayList<>(Arrays.asList(leader, honest1, honest2, honest3));
+	}
+
+
+	public static void testTransfer(
+			Client fromClient,
+			Client toClient,
+			BigInteger amount,
+			BigInteger expectedFromBalance,
+			BigInteger expectedToBalance,
+			CoinType coinType
+	) {
+		// send transfer
+		String toName = toClient.getClientName();
+		String fromName = fromClient.getClientName();
+		fromClient.sendTransfer(toName, amount, coinType);
+
+		// wait for the reply to appear
+		Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
+			Assertions.assertNotNull(fromClient.getLastTransferReply());
+		});
+		// verify transfer was successful
+		Assertions.assertTrue(fromClient.getLastTransferReply().getSuccess());
+		fromClient.setLastTransferReply(null);
+
+		// check updated balances
+		fromClient.sendGetBalance(fromName, coinType);
+		toClient.sendGetBalance(toName, coinType);
+		Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
+			Assertions.assertNotNull(fromClient.getLastBalance());
+			Assertions.assertNotNull(toClient.getLastBalance());
+		});
+
+		// compare expected balances
+		Assertions.assertEquals(expectedFromBalance, fromClient.getLastBalance());
+		Assertions.assertEquals(expectedToBalance, toClient.getLastBalance());
+		// reset last balance
+		fromClient.setLastBalance(null);
+		toClient.setLastBalance(null);
 	}
 }
