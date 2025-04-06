@@ -58,6 +58,13 @@ public class TransferReply extends ClientReplyMessage {
         return transactionType;
     }
 
+    public String getDataToSign() {
+        if (transactionType == TransactionType.TRANSFER_FROM) {
+            return senderAddr + spenderAddr + recipientAddr + amount  + transactionType ;
+        }
+        return senderAddr + recipientAddr + amount + transactionType;
+    }
+
     @Override
     public String toString() {
         return "TransferReply{" +

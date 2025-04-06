@@ -30,10 +30,11 @@ public class ConsensusHandler {
     }
 
     // only leader runs starts consensus
-    public boolean startConsenusLeader(ConsensusLeaderState leaderState) {
+    public boolean startConsenusLeader(ValueTimestampPair newValts, ConsensusLeaderState leaderState) {
         // TODO on member, dont forget the things before read phase (noncecheck)
         // TODO leaderState.setCurrent(valts); set new value of consensus
         dcLogger.log("-- STARTING CONSENSUS FOR '" + leaderState.getCurrent() + "' --");
+        leaderState.setCurrent(newValts);
         readPhase(leaderState);
         statePhase(leaderState);
         // the rest of the consensus is the same for member and leader
@@ -68,9 +69,7 @@ public class ConsensusHandler {
 
     public ValueTimestampPair getNextValtsForConsensus() {
         try {
-            dcLogger.log("[ME] Waiting to take...");
             ValueTimestampPair valt = consensusQueue.take();
-            dcLogger.log("[ME] Took");
             return valt;
         }  catch (InterruptedException e) {
             dcLogger.error("Error while taking object from consensusQueue: " + e.getMessage());

@@ -10,6 +10,7 @@ public class ClientReplyMessage extends Message {
     private int instanceOfDecision;
 	MessageType replyType;
     private long nonce;
+    private String signature;
 
     public ClientReplyMessage(String value, boolean success, int instanceOfDecision, MessageType replyType) {
         super(replyType);
@@ -52,6 +53,18 @@ public class ClientReplyMessage extends Message {
     }
     public long getNonce() {
         return nonce;
+    }
+
+    public void setSignature(String signature) {
+        this.signature = signature;
+    }
+
+    public String getSignature() {
+        return signature;
+    }
+
+    public String getDataToSign() {
+        return "";
     }
 
     // for hashmap in client

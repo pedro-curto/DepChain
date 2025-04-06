@@ -12,6 +12,7 @@ import depchain.common.messaging.library.*;
 import java.math.BigInteger;
 import java.net.DatagramSocket;
 import java.security.KeyPair;
+import java.security.PublicKey;
 import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -207,9 +208,11 @@ public class Client {
                 break;
             case "ISBLACKLISTED":
                 handleIsBlackListed(content, coinType);
+                break;
             default:
                 System.out.println("Invalid command.");
         }
+        memberReplyMessages.clear();
     }
 
     private void handleIsBlackListed(String[] content, CoinType coinType) {
@@ -493,9 +496,6 @@ public class Client {
                         System.out.println("Received STRING_REPLY but message is not a ClientReplyMessage instance: " + message);
                     }
                     break;
-                    //ClientReplyMessage clientReplyMessage = (ClientReplyMessage) message;
-                    //handleStringReply(clientReplyMessage);
-                    //break;
                 case IS_BLACK_LISTED_REPLY:
                     IsBlackListedReply isBlackListedReply = (IsBlackListedReply) message;
                     handleIsBlackListedReply(isBlackListedReply);
@@ -511,6 +511,14 @@ public class Client {
     /*------------------------------------------------------------------------*/
 
     private synchronized void handleIsBlackListedReply(IsBlackListedReply reply) {
+        if (!verifyMemberSignature(reply)) {
+            System.out.println("Invalid signature");
+            return;
+        }
+        if (!verifyReplay(reply)) {
+            System.out.println("Replayed reply");
+            return;
+        }
         memberReplyMessages.putIfAbsent(reply, 0);
         memberReplyMessages.put(reply, memberReplyMessages.get(reply) + 1);
         // reached quorum of f+1 equal messages
@@ -545,6 +553,14 @@ public class Client {
     }
 
     private synchronized void handleTransferReply(TransferReply reply) {
+        if (!verifyMemberSignature(reply)) {
+            System.out.println("Invalid signature");
+            return;
+        }
+        if (!verifyReplay(reply)) {
+            System.out.println("Replayed reply");
+            return;
+        }
         memberReplyMessages.putIfAbsent(reply, 0);
         memberReplyMessages.put(reply, memberReplyMessages.get(reply) + 1);
         // reached quorum of f+1 equal messages
@@ -567,6 +583,14 @@ public class Client {
     }
 
     private synchronized void handleBalanceReply(BalanceReply reply) {
+        if (!verifyMemberSignature(reply)) {
+            System.out.println("Invalid signature");
+            return;
+        }
+        if (!verifyReplay(reply)) {
+            System.out.println("Replayed reply");
+            return;
+        }
         memberReplyMessages.putIfAbsent(reply, 0);
         memberReplyMessages.put(reply, memberReplyMessages.get(reply) + 1);
         // reached quorum of f+1 equal messages
@@ -588,6 +612,14 @@ public class Client {
     }
 
     private synchronized void handleAllowanceReply(AllowanceReply reply) {
+        if (!verifyMemberSignature(reply)) {
+            System.out.println("Invalid signature");
+            return;
+        }
+        if (!verifyReplay(reply)) {
+            System.out.println("Replayed reply");
+            return;
+        }
         memberReplyMessages.putIfAbsent(reply, 0);
         memberReplyMessages.put(reply, memberReplyMessages.get(reply) + 1);
         // reached quorum of f+1 equal messages
@@ -665,5 +697,29 @@ public class Client {
 
     public void setLastAllowance(BigInteger lastAllowance) {
         this.lastAllowance = lastAllowance;
+    }
+
+    public PublicKey getMemberPublicKeyByPort(int port) {
+        return members.stream()
+                .filter(m -> m.getPort() == port)
+                .findFirst()
+                .orElse(null).getPublicKey();
+    }
+
+    public boolean verifyMemberSignature(ClientReplyMessage reply) {
+        return Security.verifyDS(
+                reply.getSignature(),
+                reply.getDataToSign(),
+                getMemberPublicKeyByPort(reply.getPort())
+        );
+    }
+
+    public boolean verifyReplay(ClientReplyMessage reply) {
+        for (ClientReplyMessage r : memberReplyMessages.keySet()) {
+            if (reply.getPort() == r.getPort())  {
+                return false;
+            }
+        }
+        return true;
     }
 }

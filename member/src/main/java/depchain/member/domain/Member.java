@@ -363,6 +363,8 @@ public class Member {
                 this.serverNonce,
                 this.config.getPort()
         );
+        String signature = Security.makeDS(balanceReply.getDataToSign(), Security.getMyPrivateKey(config.getMyName()));
+        balanceReply.setSignature(signature);
 
         sendToClient(balanceReply, balanceOfMessage.getPort());
     }
@@ -392,6 +394,8 @@ public class Member {
                 this.serverNonce,
                 this.config.getPort()
         );
+        String signature = Security.makeDS(allowanceReply.getDataToSign(), Security.getMyPrivateKey(config.getMyName()));
+        allowanceReply.setSignature(signature);
 
         sendToClient(allowanceReply, allowanceMessage.getPort());
     }
@@ -414,6 +418,8 @@ public class Member {
                 this.serverNonce,
                 this.config.getPort()
         );
+        String signature = Security.makeDS(isBlackListedReply.getDataToSign(), Security.getMyPrivateKey(config.getMyName()));
+        isBlackListedReply.setSignature(signature);
 
         sendToClient(isBlackListedReply, isBlackListedMessage.getPort());
     }
@@ -434,12 +440,8 @@ public class Member {
                 while (!finished) {
                     // checks for replays
                     // TODO -> check client signature here?
-                    // TODO maybe move some code to other function to make it smaller
                     ConsensusLeaderState leaderState = (ConsensusLeaderState) consensusHandler.getConsensusState();
-                    if (leaderState.getCurrent().isEmpty()) {
-                        leaderState.setCurrent(newValts);
-                    }
-                    finished = consensusHandler.startConsenusLeader(leaderState);
+                    finished = consensusHandler.startConsenusLeader(newValts ,leaderState);
                     if (!finished) {
                         consensusHandler.getConsensusState().nextEpoch();
                     }
@@ -489,7 +491,9 @@ public class Member {
                     this.serverNonce,
                     config.getPort()
             );
-            // TODO the reply needs to be signed by member (byzantine can pretend to be other member)
+            String signature = Security.makeDS(transferReply.getDataToSign(), Security.getMyPrivateKey(config.getMyName()));
+            transferReply.setSignature(signature);
+
             dcLogger.log("SENDING " + transferReply.getType() + "!!!");
             sendToClient(transferReply, tx.getClientPort());
         }

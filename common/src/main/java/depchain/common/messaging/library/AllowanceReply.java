@@ -45,6 +45,10 @@ public class AllowanceReply extends ClientReplyMessage {
         return allowance;
     }
 
+    public String getDataToSign() {
+        return owner + spender + allowance;
+    }
+
     @Override
     public boolean equals(Object obj) {
         if (!super.equals(obj)) return false;

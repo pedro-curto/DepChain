@@ -40,6 +40,10 @@ public class IsBlackListedReply extends ClientReplyMessage {
         return isBlackListed;
     }
 
+    public String getDataToSign() {
+        return account + isBlackListed;
+    }
+
     @Override
     public boolean equals(Object obj) {
         if (!super.equals(obj)) return false;
