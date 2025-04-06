@@ -522,7 +522,16 @@ public class Client {
         memberReplyMessages.putIfAbsent(reply, 0);
         memberReplyMessages.put(reply, memberReplyMessages.get(reply) + 1);
         // reached quorum of f+1 equal messages
-        if (memberReplyMessages.get(reply) == this.faultyProcesses+1) {
+        if (memberReplyMessages.get(reply) == this.faultyProcesses + 1) {
+            if (reply.getSuccess()) {
+                if (reply.isBlackListed()) {
+                    System.out.println(getNameByAddress(reply.getAccount()) + " is blacklisted.");
+                } else {
+                    System.out.println(getNameByAddress(reply.getAccount()) + " is not blacklisted.");
+                }
+            } else {
+                System.out.println(reply.getAccount() + " was not able to be blacklisted.");
+            }
             System.out.println("IsBlacklisted: {");
             System.out.println("account: " + reply.getAccount());
             System.out.println("result: " + reply.isBlackListed());
@@ -564,7 +573,8 @@ public class Client {
         memberReplyMessages.putIfAbsent(reply, 0);
         memberReplyMessages.put(reply, memberReplyMessages.get(reply) + 1);
         // reached quorum of f+1 equal messages
-        if (memberReplyMessages.get(reply) == this.faultyProcesses+1) {
+        if (memberReplyMessages.get(reply) == this.faultyProcesses + 1) {
+            printTransferReply(reply);
             System.out.println("Transfer: {");
             System.out.println("type: " + reply.getType());
             System.out.println("From: " + reply.getSenderAddr());
@@ -595,6 +605,7 @@ public class Client {
         memberReplyMessages.put(reply, memberReplyMessages.get(reply) + 1);
         // reached quorum of f+1 equal messages
         if (memberReplyMessages.get(reply) == this.faultyProcesses+1) {
+            System.out.print(getNameByAddress(reply.getAddress()) + " balance is "+ reply.getBalance() + ".");
             System.out.println("Balance: {");
             System.out.println("address "+ reply.getAddress());
             System.out.println("balance: " + reply.getBalance());
@@ -624,6 +635,9 @@ public class Client {
         memberReplyMessages.put(reply, memberReplyMessages.get(reply) + 1);
         // reached quorum of f+1 equal messages
         if (memberReplyMessages.get(reply) == this.faultyProcesses+1) {
+            String ownerName = getNameByAddress(reply.getOwner());
+            String spenderName = getNameByAddress(reply.getSpender());
+            System.out.print(ownerName + " allows "+ spenderName + " to use "+ reply.getAllowance() + ".");
             System.out.println("Allowance {");
             System.out.println("owner: " + reply.getOwner());
             System.out.println("spender: " + reply.getSpender());
@@ -721,5 +735,44 @@ public class Client {
             }
         }
         return true;
+    }
+
+    public void printTransferReply(TransferReply reply) {
+        String senderName = getNameByAddress(reply.getSenderAddr());
+        String recipientName = getNameByAddress(reply.getRecipientAddr());
+        switch (reply.getTransactionType()) {
+            case APPROVE:
+                System.out.print(senderName + " approved "+ reply.getAmount() + " to "+ recipientName);
+                break;
+            case TRANSFER:
+                System.out.print(senderName + " transfered "+ reply.getAmount() + " to "+ recipientName);
+                break;
+            case TRANSFER_FROM:
+                String spenderName = getNameByAddress(reply.getSpenderAddr());
+                System.out.print(spenderName + " transfered from " + senderName + reply.getAmount() + " to "+ recipientName);
+                break;
+            case BLACKLIST:
+                System.out.print(senderName + " blacklisted " + recipientName);
+                break;
+            case UNBLACKLIST:
+                System.out.print(senderName + " unblacklisted " + recipientName);
+                break;
+            default:
+                System.out.println("Transfer reply type not recognized");
+        }
+        if (reply.getSuccess()) {
+            System.out.println(" successfully.");
+        } else {
+            System.out.println(" unsuccessfully.");
+        }
+    }
+
+    public String getNameByAddress(String address) {
+        for (Map.Entry<String, String> entry : addresses.entrySet()) {
+            if (entry.getValue().equals(address)) {
+                return entry.getKey();
+            }
+        }
+        return null;
     }
 }
