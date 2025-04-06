@@ -102,7 +102,6 @@ public class DepCoinHandler {
 			dcLogger.log("Invalid value");
 			return false;
 		}
-		// TODO prevent allowence attack?
 		state.addAllowanceToOwner(ownerAccount.getName(), spenderAccount.getName(), value);
 		dcLogger.verbose("Allowance set from " + ownerAccount + " to " + spenderAccount + ": " + value);
 		return true;

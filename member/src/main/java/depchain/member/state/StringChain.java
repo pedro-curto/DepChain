@@ -4,7 +4,6 @@ import java.util.ArrayList;
 
 public class StringChain {
 
-    // TODO -> this will not be here
     private ArrayList<String> stringChain;
 
     public StringChain(ArrayList<String> stringChain) {

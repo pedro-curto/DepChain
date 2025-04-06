@@ -18,7 +18,6 @@ public class Message {
 		this.port = port;
 		this.coinType = coinType;
 	}
-	//TODO -> use (address + port) or an id to identify processes as it is more correct
 
 	public Message(long sequenceNumber, MessageType messageType) {
 		this.sequenceNumber = sequenceNumber;

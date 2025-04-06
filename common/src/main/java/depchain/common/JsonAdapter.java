@@ -57,7 +57,6 @@ public class JsonAdapter {
                 obj.get("nonce").getAsLong(),
                 TransactionType.valueOf(obj.get("type").getAsString()),
                 CoinType.valueOf(obj.get("coin_type").getAsString()),
-                // TODO -> check
                 obj.get("clientPort").getAsInt()
         );
     }
@@ -88,7 +87,7 @@ public class JsonAdapter {
                 .map(JsonAdapter::serializeTransaction)
                 .forEach(transactions::add);
         json.add("transactions", transactions);
-        // TODO -> i dont think we're going to have a state in the block
+        // i dont think we're going to have a state in the block
         //json.add("state", JsonAdapter.serializeBlockChainState(block.getState()));
         return json;
     }

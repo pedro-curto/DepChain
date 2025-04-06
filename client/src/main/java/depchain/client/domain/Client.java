@@ -59,7 +59,6 @@ public class Client {
         this.faultyProcesses = Math.floorDiv(members.size() - 1, 3);
         this.byzantineQuorum = members.size() - faultyProcesses;
         this.memberResponses = new HashMap<>();
-        // TODO hardcoded leader
         this.leaderPort = members.getFirst().getPort();
         this.dcLogger = new DCLogger(Client.class, true);
         this.testEnvironment = testEnvironment;
@@ -184,6 +183,8 @@ public class Client {
     }
 
     private void handleCoinCommand(String[] content, CoinType coinType) {
+        memberReplyMessages.clear();
+        hasMemberReplied.clear();
         switch(content[0].toUpperCase()) {
             case "BALANCE":
                 handleBalanceCommand(content, coinType);
@@ -212,8 +213,6 @@ public class Client {
             default:
                 System.out.println("Invalid command.");
         }
-        memberReplyMessages.clear();
-        hasMemberReplied.clear();
     }
 
     private void handleIsBlackListed(String[] content, CoinType coinType) {
@@ -245,7 +244,6 @@ public class Client {
                 this.myAddress,
                 null,
                 addr,
-                //  TODO have to send BigInteger.ZERO otherwise json can't convert null to BigInteger in parseBlock
                 BigInteger.ZERO, // change this in the future
                 coinType,
                 nonce,
@@ -273,7 +271,6 @@ public class Client {
                 this.myAddress,
                 null,
                 addr,
-                //  TODO have to send BigInteger.ZERO otherwise json can't convert null to BigInteger in parseBlock
                 BigInteger.ZERO, // change this in the future
                 coinType,
                 nonce,
@@ -501,6 +498,11 @@ public class Client {
                     IsBlackListedReply isBlackListedReply = (IsBlackListedReply) message;
                     handleIsBlackListedReply(isBlackListedReply);
                     break;
+                case ERROR:
+                    ErrorMessage errorReply = (ErrorMessage) message;
+                    dcLogger.error("Error message received: " + errorReply);
+                    handleErrorMessage(errorReply);
+                    break;
                 default:
                     System.out.println("Reply type does not exist: " + message.getType());
             }
@@ -512,10 +514,6 @@ public class Client {
     /*------------------------------------------------------------------------*/
 
     private synchronized void handleIsBlackListedReply(IsBlackListedReply reply) {
-        //if (!verifyMemberSignature(reply)) {
-        //    System.out.println("Invalid signature");
-        //    return;
-        //}
         if (verifyReplay(reply)) {
             System.out.println("Replayed reply");
             return;
@@ -564,10 +562,6 @@ public class Client {
     }
 
     private synchronized void handleTransferReply(TransferReply reply) {
-        //if (!verifyMemberSignature(reply)) {
-        //    System.out.println("Invalid signature");
-        //    return;
-        //}
         if (verifyReplay(reply)) {
             System.out.println("Replayed reply");
             return;
@@ -596,10 +590,6 @@ public class Client {
     }
 
     private synchronized void handleBalanceReply(BalanceReply reply) {
-        //if (!verifyMemberSignature(reply)) {
-        //    System.out.println("Invalid signature");
-        //    return;
-        //}
         if (verifyReplay(reply)) {
             // returns true if there's already an entry in the map for the reply's port
             System.out.println("Replayed reply");
@@ -628,10 +618,6 @@ public class Client {
     }
 
     private synchronized void handleAllowanceReply(AllowanceReply reply) {
-        //if (!verifyMemberSignature(reply)) {
-        //    System.out.println("Invalid signature");
-        //    return;
-        //}
         if (verifyReplay(reply)) {
             dcLogger.error("Replayed reply");
             return;
@@ -659,6 +645,17 @@ public class Client {
         }
     }
 
+    private synchronized void handleErrorMessage(Message message) {
+        if (message instanceof ErrorMessage errorMessage) {
+            System.out.println("Error message: {");
+            System.out.println("error: " + errorMessage.getErrorMessage());
+            System.out.println("}");
+        } else {
+            System.out.println("Received an error message but it's not an instance of ErrorMessage: " + message);
+        }
+    }
+
+
     private void printHelpInfo() {
         System.out.println("-- Available commands: --");
         System.out.println("1. ISTCoin <command> <args>");
@@ -681,6 +678,7 @@ public class Client {
     }
 
     public BigInteger getLastBalance() {
+        dcLogger.log("Last balance: " + lastBalance);
         return lastBalance;
     }
 
@@ -733,22 +731,12 @@ public class Client {
         );
     }
 
-    public boolean verifyReplay(ClientReplyMessage reply) {
-        int memberPortOfReply = reply.getPort();
-        // check if the member has already replied
+    public synchronized boolean verifyReplay(ClientReplyMessage reply) {
+        //int memberPortOfReply = reply.getPort();
         //if (hasMemberReplied.containsKey(memberPortOfReply)) {
         //    return true;
         //}
-        //return false;
-        for (ClientReplyMessage r : memberReplyMessages.keySet()) {
-            if (reply.getPort() == r.getPort())  {
-                dcLogger.log("REPLAY! REPLY THAT TRIGGERED: " + r);
-                dcLogger.log("MEMBER REPLY MESSAGES: " + memberReplyMessages);
-                return true;
-            }
-        }
         return false;
-        //return true;
     }
 
     public void printTransferReply(TransferReply reply) {

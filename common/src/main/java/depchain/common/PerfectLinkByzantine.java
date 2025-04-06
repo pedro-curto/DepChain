@@ -129,7 +129,6 @@ public class PerfectLinkByzantine extends PerfectLink {
         StringBuilder corrupted = new StringBuilder(json);
 
         // Determine corruption type and number of corruptions
-        // TODO change to 4 to use also bitflip
         int corruptionType = random.nextInt(3); // 4 for different corruption types
         int corruptionCount = 1 + random.nextInt(3); // 1-3 corruptions per message
 

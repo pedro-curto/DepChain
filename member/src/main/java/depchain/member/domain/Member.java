@@ -174,26 +174,14 @@ public class Member {
                         transferMessage.getTransactionType() != TransactionType.BLACKLIST &&
                         transferMessage.getTransactionType() != TransactionType.UNBLACKLIST) {
                             dcLogger.error("Cannot transfer negative or null amount.");
-                            TransferReply txReply = new TransferReply(
-                                    false,
-                                    -1,
-                                    transferMessage.getValue(),
-                                    transferMessage.getFrom(),
-                                    transferMessage.getSpender(),
-                                    transferMessage.getTo(),
-                                    transferMessage.getCoinType(),
-                                    transferMessage.getTransactionType(),
-                                    this.serverNonce,
-                                    config.getPort()
-                            );
-                            sendToClient(txReply, transferMessage.getClientPort());
+                            ErrorMessage reply = new ErrorMessage("Tried to transfer a negative amount!");
+                            sendToClient(reply, transferMessage.getClientPort());
                             break;
                         }
-                        // TODO check signature before incrementing nonce??
+
                         synchronized (this) {
                             // synchronized for avoiding concurrent modification/checking
                             if (isValidClientNonce(transferMessage.getNonce(), transferMessage.getClientPort())) {
-                                // TODO -> acho que não devia ser logo
                                 setClientNonce(transferMessage.getNonce(), transferMessage.getClientPort());
                                 this.transferQueue.put(transferMessage);
                             } else {
@@ -201,21 +189,10 @@ public class Member {
                                         transferMessage.getNonce() + " but current: "
                                         + getClientNonce(transferMessage.getClientPort()));
                                 // sends an answer back saying it was rejected
-                                TransferReply txReply = new TransferReply(
-                                        false,
-                                        -1,
-                                        transferMessage.getValue(),
-                                        transferMessage.getFrom(),
-                                        transferMessage.getSpender(),
-                                        transferMessage.getTo(),
-                                        transferMessage.getCoinType(),
-                                        transferMessage.getTransactionType(),
-                                        this.serverNonce,
-                                        config.getPort()
-                                );
-                                String signature = Security.makeDS(txReply.getDataToSign(), Security.getMyPrivateKey(config.getMyName()));
-                                txReply.setSignature(signature);
-                                sendToClient(txReply, transferMessage.getClientPort());
+                                ErrorMessage reply = new ErrorMessage("Tried to replay a message!");
+                                //String signature = Security.makeDS(txReply.getDataToSign(), Security.getMyPrivateKey(config.getMyName()));
+                                //txReply.setSignature(signature);
+                                sendToClient(reply, transferMessage.getClientPort());
                                 this.replayAttack = true;
                             }
                         }
@@ -335,7 +312,6 @@ public class Member {
         dcLogger.log("dataToSign: " + dataToSign);
         // don't send own instance of consensus state to message, send a copy or else stack overflow error
         ConsensusState myState = new ConsensusState(config.getMyName(), state.getCurrent(), state.getWriteset());
-        // TODO -> i used the setter here to not change the constructor, use the constructor later
         myState.setInstance(state.getInstance());
         StateMessage stateMessage = new StateMessage(myState, mySignature, state.getInstance(), config.getPort());
         sendToLeader(stateMessage);
@@ -464,7 +440,6 @@ public class Member {
                 boolean finished = false;
                 while (!finished) {
                     // checks for replays
-                    // TODO -> check client signature here?
                     ConsensusLeaderState leaderState = (ConsensusLeaderState) consensusHandler.getConsensusState();
                     finished = consensusHandler.startConsenusLeader(newValts ,leaderState);
                     if (!finished) {
@@ -503,7 +478,6 @@ public class Member {
 
     public void replyTransactions(List<Transaction> transactions) {
         for(Transaction tx: transactions) {
-            // TODO could make a TransferReply constructor with a Transaction as argument
             TransferReply transferReply = new TransferReply(
                     tx.getSuccess(),
                     consensusHandler.getConsensusState().getInstance(),

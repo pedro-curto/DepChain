@@ -33,7 +33,6 @@ public class ConsensusLeaderState extends ConsensusState {
 		}
 	}
 
-	// TODO -> implement returning imediatlly after receiving a value that can be decided
 	public List<StateMessage> waitForStateQuorum() {
 		synchronized (statesLock) {
             try {

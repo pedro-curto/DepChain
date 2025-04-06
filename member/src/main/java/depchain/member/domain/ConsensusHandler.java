@@ -31,8 +31,6 @@ public class ConsensusHandler {
 
     // only leader runs starts consensus
     public boolean startConsenusLeader(ValueTimestampPair newValts, ConsensusLeaderState leaderState) {
-        // TODO on member, dont forget the things before read phase (noncecheck)
-        // TODO leaderState.setCurrent(valts); set new value of consensus
         dcLogger.log("-- STARTING CONSENSUS FOR '" + leaderState.getCurrent() + "' --");
         leaderState.setCurrent(newValts);
         readPhase(leaderState);
@@ -168,7 +166,6 @@ public class ConsensusHandler {
         for (StateMessage thisState : collectedStates) {
             if (!member.verifyMemberStateAuthenticity(thisState)) {
                 dcLogger.error("Signature is invalid for " + thisState.getState().getMemberName());
-                // TODO -> hardcoded for the test (fix)
                 member.setCaughtInvalidSignature();
                 continue;
             } else {
@@ -214,27 +211,6 @@ public class ConsensusHandler {
             dcLogger.error("Did not get leader value in COLLECTED message");
             return null;
         }
-        // TODO -> how to check client signatures for blocks? check for each field?
-//        if (!member.checkClientSignature(leaderValue)) {
-//            dcLogger.error("Leader forged new value");
-//            return null;
-//        }
-            // check if each tx in block is valid
-//            List<Transaction> txs = JsonAdapter.parseTransactions(leaderValue.getValue());
-//            for (Transaction tx : txs) {
-//                if (!Security.validateTransaction(tx)) {
-//                    dcLogger.error("Signature for transaction is invalid: " + tx);
-//                    return null;
-//                }
-//            }
-
-//        else {
-//            // append request (stringchain)
-//            if (!checkClientSignature(leaderValue)) {
-//                dcLogger.error("Leader forged new value");
-//                return null;
-//            }
-//        }
         return leaderValue;
     }
 }

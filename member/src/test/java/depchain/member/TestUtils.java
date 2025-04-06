@@ -169,6 +169,9 @@ public class TestUtils {
 		toClient.sendGetBalance(toName, coinType);
 		Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
 			Assertions.assertNotNull(ownerClient.getLastBalance());
+		});
+
+		Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
 			Assertions.assertNotNull(toClient.getLastBalance());
 		});
 

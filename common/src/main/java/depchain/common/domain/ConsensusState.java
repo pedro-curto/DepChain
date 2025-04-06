@@ -147,7 +147,6 @@ public class ConsensusState {
         return maxValue;
     }
 
-    // TODO-> add parameter for timeout because of lider, other dont have timeout
     public List<StateMessage> waitForCollectedMessage() {
         synchronized (lock) {
             while (collectedMessage == null) {
