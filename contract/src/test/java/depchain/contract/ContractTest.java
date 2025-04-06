@@ -210,4 +210,17 @@ public class ContractTest {
         Assertions.assertFalse(transferResult);
     }
 
+    @Test
+    public void testTransferWithNegativeValue() {
+        /*
+         * Tries to transfer negative tokens from sender to recipient, and checks if the operation
+         * is successful.
+         */
+        SimpleWorld world = this.world;
+        EVMExecutor executor = ContractFunctions.deployContract(SENDER_STR, CONTRACT_STR, world, this.tracer,
+                this.deploymentBytecode, this.runtimeBytecode);
+        boolean result = ContractFunctions.transferTokens(executor, bos, SENDER, RECIPIENT, new BigInteger("-5"));
+		Assertions.assertFalse(result);
+    }
+
 }

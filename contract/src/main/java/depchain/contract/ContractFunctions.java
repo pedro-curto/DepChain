@@ -127,6 +127,10 @@ public class ContractFunctions {
                                          Address recipientAddress,
                                          BigInteger tokens) {
         // check sender and recipient's initial balance
+        if (tokens == null || tokens.compareTo(BigInteger.ZERO) <= 0) {
+            System.out.println("Invalid token amount");
+            return false;
+        }
         executor.callData(Bytes.fromHexString(BALANCEOF_ID + ContractUtils.padHexStringTo256Bit(senderAddress.toHexString())));
         executor.execute();
         BigInteger senderBalance = ContractUtils.extractBigIntegerFromReturnData(bos);
@@ -160,6 +164,10 @@ public class ContractFunctions {
     }
 
     public static boolean approve(EVMExecutor executor, ByteArrayOutputStream bos, Address owner, Address spender, BigInteger amount) {
+        if (amount == null || amount.compareTo(BigInteger.ZERO) <= 0) {
+            System.out.println("Invalid token amount");
+            return false;
+        }
         String callData = APPROVE_ID
                 + ContractUtils.padHexStringTo256Bit(spender.toHexString())
                 + ContractUtils.convertIntegerToHex256Bit(amount);
@@ -170,6 +178,10 @@ public class ContractFunctions {
     }
 
     public static boolean transferFrom(EVMExecutor executor, ByteArrayOutputStream bos, Address spender, Address from, Address to, BigInteger amount) {
+        if (amount == null || amount.compareTo(BigInteger.ZERO) <= 0) {
+            System.out.println("Invalid token amount");
+            return false;
+        }
         String callData = TRANSFERFROM_ID
                 + ContractUtils.padHexStringTo256Bit(from.toHexString())
                 + ContractUtils.padHexStringTo256Bit(to.toHexString())

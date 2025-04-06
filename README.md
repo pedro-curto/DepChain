@@ -24,7 +24,7 @@ From the root directory of the project, run the following command:
 ```bash
 mvn clean install
 ```
-This can take some time (around 2 minutes) since it will run the tests.
+This can take some time (around 3 minutes) since it will run the tests.
 
 If you want to ignore the tests, run the following command instead:
 ```bash
@@ -158,10 +158,10 @@ Where `<byzantineBehaviour>` can be one of the following:
 - '5': spam messages (STATEs, WRITEs...)
 - '6': send wrong writes and accepts
 
-Afterwards (very important to be **paulo** or some client that you generated the keys for), run the client:
+Afterwards (very important to be **paulo**, **joao**, **pedro** or some client that you generated the keys for), run the client:
 ```bash
 cd client
-mvn compile exec:java -Dexec.args="2000 paulo"
+mvn compile exec:java -Dexec.args="2000 paulo 0"
 ```
 
 Send requests:

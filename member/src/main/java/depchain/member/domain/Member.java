@@ -34,7 +34,7 @@ public class Member {
     protected BlockingQueue<TransferMessage> transferQueue = new LinkedBlockingQueue<>();
     private final Map<Integer, Long> clientNonces = new ConcurrentHashMap<>();
     private long serverNonce = 0L;
-    private volatile boolean running;
+    protected volatile boolean running;
     private boolean caughtInvalidSignature = false;
     private boolean replayAttack = false;
     // smart contract fields
@@ -170,6 +170,25 @@ public class Member {
                     case TRANSFER:
                         TransferMessage transferMessage = (TransferMessage) message;
                         dcLogger.log("Received: " + transferMessage);
+                        if (transferMessage.getValue().compareTo(BigInteger.ZERO) <= 0 &&
+                        transferMessage.getTransactionType() != TransactionType.BLACKLIST &&
+                        transferMessage.getTransactionType() != TransactionType.UNBLACKLIST) {
+                            dcLogger.error("Cannot transfer negative or null amount.");
+                            TransferReply txReply = new TransferReply(
+                                    false,
+                                    -1,
+                                    transferMessage.getValue(),
+                                    transferMessage.getFrom(),
+                                    transferMessage.getSpender(),
+                                    transferMessage.getTo(),
+                                    transferMessage.getCoinType(),
+                                    transferMessage.getTransactionType(),
+                                    this.serverNonce,
+                                    config.getPort()
+                            );
+                            sendToClient(txReply, transferMessage.getClientPort());
+                            break;
+                        }
                         // TODO check signature before incrementing nonce??
                         synchronized (this) {
                             // synchronized for avoiding concurrent modification/checking
@@ -217,7 +236,7 @@ public class Member {
                         dcLogger.log("Unknown message type");
                 }
             } catch (InterruptedException e) {
-                dcLogger.error("Error while processing message: " + e.getMessage());
+                //dcLogger.error("Error while processing message: " + e.getMessage());
             }
         }
     }

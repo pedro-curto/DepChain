@@ -14,9 +14,9 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 public class ConsensusHandler {
 
-    private Member member;
-    private DCLogger dcLogger;
-    private ConsensusState consensusState;
+    protected Member member;
+    protected DCLogger dcLogger;
+    protected ConsensusState consensusState;
     private BlockingQueue<ValueTimestampPair> consensusQueue = new LinkedBlockingQueue<>();
 
     public ConsensusHandler(Member member, DCLogger dcLogger, ConsensusState consensusState) {
