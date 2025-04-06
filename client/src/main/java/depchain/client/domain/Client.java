@@ -661,11 +661,10 @@ public class Client {
 
     private void printHelpInfo() {
         System.out.println("-- Available commands: --");
-        System.out.println("1. APPEND <string> (compatibility with Delivery 1)");
-        System.out.println("2. ISTCoin <command> <args>");
-        System.out.println("3. DepCoin <command> <args>");
-        System.out.println("4. QUIT | EXIT");
-        System.out.println("5. HELP");
+        System.out.println("1. ISTCoin <command> <args>");
+        System.out.println("2. DepCoin <command> <args>");
+        System.out.println("3. QUIT | EXIT");
+        System.out.println("4. HELP");
         System.out.println("-- Commands for ISTCoin and DepCoin (prefix with coin name): --");
         System.out.println("- BALANCE <address>");
         System.out.println("- TRANSFER <address> <amount>");

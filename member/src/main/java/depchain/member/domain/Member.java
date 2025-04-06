@@ -241,6 +241,7 @@ public class Member {
                 acceptedTxs.add(msg);
                 clientTxs.put(msg.getFrom(), currentCount + 1);
             } else {
+                dcLogger.alert("Transaction rejected: " + msg);
                 // builds a reply rejecting the transaction
                 TransferReply txReply = new TransferReply(
                         false,
@@ -592,15 +593,6 @@ public class Member {
         dcLogger.log("Sending " + message.getType() + " message... to client " + port);
         perfectLink.sendMessage(message, port);
         incrementServerNonce();
-    }
-
-    public void broadCastToClients(Message message) {
-        dcLogger.log("BroadCasting to clients " + message.getType() + " message...");
-        for (Entity client : config.getClients()) {
-            dcLogger.log("[" + message.getType() + " MESSAGE]: " + client.getEntityName());
-            perfectLink.sendMessage(message, client.getPort());
-            incrementServerNonce();
-        }
     }
 
     public boolean isInitializer(int port) {
