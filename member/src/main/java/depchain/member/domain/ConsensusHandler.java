@@ -166,7 +166,6 @@ public class ConsensusHandler {
         ValueTimestampPair highest = new ValueTimestampPair(-1, null, -1, -1);
 
         for (StateMessage thisState : collectedStates) {
-            // TODO uncomment
             if (!member.verifyMemberStateAuthenticity(thisState)) {
                 dcLogger.error("Signature is invalid for " + thisState.getState().getMemberName());
                 // TODO -> hardcoded for the test (fix)

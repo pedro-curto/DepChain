@@ -44,7 +44,7 @@ public class Client {
     private TransferReply lastTransferReply;
     private Transaction lastExecutedTransaction;
     private BigInteger lastAllowance;
-
+    private Map<Integer, Boolean> hasMemberReplied;
     private Map<ClientReplyMessage, Integer> memberReplyMessages;
     private boolean amHappy = false;
 
@@ -63,7 +63,7 @@ public class Client {
         this.leaderPort = members.getFirst().getPort();
         this.dcLogger = new DCLogger(Client.class, true);
         this.testEnvironment = testEnvironment;
-
+        this.hasMemberReplied = new HashMap<>();
         this.memberReplyMessages = new HashMap<>();
         this.myAddress = null;
     }
@@ -213,6 +213,7 @@ public class Client {
                 System.out.println("Invalid command.");
         }
         memberReplyMessages.clear();
+        hasMemberReplied.clear();
     }
 
     private void handleIsBlackListed(String[] content, CoinType coinType) {
@@ -511,14 +512,15 @@ public class Client {
     /*------------------------------------------------------------------------*/
 
     private synchronized void handleIsBlackListedReply(IsBlackListedReply reply) {
-        if (!verifyMemberSignature(reply)) {
-            System.out.println("Invalid signature");
-            return;
-        }
-        if (!verifyReplay(reply)) {
+        //if (!verifyMemberSignature(reply)) {
+        //    System.out.println("Invalid signature");
+        //    return;
+        //}
+        if (verifyReplay(reply)) {
             System.out.println("Replayed reply");
             return;
         }
+        hasMemberReplied.putIfAbsent(reply.getPort(), true);
         memberReplyMessages.putIfAbsent(reply, 0);
         memberReplyMessages.put(reply, memberReplyMessages.get(reply) + 1);
         // reached quorum of f+1 equal messages
@@ -562,27 +564,28 @@ public class Client {
     }
 
     private synchronized void handleTransferReply(TransferReply reply) {
-        if (!verifyMemberSignature(reply)) {
-            System.out.println("Invalid signature");
-            return;
-        }
-        if (!verifyReplay(reply)) {
+        //if (!verifyMemberSignature(reply)) {
+        //    System.out.println("Invalid signature");
+        //    return;
+        //}
+        if (verifyReplay(reply)) {
             System.out.println("Replayed reply");
             return;
         }
+        hasMemberReplied.putIfAbsent(reply.getPort(), true);
         memberReplyMessages.putIfAbsent(reply, 0);
         memberReplyMessages.put(reply, memberReplyMessages.get(reply) + 1);
         // reached quorum of f+1 equal messages
         if (memberReplyMessages.get(reply) == this.faultyProcesses + 1) {
             printTransferReply(reply);
-            System.out.println("Transfer: {");
-            System.out.println("type: " + reply.getType());
-            System.out.println("From: " + reply.getSenderAddr());
-            System.out.println("To: " + reply.getRecipientAddr());
-            if (!reply.getSenderAddr().isEmpty()) System.out.println("Spender: " + reply.getSenderAddr());
-            System.out.println("Amount: " + reply.getAmount());
-            System.out.println("success: " + reply.getSuccess());
-            System.out.println("}");
+            //System.out.println("Transfer: {");
+            //System.out.println("type: " + reply.getType());
+            //System.out.println("From: " + reply.getSenderAddr());
+            //System.out.println("To: " + reply.getRecipientAddr());
+            //if (!reply.getSenderAddr().isEmpty()) System.out.println("Spender: " + reply.getSenderAddr());
+            //System.out.println("Amount: " + reply.getAmount());
+            //System.out.println("success: " + reply.getSuccess());
+            //System.out.println("}");
             this.lastTransferReply = reply;
             this.amHappy = true;
             notifyAll();
@@ -593,14 +596,16 @@ public class Client {
     }
 
     private synchronized void handleBalanceReply(BalanceReply reply) {
-        if (!verifyMemberSignature(reply)) {
-            System.out.println("Invalid signature");
-            return;
-        }
-        if (!verifyReplay(reply)) {
+        //if (!verifyMemberSignature(reply)) {
+        //    System.out.println("Invalid signature");
+        //    return;
+        //}
+        if (verifyReplay(reply)) {
+            // returns true if there's already an entry in the map for the reply's port
             System.out.println("Replayed reply");
             return;
         }
+        hasMemberReplied.putIfAbsent(reply.getPort(), true);
         memberReplyMessages.putIfAbsent(reply, 0);
         memberReplyMessages.put(reply, memberReplyMessages.get(reply) + 1);
         // reached quorum of f+1 equal messages
@@ -623,14 +628,15 @@ public class Client {
     }
 
     private synchronized void handleAllowanceReply(AllowanceReply reply) {
-        if (!verifyMemberSignature(reply)) {
-            System.out.println("Invalid signature");
+        //if (!verifyMemberSignature(reply)) {
+        //    System.out.println("Invalid signature");
+        //    return;
+        //}
+        if (verifyReplay(reply)) {
+            dcLogger.error("Replayed reply");
             return;
         }
-        if (!verifyReplay(reply)) {
-            System.out.println("Replayed reply");
-            return;
-        }
+        hasMemberReplied.putIfAbsent(reply.getPort(), true);
         memberReplyMessages.putIfAbsent(reply, 0);
         memberReplyMessages.put(reply, memberReplyMessages.get(reply) + 1);
         // reached quorum of f+1 equal messages
@@ -729,12 +735,21 @@ public class Client {
     }
 
     public boolean verifyReplay(ClientReplyMessage reply) {
+        int memberPortOfReply = reply.getPort();
+        // check if the member has already replied
+        //if (hasMemberReplied.containsKey(memberPortOfReply)) {
+        //    return true;
+        //}
+        //return false;
         for (ClientReplyMessage r : memberReplyMessages.keySet()) {
             if (reply.getPort() == r.getPort())  {
-                return false;
+                dcLogger.log("REPLAY! REPLY THAT TRIGGERED: " + r);
+                dcLogger.log("MEMBER REPLY MESSAGES: " + memberReplyMessages);
+                return true;
             }
         }
-        return true;
+        return false;
+        //return true;
     }
 
     public void printTransferReply(TransferReply reply) {
@@ -774,5 +789,18 @@ public class Client {
             }
         }
         return null;
+    }
+
+    public void resetReplies() {
+        this.hasMemberReplied.clear();
+        this.memberReplyMessages.clear();
+    }
+
+    public void resetState() {
+        resetReplies();
+        this.lastBalance = null;
+        this.lastTransferReply = null;
+        this.lastExecutedTransaction = null;
+        this.lastAllowance = null;
     }
 }

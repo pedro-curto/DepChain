@@ -62,7 +62,6 @@ public class ByzantineClientTest {
 
     @Test
     void testWithWrongSignatureClient() throws Exception {
-        // TODO -> checkem se curtem do teste
         // start client
         Client byzantineClient = startByzantineClient("paulo", BASE_CLIENT_PORT, memberInfo, 1, executor);
         this.clients = new ArrayList<>(Arrays.asList(byzantineClient));
@@ -88,6 +87,7 @@ public class ByzantineClientTest {
         BigInteger balance = byzantineClient.getLastBalance();
         System.out.println("(Test) Balance: " + balance);
         Assertions.assertTrue(balance.compareTo(transferValue) > 0);
+        byzantineClient.resetReplies();
 
         // client sends transfer request and we assert that the response back to client is negative
         byzantineClient.sendTransfer("joao", transferValue, CoinType.ISTCOIN);

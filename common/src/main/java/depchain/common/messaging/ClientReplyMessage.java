@@ -96,6 +96,7 @@ public class ClientReplyMessage extends Message {
                 ", replyType=" + replyType +
                 ", nonce=" + nonce +
                 ", coinType=" + coinType +
+                ", port=" + super.getPort() +
                 '}';
     }
 }

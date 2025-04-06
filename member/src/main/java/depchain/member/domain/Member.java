@@ -174,6 +174,7 @@ public class Member {
                         synchronized (this) {
                             // synchronized for avoiding concurrent modification/checking
                             if (isValidClientNonce(transferMessage.getNonce(), transferMessage.getClientPort())) {
+                                // TODO -> acho que não devia ser logo
                                 setClientNonce(transferMessage.getNonce(), transferMessage.getClientPort());
                                 this.transferQueue.put(transferMessage);
                             } else {
@@ -193,6 +194,8 @@ public class Member {
                                         this.serverNonce,
                                         config.getPort()
                                 );
+                                String signature = Security.makeDS(txReply.getDataToSign(), Security.getMyPrivateKey(config.getMyName()));
+                                txReply.setSignature(signature);
                                 sendToClient(txReply, transferMessage.getClientPort());
                                 this.replayAttack = true;
                             }
@@ -251,6 +254,8 @@ public class Member {
                         this.serverNonce,
                         config.getPort()
                 );
+                String signature = Security.makeDS(txReply.getDataToSign(), Security.getMyPrivateKey(config.getMyName()));
+                txReply.setSignature(signature);
                 sendToClient(txReply, msg.getClientPort());
             }
         }
@@ -267,7 +272,7 @@ public class Member {
                     msg.getTo(),
                     msg.getValue(),
                     msg.getSignature(),
-                    msg.getNonce(), // TODO here should be a transaction nonce and not a client nonce?
+                    msg.getNonce(),
                     msg.getTransactionType(),
                     msg.getCoinType(),
                     msg.getClientPort()
@@ -529,7 +534,6 @@ public class Member {
     public boolean checkClientSignature(ValueTimestampPair leaderVts) {
         String clientSignature = leaderVts.getClientSignature();
         if (clientSignature == null) return false;
-        // TODO -> fix this hardcoded for 1 client (FIX GETFIRST())
         dcLogger.log("Leader Vts: " + leaderVts);
         String reconstructSignatureData = leaderVts.getValue().toString() + leaderVts.getNonce();
         Entity client = config.getClients().stream()
@@ -636,7 +640,6 @@ public class Member {
     }
 
     private boolean isValidClientNonce(long nonce, int port) {
-        // TODO -> check: não devia ser >, e sim ==. O maior vai deixar haver gaps entre transações oq nao e suposto
         return nonce > getClientNonce(port);
     }
 

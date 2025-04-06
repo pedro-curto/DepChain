@@ -105,7 +105,7 @@ public class TestUtils {
 		});
 		// verify transfer was successful
 		Assertions.assertTrue(fromClient.getLastTransferReply().getSuccess());
-		fromClient.setLastTransferReply(null);
+		fromClient.resetState();
 
 		// check updated balances
 		fromClient.sendGetBalance(fromName, coinType);
@@ -119,8 +119,8 @@ public class TestUtils {
 		Assertions.assertEquals(expectedFromBalance, fromClient.getLastBalance());
 		Assertions.assertEquals(expectedToBalance, toClient.getLastBalance());
 		// reset last balance
-		fromClient.setLastBalance(null);
-		toClient.setLastBalance(null);
+		fromClient.resetState();
+		toClient.resetState();
 	}
 
 	public static void testAllowanceMechanism(
@@ -144,7 +144,8 @@ public class TestUtils {
 		});
 		Assertions.assertTrue(ownerClient.getLastTransferReply().getSuccess());
 		System.out.println("(TEST) owner approved sender to spend <amount> ISTCOIN");
-		ownerClient.setLastTransferReply(null);
+		//ownerClient.setLastTransferReply(null);
+		ownerClient.resetState();
 		// we check spender's allowance
 		spenderClient.sendGetAllowance(ownerName, spenderName, CoinType.ISTCOIN);
 		Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
@@ -152,6 +153,7 @@ public class TestUtils {
 		});
 		Assertions.assertEquals(spenderClient.getLastAllowance(), amount);
 		System.out.println("(TEST) spender's allowance is <amount> ISTCOIN from paulo");
+		spenderClient.resetReplies();
 
 		// now pedro will try to execute a transferFrom tx from paulo's account to joao
 		spenderClient.sendTransferFrom(ownerName, toName, amount, CoinType.ISTCOIN);
@@ -161,6 +163,7 @@ public class TestUtils {
 		// finally, check if it went well
 		Assertions.assertTrue(spenderClient.getLastTransferReply().getSuccess());
 		System.out.println("(TEST) spender transfered <amount> ISTCOIN from owner to recipient");
+		spenderClient.resetReplies();
 		// check updated balances
 		ownerClient.sendGetBalance(ownerName, coinType);
 		toClient.sendGetBalance(toName, coinType);
@@ -173,7 +176,9 @@ public class TestUtils {
 		Assertions.assertEquals(expectedOwnerBalance, ownerClient.getLastBalance());
 		Assertions.assertEquals(expectedToBalance, toClient.getLastBalance());
 		// reset last balance
-		ownerClient.setLastBalance(null);
-		toClient.setLastBalance(null);
+		//ownerClient.setLastBalance(null);
+		//toClient.setLastBalance(null);
+		ownerClient.resetState();
+		toClient.resetState();
 	}
 }

@@ -78,6 +78,7 @@ public class TransferReply extends ClientReplyMessage {
                 ", coinType=" + coinType +
                 ", nonce=" + super.getNonce() +
                 ", memberPort=" + super.getPort() +
+                ", port=" + super.getPort() +
                 '}';
     }
 
