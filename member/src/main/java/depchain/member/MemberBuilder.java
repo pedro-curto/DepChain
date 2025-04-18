@@ -45,21 +45,21 @@ class MemberBuilder {
 
         return switch (behaviour) {
             case 1 ->
-                    new NoAnswerByzantine(config, logger, pf, consensusState, stringChain, messageQueue, appendQueue);
+                    new NoAnswerByzantine(config, logger, pf, consensusState, stringChain, messageQueue);
             case 2 ->
-                    new CoordinatedWrongStateByzantine(config, logger, pf, consensusState, stringChain, messageQueue, appendQueue);
+                    new CoordinatedWrongStateByzantine(config, logger, pf, consensusState, stringChain, messageQueue);
             case 3 ->
-                    new FakeSignatureByzantine(config, logger, pf, consensusState, stringChain, messageQueue, appendQueue);
+                    new FakeSignatureByzantine(config, logger, pf, consensusState, stringChain, messageQueue);
             case 4 ->
-                    new ReplaySignatureByzantine(config, logger, pf, consensusState, stringChain, messageQueue, appendQueue);
+                    new ReplaySignatureByzantine(config, logger, pf, consensusState, stringChain, messageQueue);
             case 5 ->
-                    new SpamByzantine(config, logger, pf, consensusState, stringChain, messageQueue, appendQueue);
+                    new SpamByzantine(config, logger, pf, consensusState, stringChain, messageQueue);
             case 6 ->
-                    new WrongWriteAcceptByzantine(config, logger, pf, consensusState, stringChain, messageQueue, appendQueue);
+                    new WrongWriteAcceptByzantine(config, logger, pf, consensusState, stringChain, messageQueue);
             case 7 ->
-                    new MemberPerfectLinkByzantine(config, logger, pf, consensusState, stringChain, messageQueue, appendQueue);
+                    new MemberPerfectLinkByzantine(config, logger, pf, consensusState, stringChain, messageQueue);
             default ->
-                    new Member(config, logger, pf, consensusState, stringChain, messageQueue, appendQueue);
+                    new Member(config, logger, pf, consensusState, stringChain, messageQueue);
         };
     }
 
@@ -102,21 +102,21 @@ class MemberBuilder {
 
         return switch (byzantineType) {
             case "no-answer" ->
-                    new NoAnswerByzantine(config, logger, pf, consensusState, stringChain, messageQueue, appendQueue);
+                    new NoAnswerByzantine(config, logger, pf, consensusState, stringChain, messageQueue);
             case "fake-signature"->
-                    new FakeSignatureByzantine(config, logger, pf, consensusState, stringChain, messageQueue, appendQueue);
+                    new FakeSignatureByzantine(config, logger, pf, consensusState, stringChain, messageQueue);
             case "spam"->
-                    new SpamByzantine(config, logger, pf, consensusState, stringChain, messageQueue, appendQueue);
+                    new SpamByzantine(config, logger, pf, consensusState, stringChain, messageQueue);
             case "wrong-state"->
-                    new CoordinatedWrongStateByzantine(config, logger, pf, consensusState, stringChain, messageQueue, appendQueue);
+                    new CoordinatedWrongStateByzantine(config, logger, pf, consensusState, stringChain, messageQueue);
             case "replay-signature"->
-                    new ReplaySignatureByzantine(config, logger, pf, consensusState, stringChain, messageQueue, appendQueue);
+                    new ReplaySignatureByzantine(config, logger, pf, consensusState, stringChain, messageQueue);
             case "wrong-write-accept"->
-                    new WrongWriteAcceptByzantine(config, logger, pf, consensusState, stringChain, messageQueue, appendQueue);
+                    new WrongWriteAcceptByzantine(config, logger, pf, consensusState, stringChain, messageQueue);
             case "byz-perfect-link"->
-                    new MemberPerfectLinkByzantine(config, logger, pf, consensusState, stringChain, messageQueue, appendQueue);
+                    new MemberPerfectLinkByzantine(config, logger, pf, consensusState, stringChain, messageQueue);
             default ->
-                    new Member(config, logger, pf, consensusState, stringChain, messageQueue, appendQueue);
+                    new Member(config, logger, pf, consensusState, stringChain, messageQueue);
         };
     }
 

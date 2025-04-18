@@ -8,14 +8,12 @@ import java.math.BigInteger;
 import java.util.Objects;
 
 public class IsBlackListedReply extends ClientReplyMessage {
-    private String owner;
     private String account;
     private boolean isBlackListed;
 
     public IsBlackListedReply(
             boolean success,
             int instanceOfDecision,
-            String owner,
             String account,
             boolean isBlackListed,
             CoinType coinType,
@@ -29,14 +27,10 @@ public class IsBlackListedReply extends ClientReplyMessage {
                 nonce,
                 memberPort
         );
-        this.owner = owner;
         this.account = account;
         this.isBlackListed = isBlackListed;
     }
 
-    public String getOwner() {
-        return owner;
-    }
 
     public String getAccount() {
         return account;
@@ -46,20 +40,22 @@ public class IsBlackListedReply extends ClientReplyMessage {
         return isBlackListed;
     }
 
+    public String getDataToSign() {
+        return account + isBlackListed;
+    }
+
     @Override
     public boolean equals(Object obj) {
         if (!super.equals(obj)) return false;
         if (!(obj instanceof IsBlackListedReply)) return false;
         IsBlackListedReply other = (IsBlackListedReply) obj;
-        return (
-                other.getOwner().equals(owner) &&
-                        other.getAccount().equals(account) &&
+        return (other.getAccount().equals(account) &&
                         other.isBlackListed() == isBlackListed
         );
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(super.hashCode(), owner, account, isBlackListed);
+        return Objects.hash(super.hashCode(), account, isBlackListed);
     }
 }

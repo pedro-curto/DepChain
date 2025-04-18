@@ -24,8 +24,8 @@ public class ReplaySignatureByzantine extends Member {
     // Stores State messages from other members and replays them
     private List<StateMessage> membersStateMessages = new ArrayList<>();
 
-    public ReplaySignatureByzantine(Config config, DCLogger dcLogger, PerfectLink pf, ConsensusState cState, StringChain bcState, BlockingQueue<Message> messageQueue, BlockingQueue<AppendMessage> appendQueue) {
-        super(config, dcLogger, pf, cState, bcState, messageQueue, appendQueue);
+    public ReplaySignatureByzantine(Config config, DCLogger dcLogger, PerfectLink pf, ConsensusState cState, StringChain bcState, BlockingQueue<Message> messageQueue) {
+        super(config, dcLogger, pf, cState, bcState, messageQueue);
     }
 
 
@@ -35,7 +35,7 @@ public class ReplaySignatureByzantine extends Member {
         if (collectedMessage.getPort() != config.getLeader().getPort()) {
             return;
         }
-        consensusState.addCollectedMessage(collectedMessage);
+        consensusHandler.getConsensusState().addCollectedMessage(collectedMessage);
 
         // Stores other members state messages to replay
         this.membersStateMessages = new ArrayList<>(collectedMessage.getStates());

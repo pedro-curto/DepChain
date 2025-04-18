@@ -14,8 +14,8 @@ import java.util.concurrent.BlockingQueue;
 
 public class NoAnswerByzantine extends Member {
 
-    public NoAnswerByzantine(Config config, DCLogger dcLogger, PerfectLink pf, ConsensusState cState, StringChain bcState, BlockingQueue<Message> messageQueue, BlockingQueue<AppendMessage> appendQueue) {
-        super(config, dcLogger, pf, cState, bcState, messageQueue, appendQueue);
+    public NoAnswerByzantine(Config config, DCLogger dcLogger, PerfectLink pf, ConsensusState cState, StringChain bcState, BlockingQueue<Message> messageQueue) {
+        super(config, dcLogger, pf, cState, bcState, messageQueue);
     }
 
     @Override

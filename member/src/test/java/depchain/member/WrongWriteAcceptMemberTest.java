@@ -5,9 +5,7 @@ import depchain.common.CommonUtils;
 import depchain.common.domain.Entity;
 import depchain.common.messaging.CoinType;
 import depchain.member.domain.Member;
-import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -21,10 +19,10 @@ import java.util.concurrent.TimeUnit;
 
 import static depchain.member.TestUtils.*;
 
-public class RegularTest {
-
+public class WrongWriteAcceptMemberTest {
+	// remaining things
 	private static final int BASE_MEMBER_PORT = 5001;
-	private static final int CLIENT_PORT = 2000;
+	private static final int BASE_CLIENT_PORT = 2000;
 	private List<Entity> memberInfo;
 	private List<Entity> clientInfo;
 	private ExecutorService executor;
@@ -51,48 +49,40 @@ public class RegularTest {
 			member.stop();
 		}
 		executor.shutdownNow();
-		boolean finished = executor.awaitTermination(5, TimeUnit.SECONDS);
+		boolean finished = executor.awaitTermination(2, TimeUnit.SECONDS);
 		if (!finished) {
 			System.err.println("Executor did not shut down in time!");
 		}
 	}
 
 	@Test
-	void testBlockChainNormalBehaviour() throws Exception {
+	void testConsensusWithWrongWriteAcceptByzantine() throws Exception {
 		this.executor = Executors.newCachedThreadPool();
-		Client paulo = startClient("paulo", CLIENT_PORT, memberInfo, executor);
-		Client joao = startClient("joao", CLIENT_PORT + 1, memberInfo, executor);
-		Client pedro = startClient("pedro", CLIENT_PORT + 2, memberInfo, executor);
+		// start clients
+		Client paulo = startClient("paulo", BASE_CLIENT_PORT, memberInfo, executor);
+		Client joao = startClient("joao", BASE_CLIENT_PORT + 1, memberInfo, executor);
+		Client pedro = startClient("pedro", BASE_CLIENT_PORT + 2, memberInfo, executor);
 		this.clients = new ArrayList<>(Arrays.asList(paulo, joao, pedro));
-		this.members = TestUtils.startHonestMembers(BASE_MEMBER_PORT, memberInfo, clientInfo, executor);
-
-		// -- ISTCOIN TRANSFERS -- //
-		// all clients transfer some coins to each other
+		// starts members and byzantine process
+		Member leader = startMember("pedroribeiro", BASE_MEMBER_PORT, memberInfo, clientInfo, executor);
+		Member honest1 = startMember("pedrocurto", BASE_MEMBER_PORT + 1, memberInfo, clientInfo, executor);
+		Member honest2 = startMember("rodrigogreedy", BASE_MEMBER_PORT + 2, memberInfo, clientInfo, executor);
+		Member byzantine = startByzantineMember("dybizantino", BASE_MEMBER_PORT + 3, memberInfo, clientInfo, "wrong-write-accept", executor);
+		this.members = new ArrayList<>(Arrays.asList(leader, honest1, honest2, byzantine));
+		// wait a bit for the system to boot, sessions established, etc
+		Thread.sleep(5000);
+		// attempt normal behaviour:
 		TestUtils.testTransfer(paulo, joao, BigInteger.valueOf(1000), new BigInteger("9999999000"),
 				BigInteger.valueOf(1000), CoinType.ISTCOIN);
-		TestUtils.testTransfer(joao, pedro, BigInteger.valueOf(200),
-				BigInteger.valueOf(800), BigInteger.valueOf(200), CoinType.ISTCOIN);
-		TestUtils.testTransfer(pedro, paulo, BigInteger.valueOf(100),
-				BigInteger.valueOf(100), new BigInteger("9999999100"), CoinType.ISTCOIN);
+		// balances -> paulo: 9999999000, joao: 1000, pedro: 0
 
-		// current balances: paulo: 9999999100, joao: 800, pedro: 100
-		// -- ALLOWANCE MECHANISM -- //
-		// paulo approves pedro to spend 1000 ISTCOIN (and check op. success)
 		BigInteger allowance = BigInteger.valueOf(1000);
-		BigInteger baseOwnerBalance = new BigInteger("9999999100");
-		BigInteger baseToBalance = BigInteger.valueOf(800);
+		BigInteger baseOwnerBalance = new BigInteger("9999999000");
+		BigInteger baseToBalance = BigInteger.valueOf(1000);
 		BigInteger expectedOwnerBalance = baseOwnerBalance.subtract(allowance);
 		BigInteger expectedToBalance = baseToBalance.add(allowance);
-
-		// ownerClient, spenderClient, toClient, amount, expectedFromBalance, expectedToBalance, coinType
-		// we put it in a function to recycle code very easily between tests
+		// owner, spender, to, amount, expectedFromBalance, expectedToBalance, coinType
 		TestUtils.testAllowanceMechanism(paulo, pedro, joao, allowance, expectedOwnerBalance, expectedToBalance, CoinType.ISTCOIN);
-
-		TestUtils.testTransfer(paulo, joao, BigInteger.valueOf(50), BigInteger.valueOf(50),
-				BigInteger.valueOf(150), CoinType.DEPCOIN);
-		// paulo: 50, joao: 150, pedro: 100
-		TestUtils.testTransfer(joao, pedro, BigInteger.valueOf(100),
-				BigInteger.valueOf(50), BigInteger.valueOf(200), CoinType.DEPCOIN);
 	}
 
 }

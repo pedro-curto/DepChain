@@ -151,7 +151,6 @@ public class PerfectLink {
                 int clientPort = packet.getPort();
                 dcLogger.error("(" + clientPort + ") parsing " + received + " : " + e);
                 // reply with error
-                // TODO make a subclass of ClientReplyMessage for Error, for now type is random
                 sendMessage(new ClientReplyMessage("", false, -1, MessageType.STRING_REPLY), clientPort);
                 continue;
             }
@@ -321,8 +320,10 @@ public class PerfectLink {
                 return gson.fromJson(received, IsBlackListedMessage.class);
             case IS_BLACK_LISTED_REPLY:
                 return gson.fromJson(received, IsBlackListedReply.class);
+            case ERROR:
+                return gson.fromJson(received, ErrorMessage.class);
             default:
-                dcLogger.log("(messageFromJson) Unknown message type");
+                dcLogger.log("(messageFromJson) Unknown message type: " + message.getType());
                 return message;
         }
     }

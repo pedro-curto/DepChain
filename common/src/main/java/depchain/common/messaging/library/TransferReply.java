@@ -58,19 +58,45 @@ public class TransferReply extends ClientReplyMessage {
         return transactionType;
     }
 
+    public String getDataToSign() {
+        if (transactionType == TransactionType.TRANSFER_FROM) {
+            return senderAddr + spenderAddr + recipientAddr + amount  + transactionType ;
+        }
+        return senderAddr + recipientAddr + amount + transactionType;
+    }
+
+    @Override
+    public String toString() {
+        return "TransferReply{" +
+                "amount=" + amount +
+                ", senderAddr='" + senderAddr + '\'' +
+                ", spenderAddr='" + spenderAddr + '\'' +
+                ", recipientAddr='" + recipientAddr + '\'' +
+                ", transactionType=" + transactionType +
+                ", success=" + super.getSuccess() +
+                ", instanceOfDecision=" + super.getInstanceOfDecision() +
+                ", coinType=" + coinType +
+                ", nonce=" + super.getNonce() +
+                ", memberPort=" + super.getPort() +
+                ", port=" + super.getPort() +
+                '}';
+    }
+
     // for hashmap in client
     @Override
     public boolean equals(Object obj) {
+        if (this == obj) return true;
         if (!super.equals(obj)) return false;
         if (!(obj instanceof TransferReply)) return false;
+
         TransferReply other = (TransferReply) obj;
-        return (
-                other.getAmount().equals(amount) &&
-                other.getSenderAddr().equals(senderAddr) &&
-                other.getSpenderAddr().equals(spenderAddr) &&
-                other.getRecipientAddr().equals(recipientAddr)
-        );
+
+        return Objects.equals(this.amount, other.getAmount()) &&
+                Objects.equals(this.senderAddr, other.getSenderAddr()) &&
+                Objects.equals(this.spenderAddr, other.getSpenderAddr()) &&
+                Objects.equals(this.recipientAddr, other.getRecipientAddr());
     }
+
 
     @Override
     public int hashCode() {

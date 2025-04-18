@@ -15,8 +15,8 @@ public class SpamByzantine extends Member {
 
     private static final int SPAM_MESSAGE_NUMBER = 10;
 
-    public SpamByzantine(Config config, DCLogger dcLogger, PerfectLink pf, ConsensusState cState, StringChain bcState, BlockingQueue<Message> messageQueue, BlockingQueue<AppendMessage> appendQueue) {
-        super(config, dcLogger, pf, cState, bcState, messageQueue, appendQueue);
+    public SpamByzantine(Config config, DCLogger dcLogger, PerfectLink pf, ConsensusState cState, StringChain bcState, BlockingQueue<Message> messageQueue) {
+        super(config, dcLogger, pf, cState, bcState, messageQueue);
     }
 
     @Override

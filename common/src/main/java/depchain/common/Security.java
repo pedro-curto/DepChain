@@ -1,5 +1,6 @@
 package depchain.common;
 
+import depchain.common.domain.Transaction;
 import depchain.common.messaging.TransactionType;
 import depchain.common.messaging.library.TransferMessage;
 
@@ -188,4 +189,20 @@ public final class Security {
 		return null;
 	}
 
+	public static boolean validateTransaction(Transaction tx) {
+		String dataToSign = tx.getDataToSign();
+		System.out.println("Data to sign: " + dataToSign);
+		String signature = tx.getSignature();
+		PublicKey publicKey;
+		if (tx.getTransactionType() == TransactionType.TRANSFER_FROM) {
+			publicKey = getMembershipPublicKey(tx.getSpender());
+		} else {
+			publicKey = getMembershipPublicKey(tx.getSender());
+		}
+		boolean isValid = verifyDS(signature, dataToSign, publicKey);
+		if (!isValid) {
+			System.err.println("Error: Signature is not valid");
+		}
+		return isValid;
+	}
 }

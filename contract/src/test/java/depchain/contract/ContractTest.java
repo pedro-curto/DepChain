@@ -106,7 +106,7 @@ public class ContractTest {
         ContractFunctions.transferTokens(executor, bos, SENDER, RECIPIENT, BigInteger.valueOf(100));
         BigInteger senderBalance = ContractFunctions.callBalanceOf(executor, bos, SENDER);
         Assertions.assertEquals(new BigInteger("10000000000"), senderBalance); // Balance unchanged
-        boolean isBlacklisted = ContractFunctions.callIsBlacklisted(executor, bos, SENDER, SENDER);
+        boolean isBlacklisted = ContractFunctions.callIsBlacklisted(executor, bos, SENDER);
         Assertions.assertTrue(isBlacklisted);
 
         // remove from blacklist and retry
@@ -161,15 +161,15 @@ public class ContractTest {
 
         // attempt blacklist operation without being an owner
         ContractFunctions.addToBlacklist(executor, SENDER, RECIPIENT);
-        boolean result = ContractFunctions.callIsBlacklisted(executor, bos, SENDER, RECIPIENT);
+        boolean result = ContractFunctions.callIsBlacklisted(executor, bos, RECIPIENT);
         Assertions.assertFalse(result);
 
         // blacklist operations with owner
         ContractFunctions.addToBlacklist(executor, OWNER, RECIPIENT);
-        result = ContractFunctions.callIsBlacklisted(executor, bos, OWNER, RECIPIENT);
+        result = ContractFunctions.callIsBlacklisted(executor, bos, RECIPIENT);
         Assertions.assertTrue(result);
         ContractFunctions.removeFromBlacklist(executor, OWNER, RECIPIENT);
-        result = ContractFunctions.callIsBlacklisted(executor, bos, SENDER, RECIPIENT);
+        result = ContractFunctions.callIsBlacklisted(executor, bos, RECIPIENT);
         Assertions.assertFalse(result);
 
         // owner gives an allowance to sender
@@ -208,6 +208,19 @@ public class ContractTest {
         transferResult = ContractFunctions.transferFrom(executor, bos, SPENDER, SENDER, RECIPIENT,
                 BigInteger.valueOf(100));
         Assertions.assertFalse(transferResult);
+    }
+
+    @Test
+    public void testTransferWithNegativeValue() {
+        /*
+         * Tries to transfer negative tokens from sender to recipient, and checks if the operation
+         * is successful.
+         */
+        SimpleWorld world = this.world;
+        EVMExecutor executor = ContractFunctions.deployContract(SENDER_STR, CONTRACT_STR, world, this.tracer,
+                this.deploymentBytecode, this.runtimeBytecode);
+        boolean result = ContractFunctions.transferTokens(executor, bos, SENDER, RECIPIENT, new BigInteger("-5"));
+		Assertions.assertFalse(result);
     }
 
 }

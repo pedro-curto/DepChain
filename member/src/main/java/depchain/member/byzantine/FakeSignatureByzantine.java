@@ -20,8 +20,8 @@ public class FakeSignatureByzantine extends Member {
 
     private static final Random random = new Random();
 
-    public FakeSignatureByzantine(Config config, DCLogger dcLogger, PerfectLink pf, ConsensusState cState, StringChain bcState, BlockingQueue<Message> messageQueue, BlockingQueue<AppendMessage> appendQueue) {
-        super(config, dcLogger, pf, cState, bcState, messageQueue, appendQueue);
+    public FakeSignatureByzantine(Config config, DCLogger dcLogger, PerfectLink pf, ConsensusState cState, StringChain bcState, BlockingQueue<Message> messageQueue) {
+        super(config, dcLogger, pf, cState, bcState, messageQueue);
     }
 
 
@@ -47,6 +47,7 @@ public class FakeSignatureByzantine extends Member {
     @Override
     public void handleRead(ReadMessage readMessage) {
         dcLogger.log("Received: " + readMessage);
+        ConsensusState consensusState = consensusHandler.getConsensusState();
         String dataToSign = consensusState.getCurrent().toString() + consensusState.getWriteset();
         String mySignature = Security.makeDS(dataToSign, Security.getMyPrivateKey(config.getMyName()));
 

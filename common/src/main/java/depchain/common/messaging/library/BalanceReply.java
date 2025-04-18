@@ -38,6 +38,10 @@ public class BalanceReply extends ClientReplyMessage {
         return balance;
     }
 
+    public String getDataToSign() {
+        return address + balance;
+    }
+
     // for hashmap in client
     @Override
     public boolean equals(Object obj) {

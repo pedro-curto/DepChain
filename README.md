@@ -1,25 +1,11 @@
 # DepChain
 
-## TODO
-- Finish Part 1 fixes:
-  - Permitir receber mensagens de épocas e instâncias no futuro
-  - Proteger clientes de replay attack (nonce na mensagem do cliente) (checkem please)
-- Test blacklist functions:
-  - Block a member and check if it's not able to make and receive transfers
-  - Unblock a member and check if it's able to make and receive transfers
-  - Test if any member can block and unblock (only owner should be able)
-- Implement transferFrom
-- Implement allowance
-- Implement balanceOf
-- Implement approve
-  - Beware that: "changing an allowance with this method (approve) brings the risk that someone may use both the old and the new allowance by unfortunate transaction ordering. One possible solution to mitigate this race condition is to first reduce the spender’s allowance to 0 and set the desired value afterwards: https://github.com/ethereum/EIPs/issues/20#issuecomment-263524729"
-- Make leader wait for a given time during which he collects transactions and then starts consensus with a
-block of transactions that he collected. Afterward, all members execute the transactions in the block.
-- Step 5
+## Requirements
+- This project uses `Java 21`, `Maven`, `Python` (scripts for hashing public key and genesis file hash) and `jq` (for JSON manipulation).
 
 ## Configuration
 
-**First of all, you need to generate the configuration files** (with the membership). 
+**First of all, you need to generate the configuration files** (with the membership), to generate the membership files and the genesis file.
 For this, we assume you have the `jq` command available (we use it for JSON manipulation).
 
 To generate the configuration files:
@@ -38,8 +24,7 @@ From the root directory of the project, run the following command:
 ```bash
 mvn clean install
 ```
-This can take some time (around 1 minute) since it will run the tests.
-We only observed this once, but in the eventuality of a test failing within `mvn clean install`, run the command below to ignore the tests.
+This can take some time (around 3 minutes) since it will run the tests.
 
 If you want to ignore the tests, run the following command instead:
 ```bash
@@ -69,22 +54,38 @@ You can check each member's log at the `member/logs` directory.
 
 ### Client
 
-To run a client (it's **very important** to pass it the client name paulo specifically, since it's the one that we have private and public keys for):
+To run a client (it's **very important** to pass it a name for a client that exists in the `createMembership.sh`'s 
+client list, like paulo, joao or pedro, since they're the ones that we generate private and public keys for).
+You can add more clients to the `createMembership.sh` script, but don't forget to run the script to regenerate the configuration files.
 ```bash
 cd client
-mvn compile exec:java -Dexec.args="2000 paulo"
+mvn compile exec:java -Dexec.args="2000 paulo 0"
 ```
 
-Now, at the client, you can send messages to the server:
-```bash
-foo 
-bar
-```
+The third argument is the client's byzantine behaviour. It can be:
+- 0: no byzantine behaviour
+- 1: fakes signatures
+- 2: performs replay attacks
+
+Now, at the client, you can send these types of messages to the server (CoinType is either `ISTCoin` or `DepCoin`):
+- `QUIT | EXIT`: exits the client
+- `HELP`: prints the help info
+- `<CoinType> BALANCE <address>`
+- `<CoinType> TRANSFER <address> <amount>"`
+- `ISTCoin TRANSFER_FROM <owner> <to> <amount>"`
+- `ISTCoin APPROVE <spender> <amount>"`
+- `ISTCoin ALLOWANCE <owner> <spender>"`
+- `ISTCoin BLACKLIST <address>"`
+- `ISTCoin UNBLACKLIST <address>"`
+- `ISTCoin ISBLACKLISTED <address>"`
+
+Note that the majority of operations are only available for `ISTCoin`.
 
 ## Testing the Project
 
 ### Automated Tests
 **Member Tests**
+
 Go to the member directory:
 ```bash
 cd member
@@ -95,16 +96,27 @@ To run all tests:
 mvn test
 ```
 
-To run a specific test (example with spam Byzantine):
+To run a specific test (example with the regular test):
 ```bash
-mvn test -Dtest=ByzantineIgnoreMessagesTest#testConsensusWithSpamByzantine
+mvn test -Dtest=RegularTest#testBlockChainNormalBehaviour
 ```
 
-The tests that we have are all contained within `ByzantineBehaviourTest`:
-- `testConsensusWithIgnoringByzantine`: tests the consensus algorithm with a Byzantine member that ignores all messages
-- `testConsensusWithSpamByzantine`: tests the consensus algorithm with a Byzantine member that sends a lot of equal messages (READs, STATEs, etc...)
-- `testConsensusWithFakeSignature`: tests the consensus algorithm with a Byzantine member that sends messages with fake signatures. We assert if the fake signature is detected, and if the consensus still works
-- `testConsensusWithWrongStateMessage`: tests the consensus algorithm with a Byzantine member that sends a wrong state message in the second instance. We assert if the consensus still works (that the same message isn't decided twice)
+The tests that we have are:
+
+**Byzantine Client**
+- `testWithWrongSignatureClient` (in `ByzantineClientTest`): tests the system with a Byzantine client that sends a fake signature
+- `testWithReplayAttackClient` (in `ByzantineClientTest`): tests the system with a Byzantine client that waits for a block to be decided, grabs a transaction, and attempts to send a request to replay the transaction
+
+**Byzantine Member**
+- `testConsensusWithIgnoringByzantine` (in `ByzantineClientTest`): tests the system with a Byzantine member that ignores all messages
+- `testConsensusWithSpamByzantine` (in `SpamMemberTest`): tests the system with a Byzantine member that sends a lot of equal messages (READs, STATEs, etc...)
+- `testConsensusWithMemberFakeSignature` (in `FakeSignatureMemberTest`): tests the system with a Byzantine member that sends messages with fake signatures. We assert if the fake signature is detected, if the consensus still works and the transactions are decided correctly
+- `testConsensusWithWrongState` (in `WrongStateMemberTest`): tests the system with a Byzantine member that sends a wrong state message in the second instance. We assert if the consensus still works (that the same transaction isn't executed twice)
+
+**Regular Test**
+- `testBlockChainNormalBehaviour`: tests the normal behaviour of the blockchain, sending transfers between all clients and checking if the allowance mechanism is working properly
+
+TODO: remove?
 - `testConsensusWithWrongWriteAcceptByzantine`: tests the consensus algorithm with a Byzantine member that sends wrong WRITEs and ACCEPTs
 - `testConsensusWithByzantinePerfectLink`: tests the consensus algorithm when all members have a Byzantine perfect link, where messages can be lost, duplicated, reordered or corrupted.
 
@@ -123,6 +135,7 @@ The tests that we have check if:
 - The contract outputs normal info (name, symbol, decimals)
 - The blacklist functionality works
 - The `transfer` and `transferFrom` primitives work as expected
+- The `blacklist` and `unblacklist` primitives work as expected
 
 ### Manual Tests
 
@@ -145,16 +158,17 @@ Where `<byzantineBehaviour>` can be one of the following:
 - '5': spam messages (STATEs, WRITEs...)
 - '6': send wrong writes and accepts
 
-Afterwards (very important to be **paulo** or some client that you generated the keys for), run the client:
+Afterwards (very important to be **paulo**, **joao**, **pedro** or some client that you generated the keys for), run the client:
 ```bash
 cd client
-mvn compile exec:java -Dexec.args="2000 paulo"
+mvn compile exec:java -Dexec.args="2000 paulo 0"
 ```
 
-Send messages:
+Send requests:
 ```bash
-foo
-bar
+ISTCoin transfer <address> <amount>
+ISTCoin balance <address>
+[...]
 ```
 
 Check the logs at the `member/logs` directory.

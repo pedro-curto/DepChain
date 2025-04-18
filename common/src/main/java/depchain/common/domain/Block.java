@@ -4,6 +4,7 @@ import depchain.common.Security;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 public class Block {
     String hash;
@@ -72,6 +73,24 @@ public class Block {
                 .reduce("", String::concat));
         // set hash
         this.hash = Security.makeDigest(sb.toString());
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        // DOES NOT COMPARE BLOCKCHAINSTATE ATTRIBUTE
+        if (this == o) return true;
+        if (!(o instanceof Block)) return false;
+        Block that = (Block) o;
+        return blockNumber == that.blockNumber &&
+                timestamp == that.timestamp &&
+                hash.equals(that.hash) &&
+                previousHash.equals(that.previousHash) &&
+                transactions.equals(that.transactions);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(hash, previousHash, blockNumber, timestamp, transactions);
     }
 
     @Override

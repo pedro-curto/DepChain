@@ -14,7 +14,7 @@ public class ConsensusState {
     private final String memberName;
     private ValueTimestampPair current;
     private List<ValueTimestampPair> writeset;
-    private int currentConsensusInstance;
+    private int instance;
     public final Object lock;
     private Map<Integer, WriteMessage> writeMessages;
     private Map<Integer, AcceptMessage> acceptMessages;
@@ -24,12 +24,12 @@ public class ConsensusState {
     private int epoch = 0;
     private DCLogger logger;
 
-    public ConsensusState(String memberName, int currentConsensusInstance) {
+    public ConsensusState(String memberName, int instance) {
         // Initial State
         this.memberName = memberName;
-        this.current = new ValueTimestampPair(0, "");
+        this.current = new ValueTimestampPair(0);
         this.writeset = new ArrayList<>();
-        this.currentConsensusInstance = currentConsensusInstance;
+        this.instance = instance;
         this.writeMessages = new HashMap<>();
         this.acceptMessages = new HashMap<>();
         this.lock = new Object();
@@ -53,10 +53,10 @@ public class ConsensusState {
         return writeset;
     }
     public int getInstance() {
-        return currentConsensusInstance;
+        return instance;
     }
     public void setInstance(int instance) {
-        this.currentConsensusInstance = instance;
+        this.instance = instance;
     }
     public void setCurrent(ValueTimestampPair current) {
         this.current = current;
@@ -110,11 +110,11 @@ public class ConsensusState {
     }
 
     private boolean reachedQuorum(int quorum, Collection<Integer> counters) {
-        System.out.print("Quorum I want is " + quorum + " and I have " + counters + " ");
-        System.out.println("Write counters: " + writeCounters);
+        //System.out.print("Quorum I want is " + quorum + " and I have " + counters + " ");
+        //System.out.println("Write counters: " + writeCounters);
         //printValues(writeCounters);
         //printValues(acceptCounters);
-        System.out.println();
+        //System.out.println();
         for (Integer counter : counters) {
             if (counter >= quorum) {
                 return true;
@@ -147,7 +147,6 @@ public class ConsensusState {
         return maxValue;
     }
 
-    // TODO-> add parameter for timeout because of lider, other dont have timeout
     public List<StateMessage> waitForCollectedMessage() {
         synchronized (lock) {
             while (collectedMessage == null) {
@@ -179,13 +178,13 @@ public class ConsensusState {
         return null;
     }
 
-    public ValueTimestampPair waitForAcceptQuorum(int byzantineQuorum) {
+    public Block waitForAcceptQuorum(int byzantineQuorum) {
         if(waitForQuorum(byzantineQuorum, acceptCounters, TIMEOUT)) {
             // Quorum reached
             System.out.print("[ConsensusState] Accepted values: ");
             printValues(acceptCounters);
             System.out.println();
-            return decideValue(acceptCounters);
+            return decideValue(acceptCounters).getValue();
         }
         // Timeout
         return null;
@@ -220,10 +219,14 @@ public class ConsensusState {
         return true;
     }
 
+    public String getDataToSign() {
+        return current.toString() + writeset;
+    }
+
     public void nextInstance() {
-        this.current = new ValueTimestampPair(0, "");
+        this.current = new ValueTimestampPair(0);
         this.writeset = new ArrayList<>();
-        this.currentConsensusInstance = this.currentConsensusInstance +1;
+        this.instance = this.instance +1;
         this.writeMessages = new HashMap<>();
         this.acceptMessages = new HashMap<>();
         this.writeCounters = new HashMap<>();

@@ -24,8 +24,8 @@ public class CoordinatedWrongStateByzantine extends Member {
     private boolean firstEpoch;
     private ValueTimestampPair valts;
 
-    public CoordinatedWrongStateByzantine(Config config, DCLogger dcLogger, PerfectLink pf, ConsensusState cState, StringChain bcState, BlockingQueue<Message> messageQueue, BlockingQueue<AppendMessage> appendQueue) {
-        super(config, dcLogger, pf, cState, bcState, messageQueue, appendQueue);
+    public CoordinatedWrongStateByzantine(Config config, DCLogger dcLogger, PerfectLink pf, ConsensusState cState, StringChain bcState, BlockingQueue<Message> messageQueue) {
+        super(config, dcLogger, pf, cState, bcState, messageQueue);
         this.firstEpoch = true;
     }
 
@@ -43,6 +43,7 @@ public class CoordinatedWrongStateByzantine extends Member {
         }
 
         // Retrieves last value used, so it's signed by the client
+        ConsensusState consensusState = consensusHandler.getConsensusState();
         ValueTimestampPair fakeCurrent = new ValueTimestampPair(consensusState.getEpoch() + 1, valts.getValue());
         fakeCurrent.setClientSignature(valts.getClientSignature());
 
@@ -70,6 +71,7 @@ public class CoordinatedWrongStateByzantine extends Member {
             return;
         }
         valts = collectedMessage.getStates().get(0).getState().getCurrent();
+        ConsensusState consensusState = consensusHandler.getConsensusState();
         consensusState.addCollectedMessage(collectedMessage);
     }
 
@@ -81,7 +83,7 @@ public class CoordinatedWrongStateByzantine extends Member {
         WriteMessage echo = new WriteMessage(writeMessage.getValts(), config.getPort(), writeMessage.getConsensusInstance());
         sendToMember(echo, writeMessage.getPort());
         dcLogger.log("Sending fake echo WRITE message to " + writeMessage.getPort() + "... ");
-
+        ConsensusState consensusState = consensusHandler.getConsensusState();
         consensusState.addWriteMessage(writeMessage);
 
     }
@@ -94,7 +96,7 @@ public class CoordinatedWrongStateByzantine extends Member {
         AcceptMessage echo = new AcceptMessage(acceptMessage.getValts(), config.getPort(), acceptMessage.getConsensusInstance());
         sendToMember(echo, acceptMessage.getPort());
         dcLogger.log("Sending fake echo ACCEPT message to " + acceptMessage.getPort() + "... ");
-
+        ConsensusState consensusState = consensusHandler.getConsensusState();
         consensusState.addAcceptMessage(acceptMessage);
     }
 

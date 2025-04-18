@@ -9,6 +9,7 @@ import depchain.common.messaging.TransactionType;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.math.BigInteger;
+import java.util.Objects;
 
 public class Transaction {
     // based on: https://ethereum.org/en/developers/docs/transactions/
@@ -108,6 +109,22 @@ public class Transaction {
     }
 
     @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || o.getClass() != this.getClass()) return false;
+        Transaction other = (Transaction) o;
+
+        return Objects.equals(this.senderAddr, other.senderAddr) &&
+                Objects.equals(this.spenderAddr, other.spenderAddr) &&
+                Objects.equals(this.recipientAddr, other.recipientAddr) &&
+                Objects.equals(this.amount, other.amount) &&
+                this.nonce == other.nonce &&
+                this.transactionType == other.transactionType &&
+                this.success == other.success &&
+                this.coinType == other.coinType;
+    }
+
+    @Override
     public String toString() {
         return "Transaction{" +
                 "senderAddr='" + senderAddr + '\'' +
@@ -121,4 +138,33 @@ public class Transaction {
                 '}';
     }
 
+    @Override
+    public int hashCode() {
+        return Objects.hash(
+                senderAddr,
+                spenderAddr,
+                recipientAddr,
+                amount,
+                nonce,
+                transactionType,
+                success,
+                coinType
+        );
+    }
+
+    /*
+    from TransferMessage
+    public String getDataToSign() {
+		if (transactionType == TransactionType.TRANSFER_FROM) {
+			return from + spender + to + value + nonce + transactionType + clientPort;
+		}
+		return from + to + value + nonce + transactionType + clientPort;
+	}
+     */
+	public String getDataToSign() {
+        if (transactionType == TransactionType.TRANSFER_FROM) {
+            return senderAddr + spenderAddr + recipientAddr + amount + nonce + transactionType + clientPort;
+        }
+        return senderAddr + recipientAddr + amount + nonce + transactionType + clientPort;
+    }
 }

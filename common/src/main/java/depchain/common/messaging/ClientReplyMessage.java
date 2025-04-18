@@ -10,6 +10,7 @@ public class ClientReplyMessage extends Message {
     private int instanceOfDecision;
 	MessageType replyType;
     private long nonce;
+    private String signature;
 
     public ClientReplyMessage(String value, boolean success, int instanceOfDecision, MessageType replyType) {
         super(replyType);
@@ -54,6 +55,18 @@ public class ClientReplyMessage extends Message {
         return nonce;
     }
 
+    public void setSignature(String signature) {
+        this.signature = signature;
+    }
+
+    public String getSignature() {
+        return signature;
+    }
+
+    public String getDataToSign() {
+        return "";
+    }
+
     // for hashmap in client
     @Override
     public boolean equals(Object obj) {
@@ -83,6 +96,7 @@ public class ClientReplyMessage extends Message {
                 ", replyType=" + replyType +
                 ", nonce=" + nonce +
                 ", coinType=" + coinType +
+                ", port=" + super.getPort() +
                 '}';
     }
 }

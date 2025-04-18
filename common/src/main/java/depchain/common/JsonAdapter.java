@@ -6,6 +6,7 @@ import depchain.common.messaging.CoinType;
 import depchain.common.messaging.TransactionType;
 
 import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -56,7 +57,6 @@ public class JsonAdapter {
                 obj.get("nonce").getAsLong(),
                 TransactionType.valueOf(obj.get("type").getAsString()),
                 CoinType.valueOf(obj.get("coin_type").getAsString()),
-                // TODO -> check
                 obj.get("clientPort").getAsInt()
         );
     }
@@ -87,7 +87,7 @@ public class JsonAdapter {
                 .map(JsonAdapter::serializeTransaction)
                 .forEach(transactions::add);
         json.add("transactions", transactions);
-        // TODO -> i dont think we're going to have a state in the block
+        // i dont think we're going to have a state in the block
         //json.add("state", JsonAdapter.serializeBlockChainState(block.getState()));
         return json;
     }
@@ -168,4 +168,14 @@ public class JsonAdapter {
         return new GenesisBlock(hash, previousHash, transactions, accounts, contractData);
     }
 
+    // parses a list of transactions from a string (that represents a block, starting with BLOCK:)
+	public static List<Transaction> parseTransactions(String value) {
+        String blockStr = value.substring("BLOCK:".length()).trim();
+        JsonObject blockJson = JsonParser.parseString(blockStr).getAsJsonObject();
+        return blockJson.getAsJsonArray("transactions")
+                .asList()
+                .stream()
+                .map(JsonAdapter::parseTransaction)
+                .toList();
+	}
 }

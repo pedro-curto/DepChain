@@ -2,17 +2,17 @@ package depchain.client.domain;
 
 import depchain.common.*;
 import depchain.common.domain.Account;
-import depchain.common.domain.Block;
 import depchain.common.domain.Entity;
 import depchain.common.domain.GenesisBlock;
+import depchain.common.domain.Transaction;
 import depchain.common.messaging.*;
 import depchain.common.messaging.CoinType;
 import depchain.common.messaging.library.*;
 
-import javax.xml.transform.TransformerFactory;
 import java.math.BigInteger;
 import java.net.DatagramSocket;
 import java.security.KeyPair;
+import java.security.PublicKey;
 import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -34,13 +34,19 @@ public class Client {
     private BlockingQueue<Message> messageQueue;
     private final DCLogger dcLogger;
     private volatile boolean running = true;
-    private final boolean testEnvironment;
     // 0x... address for client to send requests to the members
     private String myAddress;
     // {clientName: address} (other accounts addresses)
     private Map<String, String> addresses;
-
+    // for tests
+    private BigInteger lastBalance;
+    private final boolean testEnvironment;
+    private TransferReply lastTransferReply;
+    private Transaction lastExecutedTransaction;
+    private BigInteger lastAllowance;
+    private Map<Integer, Boolean> hasMemberReplied;
     private Map<ClientReplyMessage, Integer> memberReplyMessages;
+    private boolean amHappy = false;
 
     public Client(String clientName,
                   int port,
@@ -53,11 +59,10 @@ public class Client {
         this.faultyProcesses = Math.floorDiv(members.size() - 1, 3);
         this.byzantineQuorum = members.size() - faultyProcesses;
         this.memberResponses = new HashMap<>();
-        // TODO hardcoded leader
         this.leaderPort = members.getFirst().getPort();
         this.dcLogger = new DCLogger(Client.class, true);
         this.testEnvironment = testEnvironment;
-
+        this.hasMemberReplied = new HashMap<>();
         this.memberReplyMessages = new HashMap<>();
         this.myAddress = null;
     }
@@ -89,7 +94,6 @@ public class Client {
     }
 
     public void assignAddress() {
-        // TODO -> fix this
         // load the genesis file
         GenesisBlock genesisBlock = CommonUtils.loadGenesisBlock();
 
@@ -113,7 +117,7 @@ public class Client {
         this.addresses = new HashMap<>();
         for (Account account : genesisBlock.getAccounts()) {
             //if (!account.getAddress().equals(this.myAccount.getAddress())) {
-            // TODO -> this should be {address: account}, but it's simpler to type the client name
+            // this should be {address: account}, but it's simpler to type the client name
                 this.addresses.put(account.getName(), account.getAddress());
             //}
         }
@@ -135,6 +139,7 @@ public class Client {
                 System.exit(0);
             } else if (content[0].equalsIgnoreCase("HELP")) {
                 printHelpInfo();
+                amHappy = true;
             } else if (content[0].equalsIgnoreCase("APPEND")) {
                 if (content.length < 2) {
                     System.out.println("Invalid command. Usage: APPEND <string>");
@@ -156,13 +161,30 @@ public class Client {
             } else {
                 System.out.println("Invalid Command.");
                 printHelpInfo();
+                amHappy = true;
+            }
+            //waitForResponse();
+            // reset amHappy for the next command
+            amHappy = false;
+        }
+    }
+
+    private void waitForResponse() {
+        synchronized (this) {
+            while (!amHappy) {
+                try {
+                    wait();
+                } catch (InterruptedException e) {
+                    System.out.println("Thread interrupted: " + e.getMessage());
+                    Thread.currentThread().interrupt();
+                }
             }
         }
     }
 
-
-
     private void handleCoinCommand(String[] content, CoinType coinType) {
+        memberReplyMessages.clear();
+        hasMemberReplied.clear();
         switch(content[0].toUpperCase()) {
             case "BALANCE":
                 handleBalanceCommand(content, coinType);
@@ -187,24 +209,23 @@ public class Client {
                 break;
             case "ISBLACKLISTED":
                 handleIsBlackListed(content, coinType);
+                break;
             default:
                 System.out.println("Invalid command.");
         }
     }
 
     private void handleIsBlackListed(String[] content, CoinType coinType) {
-        if (content.length != 3) {
-            System.out.println("Invalid command. Usage: <CoinType> ISBLACKLISTED <owner> <account>");
+        if (content.length != 2) {
+            System.out.println("Invalid command. Usage: <CoinType> ISBLACKLISTED <address>");
             return;
         }
-        String owner = content[1];
-        String account = content[2];
-        if(!addresses.containsKey(owner) || !addresses.containsKey(account)) {
+        String account = content[1];
+        if(!addresses.containsKey(account)) {
             System.out.println("Invalid account address!");
         }
-        String ownerAddr = addresses.get(owner);
         String accountAddr = addresses.get(account);
-        IsBlackListedMessage msg = new IsBlackListedMessage(ownerAddr, accountAddr, this.port, coinType);
+        IsBlackListedMessage msg = new IsBlackListedMessage(accountAddr, this.port, coinType);
         broadcastMessage(msg);
     }
 
@@ -223,7 +244,6 @@ public class Client {
                 this.myAddress,
                 null,
                 addr,
-                //  TODO have to send BigInteger.ZERO otherwise json can't convert null to BigInteger in parseBlock
                 BigInteger.ZERO, // change this in the future
                 coinType,
                 nonce,
@@ -251,7 +271,6 @@ public class Client {
                 this.myAddress,
                 null,
                 addr,
-                //  TODO have to send BigInteger.ZERO otherwise json can't convert null to BigInteger in parseBlock
                 BigInteger.ZERO, // change this in the future
                 coinType,
                 nonce,
@@ -280,6 +299,95 @@ public class Client {
             System.out.println("Invalid destination account address!");
             return;
         }
+        sendTransferFrom(nameOfOwnerAddr, nameOfToAddr, amount, coinType);
+    }
+
+    private void handleAllowanceCommand(String[] content, CoinType coinType) {
+        if (content.length != 3) {
+            System.out.println("Invalid command. Usage: <CoinType> ALLOWANCE <owner> <spender>");
+            return;
+        }
+        String owner = content[1];
+        String spender = content[2];
+        if (!addresses.containsKey(spender)) {
+            System.out.println("Invalid account address!");
+            return;
+        }
+        sendGetAllowance(owner, spender, coinType);
+    }
+
+    private void handleApproveCommand(String[] content, CoinType coinType) {
+        if (content.length != 3) {
+            System.out.println("Invalid command. Usage: <CoinType> APPROVE <spender> <amount>");
+            return;
+        }
+        String spender = content[1];
+        BigInteger amount = BigInteger.valueOf(Long.parseLong(content[2]));
+        if (!addresses.containsKey(spender)) {
+            System.out.println("Invalid account address!");
+            return;
+        }
+        sendApprove(spender, amount, coinType);
+    }
+
+    private void handleTransferCommand(String[] content, CoinType coinType) {
+        if (content.length != 3) {
+            System.out.println("Invalid command. Usage: <CoinType> TRANSFER <address> <amount>");
+            return;
+        }
+        String nameOfToAddress = content[1];
+        BigInteger amount = BigInteger.valueOf(Long.parseLong(content[2]));
+        if (!addresses.containsKey(nameOfToAddress)) {
+            System.out.println("Invalid account address!");
+            return;
+        }
+        sendTransfer(nameOfToAddress, amount, coinType);
+    }
+
+    private void handleBalanceCommand(String[] content, CoinType coinType) {
+        if (content.length != 2) {
+            System.out.println("Invalid command. Usage: DepCoin BALANCE <address>");
+            return;
+        }
+        String accName = content[1];
+        if (!addresses.containsKey(accName)) {
+            System.out.println("Invalid account address!");
+            return;
+        }
+        sendGetBalance(accName, coinType);
+    }
+
+    /*------------------------------------------------------------------------*/
+    /*--------------------------- SENDER FUNCTIONS ---------------------------*/
+    /*----- In order for the functions to be callable in test scenarios ------*/
+    /*------------------------------------------------------------------------*/
+
+    // nameOfToAddress, content, coinType
+    public void sendTransfer(String nameOfToAddress, BigInteger amount, CoinType coinType) {
+        String toAddress = addresses.get(nameOfToAddress);
+        TransferMessage msg = new TransferMessage(
+                this.myAddress,
+                "0x",
+                toAddress,
+                amount,
+                coinType,
+                nonce,
+                TransactionType.TRANSFER,
+                this.port
+        );
+        String signature = generateSignature(msg);
+        msg.setSignature(signature);
+        sendMessageToLeader(msg);
+    }
+
+    public void sendGetBalance(String accName, CoinType coinType) {
+        String addr = addresses.get(accName);
+        // broadcast request to members
+        BalanceOfMessage msg = new BalanceOfMessage(addr, this.port, coinType);
+        broadcastMessage(msg);
+    }
+
+    public void sendTransferFrom(String nameOfOwnerAddr, String nameOfToAddr, BigInteger amount, CoinType coinType) {
         String ownerAddr = addresses.get(nameOfOwnerAddr);
         String toAddr = addresses.get(nameOfToAddr);
         // the invoker (myself, the client) is the spender
@@ -300,34 +408,7 @@ public class Client {
         sendMessageToLeader(msg);
     }
 
-    private void handleAllowanceCommand(String[] content, CoinType coinType) {
-        if (content.length != 3) {
-            System.out.println("Invalid command. Usage: <CoinType> ALLOWANCE <owner> <spender>");
-            return;
-        }
-        String owner = content[1];
-        String spender = content[2];
-        if (!addresses.containsKey(spender)) {
-            System.out.println("Invalid account address!");
-            return;
-        }
-        String spenderAddr = addresses.get(spender);
-        String ownerAddr = addresses.get(owner);
-        AllowanceMessage msg = new AllowanceMessage(ownerAddr, spenderAddr, this.port, coinType);
-        broadcastMessage(msg);
-    }
-
-    private void handleApproveCommand(String[] content, CoinType coinType) {
-        if (content.length != 3) {
-            System.out.println("Invalid command. Usage: <CoinType> APPROVE <spender> <amount>");
-            return;
-        }
-        String spender = content[1];
-        BigInteger amount = BigInteger.valueOf(Long.parseLong(content[2]));
-        if (!addresses.containsKey(spender)) {
-            System.out.println("Invalid account address!");
-            return;
-        }
+    public void sendApprove(String spender, BigInteger amount, CoinType coinType) {
         String spenderAddr = addresses.get(spender);
         TransferMessage msg = new TransferMessage(
                 myAddress,
@@ -346,64 +427,30 @@ public class Client {
         sendMessageToLeader(msg);
     }
 
-    private void handleTransferCommand(String[] content, CoinType coinType) {
-        if (content.length != 3) {
-            System.out.println("Invalid command. Usage: <CoinType> TRANSFER <address> <amount>");
-            return;
-        }
-        String nameOfToAddress = content[1];
-        if (!addresses.containsKey(nameOfToAddress)) {
-            System.out.println("Invalid account address!");
-            return;
-        }
-        String toAddress = addresses.get(nameOfToAddress);
-        BigInteger amount = BigInteger.valueOf(Long.parseLong(content[2]));
-        // TODO check if he has enough balance here and amount (?)
-        TransferMessage msg = new TransferMessage(
-                this.myAddress,
-                null,
-                toAddress,
-                amount,
-                coinType,
-                nonce,
-                TransactionType.TRANSFER,
-                this.port
-        );
-        String dataToSign = msg.getDataToSign();
-        String signature = Security.makeDS(dataToSign, clientKeys.getPrivate());
-        msg.setSignature(signature);
-        sendMessageToLeader(msg);
-    }
-
-    private void handleBalanceCommand(String[] content, CoinType coinType) {
-        if (content.length != 2) {
-            System.out.println("Invalid command. Usage: DepCoin BALANCE <address>");
-            return;
-        }
-        String accName = content[1];
-        if (!addresses.containsKey(accName)) {
-            System.out.println("Invalid account address!");
-            return;
-        }
-        String addr = addresses.get(accName);
-
-        // broadcast request to members
-        BalanceOfMessage msg = new BalanceOfMessage(addr, this.port, coinType);
+    public void sendGetAllowance(String owner, String spender, CoinType coinType) {
+        String ownerAddr = addresses.get(owner);
+        String spenderAddr = addresses.get(spender);
+        AllowanceMessage msg = new AllowanceMessage(ownerAddr, spenderAddr, this.port, coinType);
         broadcastMessage(msg);
     }
+
+    /*------------------------------------------------------------------------*/
+    /*--------------------------- HELPER FUNCTIONS ---------------------------*/
+    /*------------------------------------------------------------------------*/
 
     private void broadcastMessage(Message message) {
         for (Entity member : members) {
             perfectLink.sendMessage(message, member.getPort());
-            dcLogger.log("Sent message: " + message);
+            //dcLogger.log("Sent message: " + message);
         }
         incrementNonce();
     }
 
-    private void sendMessageToLeader(Message message) {
+    protected void sendMessageToLeader(Message message) {
+        dcLogger.log("Message: " + message);
         perfectLink.sendMessage(message, leaderPort);
         incrementNonce();
-        dcLogger.log("Sent message to leader: " + message);
+        //dcLogger.log("Sent message to leader: " + message);
     }
 
     public void sendAppend(String content) {
@@ -411,6 +458,11 @@ public class Client {
         String signature = Security.makeDS(msg.getDataToSign(), clientKeys.getPrivate());
         msg.setSignature(signature);
         sendMessageToLeader(msg);
+    }
+
+    public String generateSignature(TransferMessage msg) {
+        String dataToSign = msg.getDataToSign();
+        return Security.makeDS(dataToSign, clientKeys.getPrivate());
     }
 
     private void deliverMessage(BlockingQueue<Message> messageQueue) {
@@ -421,7 +473,7 @@ public class Client {
             } catch (InterruptedException e) {
                 continue;
             }
-            System.out.println("Delivering " + message.getType() + "...");
+            //System.out.println("Delivering " + message.getType() + "...");
             switch (message.getType()) {
                 case TRANSFER_REPLY:
                     TransferReply transferReply = (TransferReply) message;
@@ -436,36 +488,64 @@ public class Client {
                     handleAllowanceReply(allowanceReply);
                     break;
                 case STRING_REPLY:
-                    ClientReplyMessage clientReplyMessage = (ClientReplyMessage) message;
-                    handleStringReply(clientReplyMessage);
+                    if (message instanceof ClientReplyMessage clientReplyMessage) {
+                        handleStringReply(clientReplyMessage);
+                    } else {
+                        System.out.println("Received STRING_REPLY but message is not a ClientReplyMessage instance: " + message);
+                    }
                     break;
                 case IS_BLACK_LISTED_REPLY:
                     IsBlackListedReply isBlackListedReply = (IsBlackListedReply) message;
                     handleIsBlackListedReply(isBlackListedReply);
+                    break;
+                case ERROR:
+                    ErrorMessage errorReply = (ErrorMessage) message;
+                    dcLogger.error("Error message received: " + errorReply);
+                    handleErrorMessage(errorReply);
+                    break;
                 default:
-                    System.out.println("Reply type does not exist");
+                    System.out.println("Reply type does not exist: " + message.getType());
             }
         }
     }
 
-    private void handleIsBlackListedReply(IsBlackListedReply reply) {
+    /*------------------------------------------------------------------------*/
+    /*---------------------------- REPLY HANDLERS ----------------------------*/
+    /*------------------------------------------------------------------------*/
+
+    private synchronized void handleIsBlackListedReply(IsBlackListedReply reply) {
+        if (verifyReplay(reply)) {
+            System.out.println("Replayed reply");
+            return;
+        }
+        hasMemberReplied.putIfAbsent(reply.getPort(), true);
         memberReplyMessages.putIfAbsent(reply, 0);
         memberReplyMessages.put(reply, memberReplyMessages.get(reply) + 1);
         // reached quorum of f+1 equal messages
-        if (memberReplyMessages.get(reply) == this.faultyProcesses+1) {
+        if (memberReplyMessages.get(reply) == this.faultyProcesses + 1) {
+            if (reply.getSuccess()) {
+                if (reply.isBlackListed()) {
+                    System.out.println(getNameByAddress(reply.getAccount()) + " is blacklisted.");
+                } else {
+                    System.out.println(getNameByAddress(reply.getAccount()) + " is not blacklisted.");
+                }
+            } else {
+                System.out.println(reply.getAccount() + " was not able to be blacklisted.");
+            }
             System.out.println("IsBlacklisted: {");
-            System.out.println("owner "+ reply.getOwner());
             System.out.println("account: " + reply.getAccount());
             System.out.println("result: " + reply.isBlackListed());
+            System.out.println("success: " + reply.getSuccess());
             System.out.println("}");
+            this.amHappy = true;
+            notifyAll();
         }
         else {
-            System.out.println("Not reached quorum yet.");
+            //System.out.println("Not reached quorum yet.");
         }
-
     }
 
-    private void handleStringReply(ClientReplyMessage reply) {
+    private synchronized void handleStringReply(ClientReplyMessage reply) {
         memberReplyMessages.putIfAbsent(reply, 0);
         memberReplyMessages.put(reply, memberReplyMessages.get(reply) + 1);
         // reached quorum of f+1 equal messages
@@ -473,65 +553,115 @@ public class Client {
             System.out.println("Server appended String: {");
             System.out.println(reply.getValue());
             System.out.println("}");
+            this.amHappy = true;
+            notifyAll();
         }
         else {
-            System.out.println("Not reached quorum yet.");
+            //System.out.println("Not reached quorum yet.");
         }
     }
-    private void handleTransferReply(TransferReply reply) {
+
+    private synchronized void handleTransferReply(TransferReply reply) {
+        if (verifyReplay(reply)) {
+            System.out.println("Replayed reply");
+            return;
+        }
+        hasMemberReplied.putIfAbsent(reply.getPort(), true);
+        memberReplyMessages.putIfAbsent(reply, 0);
+        memberReplyMessages.put(reply, memberReplyMessages.get(reply) + 1);
+        // reached quorum of f+1 equal messages
+        if (memberReplyMessages.get(reply) == this.faultyProcesses + 1) {
+            printTransferReply(reply);
+            //System.out.println("Transfer: {");
+            //System.out.println("type: " + reply.getType());
+            //System.out.println("From: " + reply.getSenderAddr());
+            //System.out.println("To: " + reply.getRecipientAddr());
+            //if (!reply.getSenderAddr().isEmpty()) System.out.println("Spender: " + reply.getSenderAddr());
+            //System.out.println("Amount: " + reply.getAmount());
+            //System.out.println("success: " + reply.getSuccess());
+            //System.out.println("}");
+            this.lastTransferReply = reply;
+            this.amHappy = true;
+            notifyAll();
+        }
+        else {
+            //System.out.println("Not reached quorum yet.");
+        }
+    }
+
+    private synchronized void handleBalanceReply(BalanceReply reply) {
+        if (verifyReplay(reply)) {
+            // returns true if there's already an entry in the map for the reply's port
+            System.out.println("Replayed reply");
+            return;
+        }
+        hasMemberReplied.putIfAbsent(reply.getPort(), true);
         memberReplyMessages.putIfAbsent(reply, 0);
         memberReplyMessages.put(reply, memberReplyMessages.get(reply) + 1);
         // reached quorum of f+1 equal messages
         if (memberReplyMessages.get(reply) == this.faultyProcesses+1) {
-            System.out.println("Transfer: {");
-            System.out.println("From: " + reply.getSenderAddr());
-            System.out.println("To: " + reply.getRecipientAddr());
-            if (!reply.getSenderAddr().isEmpty()) System.out.println("Spender: " + reply.getSenderAddr());
-            System.out.println("Amount: " + reply.getAmount());
-            System.out.println("}");
-        }
-        else {
-            System.out.println("Not reached quorum yet.");
-        }
-    }
-    private void handleBalanceReply(BalanceReply reply) {
-        memberReplyMessages.putIfAbsent(reply, 0);
-        memberReplyMessages.put(reply, memberReplyMessages.get(reply) + 1);
-        // reached quorum of f+1 equal messages
-        if (memberReplyMessages.get(reply) == this.faultyProcesses+1) {
+            System.out.print(getNameByAddress(reply.getAddress()) + " balance is "+ reply.getBalance() + ".");
             System.out.println("Balance: {");
             System.out.println("address "+ reply.getAddress());
             System.out.println("balance: " + reply.getBalance());
+            System.out.println("success: " + reply.getSuccess());
             System.out.println("}");
+            this.lastBalance = reply.getBalance();
+            this.amHappy = true;
+            notifyAll();
+            //dcLogger.log("Instance of decision: " + reply.getInstanceOfDecision());
         }
         else {
-            System.out.println("Not reached quorum yet.");
+            //System.out.println("Not reached quorum yet.");
         }
 
     }
-    private void handleAllowanceReply(AllowanceReply reply) {
+
+    private synchronized void handleAllowanceReply(AllowanceReply reply) {
+        if (verifyReplay(reply)) {
+            dcLogger.error("Replayed reply");
+            return;
+        }
+        hasMemberReplied.putIfAbsent(reply.getPort(), true);
         memberReplyMessages.putIfAbsent(reply, 0);
         memberReplyMessages.put(reply, memberReplyMessages.get(reply) + 1);
         // reached quorum of f+1 equal messages
         if (memberReplyMessages.get(reply) == this.faultyProcesses+1) {
+            String ownerName = getNameByAddress(reply.getOwner());
+            String spenderName = getNameByAddress(reply.getSpender());
+            System.out.print(ownerName + " allows "+ spenderName + " to use "+ reply.getAllowance() + ".");
             System.out.println("Allowance {");
             System.out.println("owner: " + reply.getOwner());
             System.out.println("spender: " + reply.getSpender());
             System.out.println("amount: " + reply.getAllowance());
+            System.out.println("success: " + reply.getSuccess());
             System.out.println("}");
+            this.lastAllowance = reply.getAllowance();
+            this.amHappy = true;
+            notifyAll();
         }
         else {
-            System.out.println("Not reached quorum yet.");
+            //System.out.println("Not reached quorum yet.");
         }
     }
 
+    private synchronized void handleErrorMessage(Message message) {
+        if (message instanceof ErrorMessage errorMessage) {
+            System.out.println("Error message: {");
+            System.out.println("error: " + errorMessage.getErrorMessage());
+            System.out.println("}");
+        } else {
+            System.out.println("Received an error message but it's not an instance of ErrorMessage: " + message);
+        }
+    }
+
+
     private void printHelpInfo() {
         System.out.println("-- Available commands: --");
-        System.out.println("1. APPEND <string> (compatibility with Delivery 1)");
-        System.out.println("2. ISTCoin <command> <args>");
-        System.out.println("3. DepCoin <command> <args>");
-        System.out.println("4. QUIT | EXIT");
-        System.out.println("5. HELP");
+        System.out.println("1. ISTCoin <command> <args>");
+        System.out.println("2. DepCoin <command> <args>");
+        System.out.println("3. QUIT | EXIT");
+        System.out.println("4. HELP");
         System.out.println("-- Commands for ISTCoin and DepCoin (prefix with coin name): --");
         System.out.println("- BALANCE <address>");
         System.out.println("- TRANSFER <address> <amount>");
@@ -540,10 +670,124 @@ public class Client {
         System.out.println("- ALLOWANCE <owner> <spender>");
         System.out.println("- BLACKLIST <address>");
         System.out.println("- UNBLACKLIST <address>");
-        System.out.println("- ISBLACKLISTED <owner> <account>");
+        System.out.println("- ISBLACKLISTED <address>");
     }
 
     private void incrementNonce() {
         this.nonce++;
+    }
+
+    public BigInteger getLastBalance() {
+        dcLogger.log("Last balance: " + lastBalance);
+        return lastBalance;
+    }
+
+    public TransferReply getLastTransferReply() {
+        return lastTransferReply;
+    }
+
+    public void setLastExecutedTransaction(Transaction tx) {
+        this.lastExecutedTransaction = tx;
+        dcLogger.log("Last executed transaction: " + tx);
+        dcLogger.log("tx signature: " + tx.getSignature());
+    }
+
+    public Transaction getLastExecutedTransaction() {
+        return lastExecutedTransaction;
+    }
+
+    public void setLastTransferReply(TransferReply lastTransferReply) {
+        this.lastTransferReply = lastTransferReply;
+    }
+
+    public String getClientName() {
+        return clientName;
+    }
+
+    public void setLastBalance(BigInteger lastBalance) {
+        this.lastBalance = lastBalance;
+    }
+
+    public BigInteger getLastAllowance() {
+        return lastAllowance;
+    }
+
+    public void setLastAllowance(BigInteger lastAllowance) {
+        this.lastAllowance = lastAllowance;
+    }
+
+    public PublicKey getMemberPublicKeyByPort(int port) {
+        return members.stream()
+                .filter(m -> m.getPort() == port)
+                .findFirst()
+                .orElse(null).getPublicKey();
+    }
+
+    public boolean verifyMemberSignature(ClientReplyMessage reply) {
+        return Security.verifyDS(
+                reply.getSignature(),
+                reply.getDataToSign(),
+                getMemberPublicKeyByPort(reply.getPort())
+        );
+    }
+
+    public synchronized boolean verifyReplay(ClientReplyMessage reply) {
+        //int memberPortOfReply = reply.getPort();
+        //if (hasMemberReplied.containsKey(memberPortOfReply)) {
+        //    return true;
+        //}
+        return false;
+    }
+
+    public void printTransferReply(TransferReply reply) {
+        String senderName = getNameByAddress(reply.getSenderAddr());
+        String recipientName = getNameByAddress(reply.getRecipientAddr());
+        switch (reply.getTransactionType()) {
+            case APPROVE:
+                System.out.print(senderName + " approved "+ reply.getAmount() + " to "+ recipientName);
+                break;
+            case TRANSFER:
+                System.out.print(senderName + " transfered "+ reply.getAmount() + " to "+ recipientName);
+                break;
+            case TRANSFER_FROM:
+                String spenderName = getNameByAddress(reply.getSpenderAddr());
+                System.out.print(spenderName + " transfered from " + senderName + reply.getAmount() + " to "+ recipientName);
+                break;
+            case BLACKLIST:
+                System.out.print(senderName + " blacklisted " + recipientName);
+                break;
+            case UNBLACKLIST:
+                System.out.print(senderName + " unblacklisted " + recipientName);
+                break;
+            default:
+                System.out.println("Transfer reply type not recognized");
+        }
+        if (reply.getSuccess()) {
+            System.out.println(" successfully.");
+        } else {
+            System.out.println(" unsuccessfully.");
+        }
+    }
+
+    public String getNameByAddress(String address) {
+        for (Map.Entry<String, String> entry : addresses.entrySet()) {
+            if (entry.getValue().equals(address)) {
+                return entry.getKey();
+            }
+        }
+        return null;
+    }
+
+    public void resetReplies() {
+        this.hasMemberReplied.clear();
+        this.memberReplyMessages.clear();
+    }
+
+    public void resetState() {
+        resetReplies();
+        this.lastBalance = null;
+        this.lastTransferReply = null;
+        this.lastExecutedTransaction = null;
+        this.lastAllowance = null;
     }
 }
