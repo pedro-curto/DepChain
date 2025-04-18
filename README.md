@@ -1,5 +1,11 @@
 # DepChain
 
+DepChain is a **simplified permissioned blockchain system with high dependability guarantees**.
+
+This repository contains documentation and source code for this *Highly Dependable Systems* (SEC) project.
+
+The [REPORT](REPORT.pdf) document provides an overview of the key technical decisions, our implementation and some tests we performed. This remaining README explains how to run the project.
+
 ## Requirements
 - This project uses `Java 21`, `Maven`, `Python` (scripts for hashing public key and genesis file hash) and `jq` (for JSON manipulation).
 
